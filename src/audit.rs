@@ -255,6 +255,25 @@ impl AuditLog {
         Ok(format!("{{{}}}\n", parts.join(",")))
     }
 
+    /// Check that a line could be appended now, without writing one.
+    ///
+    /// A script must not reach an application when its call could not be
+    /// recorded, so this runs before anything is sent.
+    ///
+    /// # Errors
+    /// [`AuditUnavailable`] when the directory or the journal cannot be used safely.
+    pub fn probe(&self) -> Result<(), AuditUnavailable> {
+        let parent = self.path.parent().ok_or_else(|| {
+            AuditUnavailable::new(&SecurityError::InvalidPath {
+                path: self.path.clone(),
+            })
+        })?;
+        ensure_private_dir(parent).map_err(|error| AuditUnavailable::new(&error))?;
+        open_control_file(&self.path, ControlAccess::AppendOrCreate)
+            .map(drop)
+            .map_err(|error| AuditUnavailable::new(&error))
+    }
+
     /// Append one line. `script_text` is written only when enabled by configuration.
     ///
     /// # Errors
