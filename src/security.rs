@@ -12,8 +12,9 @@ use std::ffi::OsString;
 use std::fmt;
 use std::fs::{self, DirBuilder, File};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::visitor::source_order::{SourceOrderVisitor, TraversalSignal};
@@ -669,6 +670,147 @@ pub fn bounded(text: &str, limit: usize) -> Result<(String, bool), SecurityError
     }
     let head = text.get(..end).unwrap_or("");
     Ok((format!("{head}{TRUNCATION_MARKER}"), true))
+}
+
+// --------------------------------------------------------------------------
+// Captures
+// --------------------------------------------------------------------------
+
+/// A capture larger than this is refused and deleted.
+pub const MAX_CAPTURE_BYTES: u64 = 20 * 1024 * 1024;
+/// At most this many captures are kept; the oldest go first.
+pub const MAX_CAPTURES: usize = 50;
+/// A capture older than this is deleted.
+pub const MAX_CAPTURE_AGE: Duration = Duration::from_secs(3600);
+
+/// The path the Hub asks a bridge to write a capture to: `<app>-<timestamp>.png`
+/// directly inside the captures directory. `stamp` must only hold characters
+/// that are safe in a file name.
+///
+/// # Errors
+/// [`SecurityError::InvalidPath`] when the name would not stay a single component.
+pub fn capture_path_for(
+    captures_dir: &Path,
+    app: &str,
+    stamp: &str,
+) -> Result<PathBuf, SecurityError> {
+    let name = format!("{app}-{stamp}.png");
+    let safe = !app.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && !name.starts_with('.');
+    if !safe {
+        return Err(SecurityError::InvalidPath {
+            path: PathBuf::from(name),
+        });
+    }
+    Ok(captures_dir.join(name))
+}
+
+/// Accept a capture reported by a bridge: a regular file of the current user,
+/// directly reached without a symbolic link, inside the captures directory once
+/// resolved, at most [`MAX_CAPTURE_BYTES`] long. Its mode is reduced to 600.
+///
+/// # Errors
+/// Anything else; the caller then discards it with [`discard_capture`].
+pub fn accept_capture(captures_dir: &Path, reported: &Path) -> Result<PathBuf, SecurityError> {
+    if !reported.is_absolute() {
+        return Err(SecurityError::InvalidPath {
+            path: reported.to_path_buf(),
+        });
+    }
+    let resolved = resolve_under(captures_dir, reported)?;
+    let file = open_regular_nofollow(reported, ControlAccess::Read)?;
+    let info = file
+        .metadata()
+        .map_err(|e| io_error("inspect", reported, e))?;
+    if info.uid() != current_uid() {
+        return Err(SecurityError::ForeignOwner {
+            path: reported.to_path_buf(),
+        });
+    }
+    if info.len() > MAX_CAPTURE_BYTES {
+        return Err(SecurityError::TooLarge {
+            path: reported.to_path_buf(),
+            limit: MAX_CAPTURE_BYTES,
+        });
+    }
+    if info.mode() & GROUP_AND_OTHER_BITS != 0 {
+        // Changed through the open descriptor, so a swapped path cannot redirect it.
+        file.set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE))
+            .map_err(|e| io_error("restrict", reported, e))?;
+    }
+    Ok(resolved)
+}
+
+/// Delete a refused capture, but only when it is a direct entry of the captures
+/// directory: a bridge must never be able to make the Hub delete a file anywhere
+/// else. A symbolic link is removed itself, never its target.
+///
+/// Returns whether something was deleted.
+#[must_use]
+pub fn discard_capture(captures_dir: &Path, reported: &Path) -> bool {
+    let direct_child = reported.parent() == Some(captures_dir)
+        && matches!(
+            reported.components().next_back(),
+            Some(Component::Normal(_))
+        );
+    if !direct_child {
+        return false;
+    }
+    match fs::symlink_metadata(reported) {
+        Ok(info) if !info.is_dir() => fs::remove_file(reported).is_ok(),
+        _ => false,
+    }
+}
+
+/// Delete captures older than [`MAX_CAPTURE_AGE`] at `now`, then the oldest ones
+/// beyond [`MAX_CAPTURES`]. Directories inside are left alone. An absent
+/// directory has nothing to purge.
+///
+/// Returns how many entries were deleted.
+///
+/// # Errors
+/// The directory exists but is not a private directory of the current user, or
+/// cannot be listed.
+pub fn purge_captures(captures_dir: &Path, now: SystemTime) -> Result<usize, SecurityError> {
+    match fs::symlink_metadata(captures_dir) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(io_error("inspect", captures_dir, e)),
+        Ok(_) => ensure_private_dir(captures_dir)?,
+    }
+    let listing = fs::read_dir(captures_dir).map_err(|e| io_error("list", captures_dir, e))?;
+    let mut kept: Vec<(SystemTime, PathBuf)> = Vec::new();
+    let mut removed = 0_usize;
+    for entry in listing {
+        let entry = entry.map_err(|e| io_error("list", captures_dir, e))?;
+        let path = entry.path();
+        let Ok(info) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if info.is_dir() {
+            continue;
+        }
+        let modified = info.modified().unwrap_or(UNIX_EPOCH);
+        let too_old = now
+            .duration_since(modified)
+            .is_ok_and(|age| age > MAX_CAPTURE_AGE);
+        if too_old {
+            if fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        } else {
+            kept.push((modified, path));
+        }
+    }
+    kept.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+    for (_, path) in kept.iter().skip(MAX_CAPTURES) {
+        if fs::remove_file(path).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }
 
 // --------------------------------------------------------------------------

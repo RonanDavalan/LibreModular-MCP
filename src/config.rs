@@ -664,3 +664,19 @@ pub fn resolve_paths(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Paths,
 pub fn resolve_paths_from_process() -> Result<Paths, ConfigError> {
     resolve_paths(|name| std::env::var_os(name))
 }
+
+/// The home directory, when `HOME` holds an absolute path. The script guard uses
+/// it to expand a leading `~` in a literal path.
+#[must_use]
+pub fn home_dir(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    lookup("HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+}
+
+/// [`home_dir`] on the environment of the running process.
+#[must_use]
+pub fn home_dir_from_process() -> Option<PathBuf> {
+    home_dir(|name| std::env::var_os(name))
+}

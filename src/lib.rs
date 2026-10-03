@@ -12,5 +12,9 @@
 pub mod audit;
 pub mod cli;
 pub mod config;
+pub mod modules;
 pub mod output;
+pub mod protocol;
+pub mod registry;
 pub mod security;
+pub mod server;

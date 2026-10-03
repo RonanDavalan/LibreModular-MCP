@@ -515,3 +515,324 @@ fn security_rs_opens_files_only_without_following_links_and_creates_directories_
     assert!(source.contains("const PRIVATE_DIR_MODE: u32 = 0o700;"));
     assert!(source.contains("const PRIVATE_FILE_MODE: u32 = 0o600;"));
 }
+
+// --- the server starts hardened before it reads the token -------------------------
+
+#[test]
+fn the_server_hardens_the_process_before_reading_the_token() {
+    let cli = source_of("cli.rs");
+    must_pass(check_hardening_precedes_token_access(
+        &cli,
+        "prepare_server",
+        &["load_token(", "AuditLog::new("],
+    ));
+    must_fail(check_hardening_precedes_token_access(
+        "fn prepare_server() { let token = load_token(&path)?; harden_process()?; }",
+        "prepare_server",
+        &["load_token("],
+    ));
+}
+
+// --- every tool answer leaves through the single output point ----------------------
+
+const TOOLS: [&str; 2] = ["execute_script", "get_state"];
+
+/// Each tool returns what `finish` produced, and `finish` is the only place of
+/// the server that serialises an answer, after `output::finalize`.
+fn single_exit_point(source: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    for tool in TOOLS {
+        match function_body(source, tool) {
+            None => problems.push(format!("tool {tool} not found")),
+            Some(body) => {
+                let code = code_lines(&body).join("\n");
+                if !code
+                    .trim_end()
+                    .trim_end_matches('}')
+                    .trim_end()
+                    .ends_with(")")
+                    || !code.contains("self.finish(")
+                {
+                    problems.push(format!("{tool} does not end with self.finish(...)"));
+                }
+            }
+        }
+    }
+    match function_body(source, "finish") {
+        None => problems.push("finish not found".to_owned()),
+        Some(body) => {
+            let finalize = body.find("output::finalize(");
+            let to_text = body.find("output::to_text(");
+            if !matches!((finalize, to_text), (Some(a), Some(b)) if a < b) {
+                problems.push("finish does not finalize before serialising".to_owned());
+            }
+        }
+    }
+    let code = code_lines(source).join("\n");
+    for needle in [
+        "serde_json::to_string",
+        "serde_json::to_vec",
+        "to_string_pretty",
+    ] {
+        if code.contains(needle) {
+            problems.push(format!(
+                "{needle} in the server: an answer could skip finalize"
+            ));
+        }
+    }
+    let finishes = code.matches("output::to_text(").count();
+    if finishes != 1 {
+        problems.push(format!("{finishes} calls to output::to_text, expected one"));
+    }
+    problems
+}
+
+#[test]
+fn each_tool_answers_through_the_single_output_point() {
+    let problems = single_exit_point(&source_of("server.rs"));
+    assert!(problems.is_empty(), "{problems:?}");
+}
+
+#[test]
+fn counter_proof_a_tool_that_serialises_on_its_own_is_detected() {
+    let real = source_of("server.rs");
+    let check = |source: &str| -> Verdict {
+        let problems = single_exit_point(source);
+        ensure!(problems.is_empty(), "{problems:?}");
+        Ok(())
+    };
+    must_pass(check(&real));
+    let bypass = real.replacen(
+        "self.finish(&payload, entry, None)",
+        "serde_json::to_string(&payload).unwrap_or_default()",
+        1,
+    );
+    assert_ne!(bypass, real, "the counter-proof must change the source");
+    must_fail(check(&bypass));
+    let unscrubbed = real.replacen("output::finalize(", "output::skip_finalize(", 1);
+    must_fail(check(&unscrubbed));
+    must_fail(check(
+        "fn finish(&self) -> String { output::to_text(&payload) }\nfn execute_script() { self.finish() }\nfn get_state() { self.finish() }",
+    ));
+}
+
+// --- the network: loopback only, and only in the protocol module -----------------
+
+const NETWORK_APIS: [&str; 8] = [
+    "std::net",
+    "tokio::net",
+    "TcpStream",
+    "TcpListener",
+    "UdpSocket",
+    "UnixListener",
+    "UnixStream",
+    "socket2",
+];
+
+/// Network use outside `protocol.rs`, any listening socket, and any address other
+/// than 127.0.0.1 written in the code.
+fn network_problems(files: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (name, source) in files {
+        for (index, line) in code_lines(source).into_iter().enumerate() {
+            let at = format!("{name}:{}", index + 1);
+            if name != "protocol.rs" {
+                for api in NETWORK_APIS {
+                    if line.contains(api) {
+                        problems.push(format!("{at}: {api} outside protocol.rs"));
+                    }
+                }
+            }
+            for listening in [
+                "TcpListener",
+                "UdpSocket",
+                "UnixListener",
+                "::bind(",
+                "listen(",
+            ] {
+                if line.contains(listening) {
+                    problems.push(format!("{at}: {listening} (the Hub never listens)"));
+                }
+            }
+            for other in [
+                "0.0.0.0",
+                "UNSPECIFIED",
+                "Ipv6Addr",
+                "\"localhost\"",
+                "::1",
+                "to_socket_addrs",
+                "lookup_host",
+            ] {
+                if line.contains(other) {
+                    problems.push(format!("{at}: {other}"));
+                }
+            }
+            for address in dotted_quads(line) {
+                if address != "127.0.0.1" {
+                    problems.push(format!("{at}: address {address}"));
+                }
+            }
+            if let Some(start) = line.find("Ipv4Addr::new(") {
+                let rest = &line[start..];
+                if !rest.starts_with("Ipv4Addr::new(127, 0, 0, 1)") {
+                    problems.push(format!("{at}: an address other than 127.0.0.1"));
+                }
+            }
+        }
+    }
+    problems
+}
+
+/// Every `a.b.c.d` made of four numbers in a line.
+fn dotted_quads(line: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let chars: Vec<char> = line.chars().collect();
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index].is_ascii_digit()
+            && (index == 0 || !chars[index - 1].is_ascii_alphanumeric())
+        {
+            let mut end = index;
+            while end < chars.len() && (chars[end].is_ascii_digit() || chars[end] == '.') {
+                end += 1;
+            }
+            let candidate: String = chars[index..end].iter().collect();
+            let candidate = candidate.trim_end_matches('.');
+            let parts: Vec<&str> = candidate.split('.').collect();
+            if parts.len() == 4 && parts.iter().all(|p| !p.is_empty()) {
+                found.push(candidate.to_owned());
+            }
+            index = end.max(index + 1);
+        } else {
+            index += 1;
+        }
+    }
+    found
+}
+
+#[test]
+fn the_network_is_only_used_by_protocol_rs_and_only_toward_127_0_0_1() {
+    let files = source_files();
+    assert!(files.iter().any(|(name, _)| name == "protocol.rs"));
+    let problems = network_problems(&files);
+    assert!(problems.is_empty(), "{problems:?}");
+    let protocol = source_of("protocol.rs");
+    assert!(protocol.contains("pub const BRIDGE_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);"));
+}
+
+#[test]
+fn counter_proof_stray_network_use_is_detected() {
+    let check = |name: &str, source: &str| -> Verdict {
+        let problems = network_problems(&[(name.to_owned(), source.to_owned())]);
+        ensure!(problems.is_empty(), "{problems:?}");
+        Ok(())
+    };
+    for (name, defective) in [
+        ("server.rs", "use std::net::TcpStream;"),
+        (
+            "modules/mod.rs",
+            "let s = tokio::net::TcpStream::connect(addr).await;",
+        ),
+        (
+            "protocol.rs",
+            "let l = TcpListener::bind(\"127.0.0.1:9301\")?;",
+        ),
+        (
+            "protocol.rs",
+            "let l = std::net::UdpSocket::bind(address)?;",
+        ),
+        (
+            "protocol.rs",
+            "const BRIDGE_ADDRESS: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);",
+        ),
+        ("protocol.rs", "let a = \"192.168.1.20:9301\";"),
+        ("protocol.rs", "let a = Ipv4Addr::UNSPECIFIED;"),
+        ("protocol.rs", "let a = (\"localhost\", 9301);"),
+    ] {
+        must_fail(check(name, defective));
+    }
+    must_pass(check(
+        "protocol.rs",
+        "pub const BRIDGE_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);\nlet v = \"3.0.4\";",
+    ));
+}
+
+// --- modules never import the security or output modules -------------------------
+
+fn module_imports(files: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (name, source) in files
+        .iter()
+        .filter(|(name, _)| name.starts_with("modules/"))
+    {
+        for (index, line) in code_lines(source).into_iter().enumerate() {
+            for forbidden in ["crate::security", "crate::output", "security::", "output::"] {
+                if line.contains(forbidden) {
+                    problems.push(format!("{name}:{}: {forbidden}", index + 1));
+                }
+            }
+        }
+    }
+    problems
+}
+
+#[test]
+fn modules_never_import_security_or_output() {
+    let files = source_files();
+    assert!(files.iter().any(|(name, _)| name == "modules/mod.rs"));
+    let problems = module_imports(&files);
+    assert!(problems.is_empty(), "{problems:?}");
+}
+
+#[test]
+fn counter_proof_a_module_importing_security_is_detected() {
+    let problems = module_imports(&[(
+        "modules/gimp.rs".to_owned(),
+        "use crate::security::guard_script;".to_owned(),
+    )]);
+    assert!(!problems.is_empty());
+}
+
+// --- only the protocol on the standard output -----------------------------------
+
+fn stdout_writes(files: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (name, source) in files.iter().filter(|(name, _)| name != "cli.rs") {
+        for (index, line) in code_lines(source).into_iter().enumerate() {
+            // `eprintln!` and `eprint!` write to the error stream and are allowed.
+            let prints = line.matches("println!").count() + line.matches("print!(").count();
+            let eprints = line.matches("eprintln!").count() + line.matches("eprint!(").count();
+            if prints > eprints {
+                problems.push(format!("{name}:{}: print to stdout", index + 1));
+            }
+            for needle in ["stdout()", "dbg!("] {
+                if line.contains(needle) {
+                    problems.push(format!("{name}:{}: {needle}", index + 1));
+                }
+            }
+        }
+    }
+    problems
+}
+
+#[test]
+fn nothing_but_cli_rs_writes_to_the_standard_output() {
+    let problems = stdout_writes(&source_files());
+    assert!(problems.is_empty(), "{problems:?}");
+}
+
+#[test]
+fn counter_proof_a_print_in_the_server_is_detected() {
+    for defective in [
+        "println!(\"debug {payload}\");",
+        "print!(\"{text}\");",
+        "eprintln!(\"fine\"); println!(\"not fine\");",
+        "let mut out = std::io::stdout();",
+    ] {
+        let problems = stdout_writes(&[("server.rs".to_owned(), defective.to_owned())]);
+        assert!(!problems.is_empty(), "{defective}");
+    }
+    assert!(
+        stdout_writes(&[("server.rs".to_owned(), "eprintln!(\"log\");".to_owned())]).is_empty()
+    );
+}
