@@ -1,5 +1,5 @@
 //! The Python bridges seen from the Hub: their own test suite, and the generated
-//! GIMP bridge driven end to end by the Hub's `tcp` module.
+//! GIMP, Krita and Blender bridges driven end to end by the Hub's `tcp` module.
 //!
 //! Why this module exists
 //! `cargo test` is the one command that proves the product works. It must run
@@ -125,9 +125,12 @@ impl Drop for BridgeProcess {
     }
 }
 
-/// The Hub's own module must reach the bridge, run a script, get a Python
-/// traceback back, read the state of an application without API, and probe it.
-fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
+/// The Hub's own module must reach the bridge of `app`, run a script, get a
+/// Python traceback back, read the state and probe it. Plain `python3` is not
+/// the application, whether or not the application is installed: the bridge
+/// either reports its API missing, or reads it directly without waiting for a
+/// main loop. Every failure names its step.
+fn check_the_hub_drives_the_bridge(bridge_file: &Path, app: &'static str) -> Verdict {
     let base = common::private_tempdir();
     let token_file = base.path().join("token");
     write_file(&token_file, 0o600, FILE_TOKEN);
@@ -135,7 +138,7 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
     let captures = common::fresh(base.path());
     let bridge = BridgeProcess::start(bridge_file, &token_file)?;
     let token = Token::new(FILE_TOKEN).map_err(|error| error.to_string())?;
-    let connector = BridgeConnector::new("gimp", bridge.port, token, Limits::default());
+    let connector = BridgeConnector::new(app, bridge.port, token, Limits::default());
     let module = TcpModule::new(connector.clone(), Duration::from_secs(10));
     let outcome = (|| -> Verdict {
         let health = module.health();
@@ -151,10 +154,10 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
             return Err(format!("health: the bridge is not reachable ({why})"));
         }
         ensure!(
-            health.app_version.as_deref() == Some("unknown")
-                && health.bridge_version.as_deref() == Some("1"),
+            health.app_version.is_some() && health.bridge_version.as_deref() == Some("1"),
             "health: {health:?}"
         );
+        let without_api = health.app_version.as_deref() == Some("unknown");
         let script = "print('hello from the bridge')\nresult = {'sum': 1 + 2, 'dir': LMM_WORK_DIR}";
         let reply = module
             .execute(script, 10, &work_dir)
@@ -176,18 +179,29 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
             "{traceback}"
         );
         let state = module
-            .state(&captures.join("gimp-e2e.png"))
+            .state(&captures.join(format!("{app}-e2e.png")))
             .map_err(|error| format!("state: {error}"))?;
-        ensure!(state.state == json!({}), "{state:?}");
-        ensure!(state.screenshot.is_none(), "{state:?}");
-        ensure!(state.app_version.as_deref() == Some("unknown"), "{state:?}");
+        ensure!(state.state.is_object(), "state: not an object: {state:?}");
         ensure!(
-            state
-                .warnings
-                .iter()
-                .any(|warning| warning.contains("cannot be imported")),
-            "{state:?}"
+            state.screenshot.is_none(),
+            "state: unexpected capture {state:?}"
         );
+        ensure!(
+            state.app_version == health.app_version,
+            "state: version {state:?}"
+        );
+        let missing_api = state
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("cannot be imported"));
+        if without_api {
+            ensure!(
+                state.state == json!({}) && missing_api,
+                "state without the API: {state:?}"
+            );
+        } else {
+            ensure!(!missing_api, "state with the API: {state:?}");
+        }
         Ok(())
     })();
     module.close();
@@ -199,24 +213,59 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
     outcome
 }
 
+const BRIDGES: [(&str, &str); 3] = [
+    ("gimp", "gimp_bridge.py"),
+    ("krita", "krita_bridge.py"),
+    ("blender", "blender_bridge.py"),
+];
+
 #[test]
 fn the_hub_tcp_module_drives_the_generated_gimp_bridge() {
-    must_pass(check_the_hub_drives_the_bridge(&generated(
-        "gimp_bridge.py",
-    )));
+    must_pass(check_the_hub_drives_the_bridge(
+        &generated("gimp_bridge.py"),
+        "gimp",
+    ));
+}
+
+#[test]
+fn the_hub_tcp_module_drives_the_generated_krita_bridge() {
+    must_pass(check_the_hub_drives_the_bridge(
+        &generated("krita_bridge.py"),
+        "krita",
+    ));
+}
+
+#[test]
+fn the_hub_tcp_module_drives_the_generated_blender_bridge() {
+    must_pass(check_the_hub_drives_the_bridge(
+        &generated("blender_bridge.py"),
+        "blender",
+    ));
 }
 
 #[test]
 fn counter_proof_a_bridge_whose_hello_lacks_the_protocol_is_refused() {
     let base = common::private_tempdir();
-    let text = fs::read_to_string(generated("gimp_bridge.py")).expect("generated bridge");
     let line = "                \"protocol\": PROTOCOL_VERSION,\n";
-    assert_eq!(
-        text.matches(line).count(),
-        1,
-        "the defect must change one place"
-    );
-    let defective = base.path().join("gimp_bridge_without_protocol.py");
-    fs::write(&defective, text.replacen(line, "", 1)).expect("write the defective bridge");
-    must_fail(check_the_hub_drives_the_bridge(&defective));
+    for (app, name) in BRIDGES {
+        let text = fs::read_to_string(generated(name)).expect("generated bridge");
+        assert_eq!(
+            text.matches(line).count(),
+            1,
+            "the defect must change one place"
+        );
+        let defective = base
+            .path()
+            .join(format!("{app}_bridge_without_protocol.py"));
+        fs::write(&defective, text.replacen(line, "", 1)).expect("write the defective bridge");
+        must_fail(check_the_hub_drives_the_bridge(&defective, app));
+    }
+}
+
+#[test]
+fn counter_proof_a_bridge_on_the_port_of_another_application_is_refused() {
+    must_fail(check_the_hub_drives_the_bridge(
+        &generated("krita_bridge.py"),
+        "blender",
+    ));
 }
