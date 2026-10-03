@@ -1,3 +1,7 @@
 #![forbid(unsafe_code)]
 
-fn main() {}
+use std::process::ExitCode;
+
+fn main() -> ExitCode {
+    libremodular_mcp::cli::main_entry()
+}
