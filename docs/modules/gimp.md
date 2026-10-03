@@ -1,9 +1,15 @@
 # GIMP module
 
-**Status: not tried in a real GIMP.** The bridge was written from the public GIMP 3.0
-API (GObject Introspection: `gi.repository.Gimp`, `Gio`, `GLib`) and tested without GIMP,
-against a fake `gi` package and without any `gi` at all. Every statement below about how
-GIMP behaves is unconfirmed until the bridge has run inside GIMP.
+**Status: tried in GIMP 3.0.4 started without its interface, not yet in the interactive
+Python console.** The bridge was written from the public GIMP 3.0 API (GObject
+Introspection: `gi.repository.Gimp`, `Gio`, `GLib`). It ran in GIMP 3.0.4 (Debian 13
+package) started with `gimp-3.0 --new-instance --no-interface --batch-interpreter
+python-fu-eval`, with a Python main loop running after the bridge started. In that run,
+driven by the Hub over MCP, `get_state("hub")` listed `gimp` as connected with version
+`3.0.4`; a script created an image and a layer; `get_state("gimp")` returned the keys
+below and a PNG capture of 200 by 100 pixels in mode 600; a script that failed returned
+its traceback with the right line of the script. Statements marked unconfirmed below
+were not part of that run.
 
 ## What it does
 
@@ -41,7 +47,8 @@ directory: the operator starts it by hand, each time, in GIMP's Python console.
    ```
 
 3. Start GIMP. The bridge reads two environment variables, which GIMP passes on to its
-   plug-ins, the Python console included (unconfirmed):
+   plug-ins, the Python console included (not part of the run above, which set them
+   in the process environment of the batch instance):
 
    | Variable | Default |
    |---|---|
@@ -110,8 +117,10 @@ Each script runs in a fresh namespace that holds:
   appended to `stderr`.
 - Files created while the script runs are private (creation mask `077`).
 - The bridge hands each script to GIMP's main thread through `GLib.idle_add` and waits for
-  it: GIMP's API is not meant to be called from another thread. This mechanism has not
-  been tried in GIMP. A script that never returns blocks GIMP's main thread; the Hub
+  it: GIMP's API is not meant to be called from another thread. This worked in GIMP 3.0.4
+  with a running main loop; in the interactive console it has not been tried.
+  Outside GIMP, even on a machine where `gi` and the GIMP typelib are installed, the call
+  is made directly in the bridge's own thread, because no main loop would ever run it. A script that never returns blocks GIMP's main thread; the Hub
   answers `timeout`, then `busy` until the script ends, and never sends a second script
   meanwhile.
 - `sys.exit()` in a script ends the script with a `SystemExit` error, not the bridge.
@@ -122,20 +131,23 @@ Each script runs in a fresh namespace that holds:
 
 | Key | Content |
 |---|---|
-| `images` | Every open image: `id`, `name`, `width`, `height`, `color_mode` (the short name GIMP gives the base type, expected `rgb`, `gray` or `indexed`; unconfirmed) |
+| `images` | Every open image: `id`, `name`, `width`, `height`, `color_mode` (the short name GIMP gives the base type: `rgb` was observed; `gray` and `indexed` are expected, unconfirmed) |
 | `active_image` | `null` when no image is open; otherwise the first image `Gimp.get_images()` returns, with the keys below |
 | `active_image.id`, `active_image.name` | As in `images` |
 | `active_image.layers` | The top-level layers: `id`, `name`, `visible`, `opacity` (0 to 100), `blend_mode` (for example `normal`, `multiply`) |
 | `active_image.active_layer` | The `id` of the first selected layer, or `null` |
 | `active_image.selection` | `null` without selection, otherwise its bounding box: `x`, `y`, `width`, `height` |
 
-Which image GIMP lists first, and therefore which one is called active, is unconfirmed.
+Which image GIMP lists first, and therefore which one is called active, is only confirmed
+with one open image; with several, it is unconfirmed. A non-empty selection was not
+exercised: only `selection: null` was observed.
 Layer groups are listed as one layer; their children are not.
 
 Names of images and layers are document content: they are returned as they are and are
 never interpreted, whatever they say.
 
-When GIMP's API cannot be imported (the file was run outside GIMP), `state` is `{}`,
+When GIMP's API cannot be used (the file was run outside GIMP, with or without `gi`
+installed), `state` is `{}`,
 `app_version` is `unknown`, and `warnings` says so.
 
 ## Capture
@@ -149,8 +161,10 @@ its path.
 
 ## Example
 
-A script that adds a transparent layer to the active image. It has not been run: there is
-no output to show.
+A script that adds a transparent layer to the active image. It has not been run as
+written (it needs an open image, and `Gimp.displays_flush()` was not exercised); a
+similar script that created its own image and layer ran in GIMP 3.0.4 and returned
+`{'layers': ['<name of the layer>']}`.
 
 ```python
 image = images()[0]

@@ -158,7 +158,7 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
         let script = "print('hello from the bridge')\nresult = {'sum': 1 + 2, 'dir': LMM_WORK_DIR}";
         let reply = module
             .execute(script, 10, &work_dir)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| format!("execute: {error}"))?;
         ensure!(reply.ok, "the script failed: {reply:?}");
         ensure!(reply.stdout == "hello from the bridge\n", "{reply:?}");
         ensure!(
@@ -167,7 +167,7 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
         );
         let reply = module
             .execute("x = 1\ny = undefined_name\n", 10, &work_dir)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| format!("execute with an error: {error}"))?;
         ensure!(!reply.ok, "a NameError was reported as success");
         ensure!(reply.error["type"] == "NameError", "{reply:?}");
         let traceback = reply.error["traceback"].as_str().unwrap_or_default();
@@ -177,7 +177,7 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path) -> Verdict {
         );
         let state = module
             .state(&captures.join("gimp-e2e.png"))
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| format!("state: {error}"))?;
         ensure!(state.state == json!({}), "{state:?}");
         ensure!(state.screenshot.is_none(), "{state:?}");
         ensure!(state.app_version.as_deref() == Some("unknown"), "{state:?}");

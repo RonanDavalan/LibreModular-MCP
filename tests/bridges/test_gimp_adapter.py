@@ -260,7 +260,7 @@ class WithGimpTests(unittest.TestCase):
                 outcome["error"] = error
 
         try:
-            with gi_modules(glib=glib):
+            with gi_modules(gimp=fake_gimp(), glib=glib):
                 thread = threading.Thread(target=worker)
                 thread.start()
                 thread.join(timeout=10)
@@ -270,6 +270,39 @@ class WithGimpTests(unittest.TestCase):
         self.assertIs(outcome["value"], glib.loop_thread, "the call ran in the main loop")
         self.assertIsInstance(outcome.get("error"), IndexError)
         self.assertIs(direct, threading.main_thread(), "from the main thread the call is direct")
+
+    def test_run_on_main_is_direct_when_gi_loads_but_the_process_is_not_gimp(self):
+        # `gi` installed on a machine with GIMP: Gimp imports, its version is None, and
+        # nothing runs a main loop. Queuing the call would wait forever.
+        glib = FakeGLib()
+        gimp = fake_gimp()
+        gimp.version = lambda: None
+        adapter = ADAPTER.GimpAdapter()
+        outcome = {}
+
+        def worker():
+            outcome["value"] = adapter.run_on_main(lambda: threading.current_thread())
+
+        try:
+            with gi_modules(gimp=gimp, glib=glib):
+                thread = threading.Thread(target=worker)
+                thread.start()
+                thread.join(timeout=10)
+                finished = not thread.is_alive()
+        finally:
+            glib.quit()
+        self.assertTrue(finished, "run_on_main did not return")
+        self.assertIs(outcome["value"], thread, "the call ran in the calling thread")
+
+    def test_outside_gimp_nothing_asks_gimp_even_when_gi_loads(self):
+        gimp = fake_gimp()
+        gimp.version = lambda: None
+        adapter = ADAPTER.GimpAdapter()
+        with gi_modules(gimp=gimp, gio=fake_gio()):
+            self.assertEqual(adapter.state(), {})
+            self.assertEqual(adapter.namespace()["images"](), [])
+            self.assertIs(adapter.screenshot("/home/alice/unused.png"), False)
+        self.assertEqual(gimp.calls, [], "GIMP was called from outside GIMP")
 
 
 class WithoutGimpTests(unittest.TestCase):

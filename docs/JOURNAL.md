@@ -186,3 +186,28 @@ Not covered yet:
 - The bridge does not lower `RLIMIT_CORE`: it runs inside the application's process.
 - A reconnection made right after the previous connection closed can be refused for a few
   milliseconds, until the bridge notices the closure and frees its single place.
+
+## 2026-10-04 — The GIMP bridge tried in GIMP 3.0.4, and a hang outside GIMP fixed
+
+The bridge ran in GIMP 3.0.4 (Debian 13 package) started without its interface
+(`gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval`, a Python main
+loop kept running after the bridge started), driven by the Hub over MCP on stdio:
+
+- `get_state("hub")` lists `gimp` as connected, version `3.0.4`, bridge version `1`.
+- A script that creates an image and a layer returns `status: ok` with the layer name in
+  `result`; the next `get_state("gimp")` lists the image (`color_mode: rgb`), the layer
+  (`blend_mode: normal`, `opacity: 100.0`, `visible: true`), `selection: null`, and a PNG
+  capture of 200 by 100 pixels in mode 600.
+- A script that fails returns `NameError` with the traceback line 2 of `<libremodular>`.
+
+Fixed: on a machine where `gi` and the GIMP typelib are installed, a bridge run as a plain
+Python program (as the tests do) queued its calls with `GLib.idle_add` and waited for a main
+loop that never ran, so `execute` and `state` never answered. Outside a process GIMP started,
+`Gimp.version()` is `None`: the adapter now calls directly, and answers `state: {}` with the
+usual warning, without asking GIMP anything. Tests: `test_run_on_main_is_direct_when_gi_loads_but_the_process_is_not_gimp`,
+`test_outside_gimp_nothing_asks_gimp_even_when_gi_loads` (the first fails on the earlier adapter).
+The end-to-end Rust test now says which step failed.
+
+Still unconfirmed: starting the bridge from the interactive Python console (menu path, the
+environment variables reaching it, its lifetime when the console closes), several open images
+(which one is listed first), a non-empty selection.

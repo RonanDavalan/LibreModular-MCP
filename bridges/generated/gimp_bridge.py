@@ -686,7 +686,8 @@ def launch(adapter, default_port):
 Why this module exists
 GIMP is reached through GObject Introspection and only accepts calls from its main
 thread. This file is the only place that knows either, so the core stays the same
-for every application. Written from the public GIMP 3.0 API; not tried in a real GIMP.
+for every application. Written from the public GIMP 3.0 API; tried in GIMP 3.0.4 without its interface, not in the
+interactive console.
 """
 
 import threading
@@ -722,6 +723,18 @@ def _glib():
     return GLib
 
 
+def _inside_gimp():
+    """Whether this process is one GIMP started: elsewhere, even with `gi` installed,
+    `Gimp.version()` is None and no main loop will ever run a queued call."""
+    Gimp = _gimp()
+    if Gimp is None:
+        return False
+    try:
+        return bool(Gimp.version())
+    except Exception:
+        return False
+
+
 def _open_images(Gimp):
     return list(Gimp.get_images())
 
@@ -730,7 +743,7 @@ def images():
     """The images open in GIMP; the first one is the one the bridge describes
     as active."""
     Gimp = _gimp()
-    return _open_images(Gimp) if Gimp is not None else []
+    return _open_images(Gimp) if Gimp is not None and _inside_gimp() else []
 
 
 def _nick(value):
@@ -805,9 +818,14 @@ class GimpAdapter:
 
     def run_on_main(self, function):
         """Run `function` in GIMP's main thread and hand back its value or its
-        exception. Without GLib, or from the main thread itself, it is a direct call."""
+        exception. Without GLib, outside GIMP, or from the main thread itself, it is a
+        direct call: a call queued where no loop runs would wait forever."""
         GLib = _glib()
-        if GLib is None or threading.current_thread() is threading.main_thread():
+        if (
+            GLib is None
+            or threading.current_thread() is threading.main_thread()
+            or not _inside_gimp()
+        ):
             return function()
         done = threading.Event()
         outcome = {}
@@ -829,7 +847,7 @@ class GimpAdapter:
 
     def state(self):
         Gimp = _gimp()
-        if Gimp is None:
+        if Gimp is None or not _inside_gimp():
             return {}
         open_images = _open_images(Gimp)
         return {
@@ -841,7 +859,7 @@ class GimpAdapter:
         """Export a flattened copy of the active image as PNG. The copy keeps the
         user's image untouched: exporting it would change its export file name."""
         Gimp, Gio = _gimp(), _gio()
-        if Gimp is None or Gio is None:
+        if Gimp is None or Gio is None or not _inside_gimp():
             return False
         open_images = _open_images(Gimp)
         if not open_images:
