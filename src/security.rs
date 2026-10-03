@@ -328,6 +328,46 @@ pub fn open_control_file_as(
     Ok(file)
 }
 
+/// Create a private file holding `initial` when nothing has that name yet; when
+/// something has, it must be a private regular file of the current user. A
+/// symbolic link is refused, never followed.
+///
+/// # Errors
+/// A link, a non-regular file, a foreign owner, a loose mode, or an I/O failure.
+pub fn ensure_private_file(path: &Path, initial: &[u8]) -> Result<(), SecurityError> {
+    match open_control_file(path, ControlAccess::CreateNew) {
+        Ok(mut file) => file
+            .write_all(initial)
+            .map_err(|e| io_error("write", path, e)),
+        Err(SecurityError::AlreadyExists { .. }) => {
+            open_control_file(path, ControlAccess::Read).map(drop)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Write `bytes` to a private file created for the purpose: whatever had that
+/// name is removed first (a link itself, never its target), then the file is
+/// created exclusively in mode 600, so a link planted in between is refused.
+///
+/// # Errors
+/// A directory of that name, or any failure to remove, create or write.
+pub fn replace_private_file(path: &Path, bytes: &[u8]) -> Result<(), SecurityError> {
+    match fs::symlink_metadata(path) {
+        Ok(info) if info.is_dir() => {
+            return Err(SecurityError::NotRegularFile {
+                path: path.to_path_buf(),
+            });
+        }
+        Ok(_) => fs::remove_file(path).map_err(|e| io_error("remove", path, e))?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => return Err(io_error("inspect", path, e)),
+    }
+    let mut file = open_control_file(path, ControlAccess::CreateNew)?;
+    file.write_all(bytes)
+        .map_err(|e| io_error("write", path, e))
+}
+
 /// Read a control file (token, configuration) in one bounded read.
 ///
 /// The single entry point for every file the Hub trusts to control its behaviour:

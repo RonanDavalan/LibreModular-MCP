@@ -680,3 +680,13 @@ pub fn home_dir(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
 pub fn home_dir_from_process() -> Option<PathBuf> {
     home_dir(|name| std::env::var_os(name))
 }
+
+/// The values of the named variables in the environment of the Hub, for the
+/// processes a module starts. Absent variables are left out.
+#[must_use]
+pub fn environment_values(names: &[&str]) -> Vec<(OsString, OsString)> {
+    names
+        .iter()
+        .filter_map(|name| std::env::var_os(name).map(|value| (OsString::from(name), value)))
+        .collect()
+}
