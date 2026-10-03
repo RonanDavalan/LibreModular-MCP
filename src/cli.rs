@@ -14,10 +14,14 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, Subcommand};
 
+use std::future::{Future, poll_fn};
+use std::pin::pin;
 use std::sync::Arc;
+use std::task::Poll;
 use std::time::{Duration, SystemTime};
 
 use rmcp::ServiceExt;
+use tokio::signal::unix::{SignalKind, signal};
 
 use crate::audit::{AuditLog, AuditUnavailable};
 use crate::config::{self, APP_DEFAULTS, ConfigError, Limits, Paths};
@@ -315,28 +319,62 @@ pub fn prepare_server(paths: &Paths) -> Result<HubServer, ServeError> {
     Ok(server)
 }
 
-/// Serve MCP on the standard input and output until the client closes it.
+/// How the MCP session came to an end.
+enum Ending {
+    /// The client closed the session, or it failed.
+    Session(Result<(), ServeError>),
+    /// The process was asked to stop; the name of the signal.
+    Signal(&'static str),
+}
+
+/// Serve MCP on the standard input and output until the client closes it or the
+/// process receives SIGTERM or SIGINT. Either way the captures are purged before
+/// the process ends.
 fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(ServeError::Runtime)?;
     let session = server.clone();
-    let outcome = runtime.block_on(async move {
-        let running = session
-            .serve(rmcp::transport::stdio())
-            .await
-            .map_err(|error| ServeError::Protocol(error.to_string()))?;
-        running
-            .waiting()
-            .await
-            .map(drop)
-            .map_err(|error| ServeError::Protocol(error.to_string()))
+    let ending = runtime.block_on(async move {
+        // Listening before the session starts: a stop request at any moment of
+        // the session takes the same way out.
+        let mut terminate = signal(SignalKind::terminate()).map_err(ServeError::Runtime)?;
+        let mut interrupt = signal(SignalKind::interrupt()).map_err(ServeError::Runtime)?;
+        let mut session = pin!(async move {
+            let running = session
+                .serve(rmcp::transport::stdio())
+                .await
+                .map_err(|error| ServeError::Protocol(error.to_string()))?;
+            running
+                .waiting()
+                .await
+                .map(drop)
+                .map_err(|error| ServeError::Protocol(error.to_string()))
+        });
+        Ok::<Ending, ServeError>(
+            poll_fn(|context| {
+                if terminate.poll_recv(context).is_ready() {
+                    return Poll::Ready(Ending::Signal("SIGTERM"));
+                }
+                if interrupt.poll_recv(context).is_ready() {
+                    return Poll::Ready(Ending::Signal("SIGINT"));
+                }
+                session.as_mut().poll(context).map(Ending::Session)
+            })
+            .await,
+        )
     });
     server.shutdown();
     // A request still waiting on a bridge must not keep the process alive.
     runtime.shutdown_timeout(Duration::from_secs(1));
-    outcome
+    match ending? {
+        Ending::Session(outcome) => outcome,
+        Ending::Signal(name) => {
+            eprintln!("libremodular-mcp: stopped on {name}");
+            Ok(())
+        }
+    }
 }
 
 /// Start the server and return the exit code. A refusal to start is reported on

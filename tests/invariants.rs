@@ -836,3 +836,276 @@ fn counter_proof_a_print_in_the_server_is_detected() {
         stdout_writes(&[("server.rs".to_owned(), "eprintln!(\"log\");".to_owned())]).is_empty()
     );
 }
+
+// --- the bridges: token and sockets only in the core, loopback only -------------
+
+/// Every Python file under `bridges/`, as (path relative to `bridges/`, text).
+fn bridge_files() -> Vec<(String, String)> {
+    fn walk(dir: &Path, root: &Path, found: &mut Vec<(String, String)>) {
+        let mut entries: Vec<_> = fs::read_dir(dir)
+            .expect("bridges directory")
+            .map(|e| e.expect("entry").path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                if !path.ends_with("__pycache__") {
+                    walk(&path, root, found);
+                }
+            } else if path.extension().is_some_and(|e| e == "py") {
+                let name = path
+                    .strip_prefix(root)
+                    .expect("inside bridges")
+                    .to_string_lossy()
+                    .into_owned();
+                found.push((name, fs::read_to_string(&path).expect("bridge text")));
+            }
+        }
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("bridges");
+    let mut found = Vec::new();
+    walk(&root, &root, &mut found);
+    found
+}
+
+fn bridge_text(name: &str) -> String {
+    bridge_files()
+        .into_iter()
+        .find(|(file, _)| file == name)
+        .map(|(_, text)| text)
+        .unwrap_or_else(|| panic!("bridges/{name} not found"))
+}
+
+/// The code of a Python file without its full-line comments.
+fn python_code_lines(source: &str) -> Vec<&str> {
+    source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .collect()
+}
+
+const BRIDGE_SOCKET_SERVERS: [&str; 7] = [
+    ".bind(",
+    ".listen(",
+    "socket.socket(",
+    "create_server(",
+    "socketserver",
+    "http.server",
+    "start_server(",
+];
+
+/// Token comparisons and listening sockets in a bridge file other than the
+/// core. Generated files are checked separately: they must be the core and an
+/// adapter, nothing more.
+fn stray_bridge_security(files: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (name, source) in files {
+        if name == "_core.py" || name.starts_with("generated/") {
+            continue;
+        }
+        for (index, line) in python_code_lines(source).into_iter().enumerate() {
+            let at = format!("bridges/{name}:{}", index + 1);
+            let lower = line.to_lowercase();
+            if lower.contains("compare_digest")
+                || (lower.contains("token")
+                    && ["==", "!=", " is ", " in "]
+                        .iter()
+                        .any(|op| lower.contains(op)))
+            {
+                problems.push(format!("{at}: token comparison outside the core"));
+            }
+            for needle in BRIDGE_SOCKET_SERVERS {
+                if line.contains(needle) {
+                    problems.push(format!("{at}: {needle} outside the core"));
+                }
+            }
+        }
+    }
+    problems
+}
+
+/// What a generated bridge holds besides the core and its adapter: only
+/// comments, blank lines and the final call.
+fn generated_extras(generated: &str, core: &str, adapter: &str) -> Vec<String> {
+    let Some(rest) = generated
+        .split_once(core.trim_end())
+        .map(|(head, tail)| format!("{head}{tail}"))
+    else {
+        return vec!["the generated bridge does not contain the core".to_owned()];
+    };
+    let Some(rest) = rest
+        .split_once(adapter.trim_end())
+        .map(|(head, tail)| format!("{head}{tail}"))
+    else {
+        return vec!["the generated bridge does not contain the adapter".to_owned()];
+    };
+    rest.lines()
+        .map(str::trim)
+        .filter(|line| {
+            !line.is_empty() && !line.starts_with('#') && *line != "launch(ADAPTER(), DEFAULT_PORT)"
+        })
+        .map(|line| format!("extra code in the generated bridge: {line}"))
+        .collect()
+}
+
+#[test]
+fn bridges_compare_the_token_and_open_sockets_only_in_the_core() {
+    let files = bridge_files();
+    assert!(files.iter().any(|(name, _)| name == "_core.py"));
+    assert!(files.iter().any(|(name, _)| name == "adapters/gimp.py"));
+    let problems = stray_bridge_security(&files);
+    assert!(problems.is_empty(), "{problems:?}");
+    let core = bridge_text("_core.py");
+    assert!(core.contains("hmac.compare_digest(given, self._token)"));
+    for (name, text) in files
+        .iter()
+        .filter(|(name, _)| name.starts_with("generated/"))
+    {
+        let adapter_name = name
+            .trim_start_matches("generated/")
+            .trim_end_matches("_bridge.py");
+        let adapter = bridge_text(&format!("adapters/{adapter_name}.py"));
+        let extras = generated_extras(text, &core, &adapter);
+        assert!(extras.is_empty(), "{name}: {extras:?}");
+    }
+}
+
+#[test]
+fn counter_proof_stray_bridge_security_is_detected() {
+    let check = |name: &str, source: &str| -> Verdict {
+        let problems = stray_bridge_security(&[(name.to_owned(), source.to_owned())]);
+        ensure!(problems.is_empty(), "{problems:?}");
+        Ok(())
+    };
+    for defective in [
+        "if hmac.compare_digest(token, given):\n    pass",
+        "if given_token == expected:\n    pass",
+        "server.bind((\"127.0.0.1\", 9301))",
+        "server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)",
+        "import http.server",
+    ] {
+        must_fail(check("adapters/gimp.py", defective));
+    }
+    must_pass(check(
+        "adapters/gimp.py",
+        "# token == other is only a comment\nGimp = _gimp()",
+    ));
+    let core = bridge_text("_core.py");
+    let adapter = bridge_text("adapters/gimp.py");
+    let sound = bridge_text("generated/gimp_bridge.py");
+    assert!(generated_extras(&sound, &core, &adapter).is_empty());
+    let padded = sound.replace(
+        "launch(ADAPTER(), DEFAULT_PORT)",
+        "_extra = socket.socket()\nlaunch(ADAPTER(), DEFAULT_PORT)",
+    );
+    assert!(!generated_extras(&padded, &core, &adapter).is_empty());
+    let edited = sound.replacen("MAX_LINE_BYTES = 8", "MAX_LINE_BYTES = 9", 1);
+    assert!(!generated_extras(&edited, &core, &adapter).is_empty());
+}
+
+const CORE_FORBIDDEN: [&str; 19] = [
+    ".connect(",
+    "connect_ex(",
+    "create_connection(",
+    "import urllib",
+    "urllib.",
+    "http.client",
+    "ftplib",
+    "smtplib",
+    "import requests",
+    "subprocess",
+    "os.system(",
+    "os.popen(",
+    "os.exec",
+    "os.spawn",
+    "os.posix_spawn",
+    "os.fork",
+    "import pty",
+    "multiprocessing",
+    "asyncio",
+];
+
+/// Any address other than 127.0.0.1 in a bridge file, and, in the core, any
+/// outgoing connection or process launch.
+fn bridge_network_problems(files: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (name, source) in files {
+        for (index, line) in python_code_lines(source).into_iter().enumerate() {
+            let at = format!("bridges/{name}:{}", index + 1);
+            for address in dotted_quads(line) {
+                if address != "127.0.0.1" {
+                    problems.push(format!("{at}: address {address}"));
+                }
+            }
+            for other in [
+                "INADDR_ANY",
+                "AF_INET6",
+                "localhost",
+                "\"::",
+                "'::",
+                "bind((\"\"",
+                "bind(('',",
+                "getaddrinfo",
+                "gethostbyname",
+            ] {
+                if line.contains(other) {
+                    problems.push(format!("{at}: {other}"));
+                }
+            }
+            if name == "_core.py" {
+                for needle in CORE_FORBIDDEN {
+                    if line.contains(needle) {
+                        problems.push(format!("{at}: {needle} in the core"));
+                    }
+                }
+            }
+        }
+    }
+    problems
+}
+
+#[test]
+fn bridges_name_no_address_but_127_0_0_1_and_the_core_neither_connects_nor_launches() {
+    let files = bridge_files();
+    let problems = bridge_network_problems(&files);
+    assert!(problems.is_empty(), "{problems:?}");
+    let core = bridge_text("_core.py");
+    assert!(core.contains("\nLISTEN_ADDRESS = \"127.0.0.1\"\n"));
+    let binds: Vec<&str> = python_code_lines(&core)
+        .into_iter()
+        .filter(|line| line.contains(".bind("))
+        .map(str::trim)
+        .collect();
+    assert_eq!(binds, vec!["listener.bind((LISTEN_ADDRESS, port))"]);
+}
+
+#[test]
+fn counter_proof_a_bridge_reaching_out_is_detected() {
+    let check = |name: &str, source: &str| -> Verdict {
+        let problems = bridge_network_problems(&[(name.to_owned(), source.to_owned())]);
+        ensure!(problems.is_empty(), "{problems:?}");
+        Ok(())
+    };
+    for (name, defective) in [
+        ("_core.py", "listener.bind((\"0.0.0.0\", port))"),
+        ("_core.py", "listener.bind((\"\", port))"),
+        ("_core.py", "LISTEN_ADDRESS = \"localhost\""),
+        ("adapters/gimp.py", "HOST = \"192.0.2.10\""),
+        ("_core.py", "import subprocess"),
+        ("_core.py", "os.system(\"true\")"),
+        (
+            "_core.py",
+            "link = socket.create_connection((LISTEN_ADDRESS, 80))",
+        ),
+        (
+            "_core.py",
+            "from urllib.request import urlopen\nurlopen(\"x\")",
+        ),
+    ] {
+        must_fail(check(name, defective));
+    }
+    must_pass(check(
+        "_core.py",
+        "LISTEN_ADDRESS = \"127.0.0.1\"\nBRIDGE_VERSION = \"1\"",
+    ));
+}

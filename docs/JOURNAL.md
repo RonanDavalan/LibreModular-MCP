@@ -122,3 +122,92 @@ Not covered yet:
 - On SIGTERM or SIGINT the process ends without the shutdown purge; captures older than an hour are
   purged at the next start.
 - The hello does not check that the bridge reports the application the port was configured for.
+
+## 2026-10-03 — Bridge core and GIMP bridge
+
+The Python side exists: a common core for every bridge of the `tcp` and `uno` modes, a GIMP
+adapter, and a build script that joins them into the single file GIMP loads,
+`bridges/generated/gimp_bridge.py`. The Hub's `tcp` module drives that file end to end. Nothing
+has been run inside a real GIMP: the adapter is written from the public GIMP 3.0 API.
+
+Done, with the command that shows it:
+
+- The Hub refuses a bridge that announces another application than the one configured on its
+  port, without repeating the announced name: `cargo test --locked --test protocol --test server`.
+- On SIGTERM and SIGINT the Hub purges the captures, releases its connections and exits with
+  code 0, after `libremodular-mcp: stopped on SIGTERM` (or `SIGINT`) on the error stream:
+  `cargo test --locked --test stdio`.
+- Bridge core: loopback only, one connection at a time, five seconds for the hello, token
+  compared in constant time, silent refusal of a bad hello, lines bounded to 8 MiB without
+  reading a longer one, token file refused when it is a link, another user's, open to others
+  or not a regular file, scripts compiled as `<libremodular>` in a fresh namespace with output
+  captured and the creation mask at 077, no effect on import:
+  `python3 -m unittest discover -s tests/bridges` (69 tests, also run on Python 3.9.23).
+- GIMP adapter with a fake `gi` package and without `gi`; generated file current, compilable
+  for Python 3.9, unchanged by regeneration, without token: same command.
+- Both, from cargo, which fails when Python is missing, and the generated GIMP bridge driven by
+  the Hub's `TcpModule`: `cargo test --locked --test bridges`.
+- Token comparison and listening sockets only in `bridges/_core.py`, generated files made of
+  the core and the adapter only, no address but 127.0.0.1 in `bridges/`, no outgoing connection
+  or process launch in the core: `cargo test --locked --test invariants`.
+- Whole suite, formatting, lints, release build, bridges:
+  `cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked && cargo build --release --locked && python3 -m compileall -q bridges && python3 scripts/build_bridges.py --check`.
+
+Decisions:
+
+- tokio gains the `signal` feature, which brings `mio` and `signal-hook-registry` as transitive
+  dependencies. The wait on the session and on the signals is written with `std::future::poll_fn`,
+  so tokio's `macros` feature is not needed.
+- `BridgeClient::connect` and `BridgeConnector::new` take the expected application name; the
+  registry passes the name from its table of known applications.
+- The bridge reads the application version once, when it starts, in the thread that starts it:
+  the hello never calls the application from a connection thread.
+- The core reports an application whose API cannot be imported by a warning in `state`; it
+  recognises it by the version `unknown`, which every adapter returns in that case.
+- A script's exceptions, `SystemExit` included, are caught inside the call handed to the main
+  thread, and the traceback starts at the first frame of the script.
+- Each captured stream keeps at most 512 Ki characters, and an answer that would exceed the
+  line limit is reduced (result dropped, texts cut) rather than sent: the Hub would otherwise
+  drop the connection.
+- Run as a program, a generated bridge serves until stopped; run from a console with `exec`, it
+  returns at once. It tells the two apart by comparing its compiled file name with `sys.argv[0]`.
+- The default token path follows `XDG_CONFIG_HOME`, then `~/.config`. The bridge does not read
+  `LIBREMODULAR_CONFIG_DIR`: `LIBREMODULAR_TOKEN_PATH` is its explicit override.
+- The capture exports a flattened copy of the active image, so that the user's image keeps the
+  export file name GIMP remembers. The active image is the first one `Gimp.get_images()` lists.
+
+Not covered yet:
+
+- Nothing has run inside GIMP: the console gesture, `GLib.idle_add` as the way to GIMP's main
+  thread, `Gimp.get_images`, `Gimp.Selection.bounds`, `Gimp.file_save` with `None` options and
+  the enumeration names are unconfirmed.
+- A signal that arrives while the Hub is still starting, before the signal handlers are in
+  place, ends the process without the shutdown purge.
+- The bridge does not lower `RLIMIT_CORE`: it runs inside the application's process.
+- A reconnection made right after the previous connection closed can be refused for a few
+  milliseconds, until the bridge notices the closure and frees its single place.
+
+## 2026-10-04 — The GIMP bridge tried in GIMP 3.0.4, and a hang outside GIMP fixed
+
+The bridge ran in GIMP 3.0.4 (Debian 13 package) started without its interface
+(`gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval`, a Python main
+loop kept running after the bridge started), driven by the Hub over MCP on stdio:
+
+- `get_state("hub")` lists `gimp` as connected, version `3.0.4`, bridge version `1`.
+- A script that creates an image and a layer returns `status: ok` with the layer name in
+  `result`; the next `get_state("gimp")` lists the image (`color_mode: rgb`), the layer
+  (`blend_mode: normal`, `opacity: 100.0`, `visible: true`), `selection: null`, and a PNG
+  capture of 200 by 100 pixels in mode 600.
+- A script that fails returns `NameError` with the traceback line 2 of `<libremodular>`.
+
+Fixed: on a machine where `gi` and the GIMP typelib are installed, a bridge run as a plain
+Python program (as the tests do) queued its calls with `GLib.idle_add` and waited for a main
+loop that never ran, so `execute` and `state` never answered. Outside a process GIMP started,
+`Gimp.version()` is `None`: the adapter now calls directly, and answers `state: {}` with the
+usual warning, without asking GIMP anything. Tests: `test_run_on_main_is_direct_when_gi_loads_but_the_process_is_not_gimp`,
+`test_outside_gimp_nothing_asks_gimp_even_when_gi_loads` (the first fails on the earlier adapter).
+The end-to-end Rust test now says which step failed.
+
+Still unconfirmed: starting the bridge from the interactive Python console (menu path, the
+environment variables reaching it, its lifetime when the console closes), several open images
+(which one is listed first), a non-empty selection.

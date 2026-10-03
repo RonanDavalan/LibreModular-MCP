@@ -17,13 +17,19 @@ use crate::security::Token;
 pub struct KnownApp {
     pub name: &'static str,
     pub mode: Mode,
-    build: fn(&AppSettings, &Token, &Limits) -> Arc<dyn Module>,
+    build: fn(&'static str, &AppSettings, &Token, &Limits) -> Arc<dyn Module>,
 }
 
-fn build_tcp(settings: &AppSettings, token: &Token, limits: &Limits) -> Arc<dyn Module> {
+/// `app` is the name of [`KNOWN_APPS`]: the only name its bridge may announce.
+fn build_tcp(
+    app: &'static str,
+    settings: &AppSettings,
+    token: &Token,
+    limits: &Limits,
+) -> Arc<dyn Module> {
     match settings.port {
         Some(port) => Arc::new(TcpModule::new(
-            BridgeConnector::new(port, token.clone(), *limits),
+            BridgeConnector::new(app, port, token.clone(), *limits),
             Duration::from_secs(u64::from(limits.default_timeout_s)),
         )),
         None => Arc::new(UnavailableModule::new(format!(
@@ -129,7 +135,7 @@ fn build(settings: &AppSettings, token: &Token, limits: &Limits) -> Arc<dyn Modu
     let known = KNOWN_APPS.iter().find(|known| known.name == settings.name);
     let supported = known.is_some_and(|known| known.mode == settings.mode);
     match known {
-        Some(known) if supported => (known.build)(settings, token, limits),
+        Some(known) if supported => (known.build)(known.name, settings, token, limits),
         Some(known) => Arc::new(UnavailableModule::new(format!(
             "mode {} is not supported for {}; use mode {}",
             settings.mode.as_str(),
