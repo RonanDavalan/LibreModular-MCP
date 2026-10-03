@@ -1,12 +1,12 @@
-//! Guard results pinned against a reference implementation.
+//! Guard results pinned against an independent implementation.
 //!
 //! Why this module exists
-//! The guard was ported from an earlier implementation. Each pinned entry was
-//! produced by that implementation and the port was checked to give the same
-//! findings and warnings, so a later change that alters what the guard sees in a
-//! script shows up here. The entries flagged `same_as_reference: false` record
-//! the one deliberate difference: a `rmdir` or `unlink` call is only refused on
-//! an object recognised as a path.
+//! A change that alters what the guard sees in a script must show up as a failure,
+//! not as a silent shift. Each pinned entry holds the findings and warnings that an
+//! independent implementation of the same checks reports for the script, and the
+//! guard is held to the same result. Entries flagged `same_as_reference: false`
+//! record the one deliberate difference: a `rmdir` or `unlink` call is only
+//! refused on an object recognised as a path.
 
 use std::fs;
 use std::path::PathBuf;
