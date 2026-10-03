@@ -1,8 +1,5 @@
-.venv/
+target/
 __pycache__/
-.pytest_cache/
-.ruff_cache/
-*.egg-info/
 token
 audit.jsonl
 audit.jsonl.*
