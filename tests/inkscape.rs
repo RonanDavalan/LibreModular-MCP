@@ -851,3 +851,41 @@ fn counter_proof_a_reader_without_the_entity_scan_expands_them() {
         &state_without_the_entity_scan,
     ));
 }
+
+// --- through the Hub ---------------------------------------------------------------------
+
+#[test]
+fn the_hub_runs_inkscape_scripts_in_its_work_directory_and_accepts_the_capture() {
+    let setup = setup();
+    let base = common::private_tempdir();
+    let module: Arc<dyn Module> = Arc::new(module(&setup));
+    let hub = common::hub::build(
+        base.path(),
+        common::hub::config("[apps.inkscape]\nenabled = true\n"),
+        vec![("inkscape".to_owned(), module)],
+    );
+    let mut session = common::hub::Session::start(hub.server.clone());
+    let answer = session.execute(
+        "inkscape",
+        "import json, os\nprint('LMM_RESULT: ' + json.dumps(os.environ['LMM_WORK_DIR']))\n",
+    );
+    assert_eq!(answer["status"], "ok", "{answer}");
+    let work = hub.volatile.join("work").join("inkscape");
+    assert_eq!(answer["result"], json!(work.to_string_lossy()));
+    assert_eq!(common::mode_of(&work.join("current.svg")), 0o600);
+    let refused = session.execute("inkscape", "import subprocess\n");
+    assert_eq!(
+        refused["status"], "refused",
+        "the guard still applies: {refused}"
+    );
+    let state = session.state("inkscape");
+    assert_eq!(state["connected"], true, "{state}");
+    assert_eq!(state["app_version"], "1.2.2");
+    assert_eq!(
+        state["state"]["layers"],
+        json!([{"id": "layer1", "label": "Layer 1"}])
+    );
+    let screenshot = state["screenshot"].as_str().expect("a capture");
+    assert!(Path::new(screenshot).starts_with(hub.captures()));
+    assert_eq!(common::mode_of(Path::new(screenshot)), 0o600);
+}
