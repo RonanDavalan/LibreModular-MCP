@@ -1,0 +1,34 @@
+[project]
+name = "libremodular-mcp"
+version = "0.1.0"
+description = "Universal MCP server that lets a language model drive desktop applications through scripts."
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp==4.0.10",
+]
+
+[project.scripts]
+libremodular-mcp = "libremodular_mcp.cli:main"
+libremodular-launch = "libremodular_mcp.cli:launch_main"
+
+[dependency-groups]
+dev = [
+    "pytest==8.4.2",
+    "ruff==0.13.3",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/libremodular_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["app: needs a real desktop application"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
