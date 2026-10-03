@@ -14,9 +14,11 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant, SystemTime};
 
 use common::fake_bridge::FakeBridge;
 use common::{FAKE_TOKEN, FILE_TOKEN, Verdict, must_fail, must_pass, write_file};
+use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 
 const BINARY: &str = env!("CARGO_BIN_EXE_libremodular-mcp");
@@ -253,4 +255,81 @@ fn a_malformed_token_file_is_refused_without_quoting_it() {
     let layout = layout(base.path());
     prepare(&layout, &format!("{FAKE_TOKEN}{FILE_TOKEN}"), "");
     must_pass(check_refuses_to_start(&layout, true));
+}
+
+// --- stopping on a signal ------------------------------------------------------------
+
+/// Start the Hub, wait until it answers, plant a capture old enough to be
+/// purged, send `signal`, and require that the process ends in time without the
+/// capture and without showing the token.
+fn check_signal_purges_captures(signal: Signal) -> Verdict {
+    let base = common::private_tempdir();
+    let layout = layout(base.path());
+    prepare(&layout, FILE_TOKEN, "");
+    let mut child = command(&layout, true).spawn().map_err(|e| e.to_string())?;
+    let mut stdin = child.stdin.take().ok_or("no stdin")?;
+    let mut stdout = BufReader::new(child.stdout.take().ok_or("no stdout")?);
+    let init = rpc(
+        1,
+        "initialize",
+        json!({"protocolVersion": "2025-06-18", "capabilities": {},
+               "clientInfo": {"name": "e2e", "version": "0"}}),
+    );
+    writeln!(stdin, "{init}").map_err(|e| e.to_string())?;
+    stdin.flush().map_err(|e| e.to_string())?;
+    let mut line = String::new();
+    stdout.read_line(&mut line).map_err(|e| e.to_string())?;
+    ensure!(line.contains("\"result\""), "the Hub did not start: {line}");
+    // Planted once the Hub runs, so that only the shutdown can remove it.
+    let captures = layout.runtime.join("libremodular-mcp").join("captures");
+    let capture = captures.join("gimp-old.png");
+    write_file(&capture, 0o600, "not really a png");
+    let two_hours_ago = SystemTime::now() - Duration::from_secs(2 * 3600);
+    fs::File::options()
+        .write(true)
+        .open(&capture)
+        .and_then(|file| file.set_modified(two_hours_ago))
+        .map_err(|e| e.to_string())?;
+    kill_process(Pid::from_child(&child), signal).map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            break status;
+        }
+        if Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("the Hub did not stop within 10 seconds".to_owned());
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    drop(stdin);
+    let mut stderr = String::new();
+    if let Some(mut pipe) = child.stderr.take() {
+        let _ = std::io::Read::read_to_string(&mut pipe, &mut stderr);
+    }
+    ensure!(!stderr.contains(FILE_TOKEN), "the token was shown");
+    ensure!(
+        fs::symlink_metadata(&capture).is_err(),
+        "the capture survived the stop ({status:?})"
+    );
+    ensure!(status.success(), "exit status {status:?}");
+    Ok(())
+}
+
+#[test]
+fn sigterm_purges_the_captures_before_the_hub_exits() {
+    must_pass(check_signal_purges_captures(Signal::TERM));
+}
+
+#[test]
+fn sigint_purges_the_captures_before_the_hub_exits() {
+    must_pass(check_signal_purges_captures(Signal::INT));
+}
+
+#[test]
+fn counter_proof_a_stop_without_the_purge_is_detected() {
+    // SIGKILL cannot be handled: the process ends the way an unhandled signal
+    // would end it, and the check must notice the capture left behind.
+    must_fail(check_signal_purges_captures(Signal::KILL));
 }
