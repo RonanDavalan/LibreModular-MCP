@@ -34,6 +34,8 @@ pub enum HelloMode {
     Close,
     /// Answer a hello for another protocol version.
     WrongProtocol,
+    /// Answer a valid hello that announces `krita` instead of `gimp`.
+    OtherApp,
 }
 
 /// What the bridge answers to one request.
@@ -204,11 +206,11 @@ fn send(stream: &mut TcpStream, value: &Value) -> bool {
     stream.write_all(&line).is_ok()
 }
 
-fn hello_answer(protocol: u64) -> Value {
+fn hello_answer(protocol: u64, app: &str) -> Value {
     json!({
         "type": "hello",
         "ok": true,
-        "app": "gimp",
+        "app": app,
         "app_version": "3.0.4",
         "bridge_version": "1",
         "protocol": protocol,
@@ -240,10 +242,13 @@ fn serve(
         return;
     }
     let answered = match hello {
-        HelloMode::Normal | HelloMode::AcceptAnyToken => send(&mut stream, &hello_answer(1)),
+        HelloMode::Normal | HelloMode::AcceptAnyToken => {
+            send(&mut stream, &hello_answer(1, "gimp"))
+        }
         HelloMode::Refuse => send(&mut stream, &json!({"type": "hello", "ok": false})),
         HelloMode::Malformed => stream.write_all(b"this is not json\n").is_ok(),
-        HelloMode::WrongProtocol => send(&mut stream, &hello_answer(2)),
+        HelloMode::WrongProtocol => send(&mut stream, &hello_answer(2, "gimp")),
+        HelloMode::OtherApp => send(&mut stream, &hello_answer(1, "krita")),
         HelloMode::Close => false,
     };
     if !answered || !matches!(hello, HelloMode::Normal | HelloMode::AcceptAnyToken) {

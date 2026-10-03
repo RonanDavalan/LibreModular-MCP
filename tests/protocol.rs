@@ -9,7 +9,8 @@
 #[macro_use]
 mod common;
 
-use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+use std::io::{BufRead, BufReader, Write};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -48,7 +49,8 @@ fn free_port() -> u16 {
 #[test]
 fn hello_is_checked_and_reports_the_bridge() {
     let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::Normal, handler(|_| ok_reply()));
-    let client = BridgeClient::connect(bridge.port(), &token(), &limits()).expect("connect");
+    let client =
+        BridgeClient::connect(bridge.port(), "gimp", &token(), &limits()).expect("connect");
     assert_eq!(client.hello().app, "gimp");
     assert_eq!(client.hello().app_version, "3.0.4");
     assert_eq!(client.hello().bridge_version, "1");
@@ -94,7 +96,8 @@ fn counter_proof_a_bridge_that_accepts_any_token_is_detected() {
 fn a_client_with_the_wrong_token_is_refused_without_the_token_in_the_message() {
     let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::Normal, handler(|_| ok_reply()));
     let wrong = Token::new("test-token-9999").expect("token");
-    let error = BridgeClient::connect(bridge.port(), &wrong, &limits()).expect_err("refused");
+    let error =
+        BridgeClient::connect(bridge.port(), "gimp", &wrong, &limits()).expect_err("refused");
     assert!(matches!(error, BridgeError::Handshake(_)), "{error}");
     let shown = format!("{error} {error:?}");
     assert!(!shown.contains("test-token"), "{shown}");
@@ -109,7 +112,7 @@ fn every_bad_hello_is_a_typed_error_that_never_shows_the_token() {
         HelloMode::WrongProtocol,
     ] {
         let bridge = FakeBridge::start(FAKE_TOKEN, mode, handler(|_| ok_reply()));
-        let error = BridgeClient::connect(bridge.port(), &token(), &limits())
+        let error = BridgeClient::connect(bridge.port(), "gimp", &token(), &limits())
             .expect_err("a bad hello is refused");
         assert!(
             matches!(error, BridgeError::Handshake(_)),
@@ -120,9 +123,74 @@ fn every_bad_hello_is_a_typed_error_that_never_shows_the_token() {
     }
 }
 
+// --- the bridge must be the application configured on its port --------------------
+
+/// A way to connect that returns the application it accepted.
+type Connect<'a> = &'a dyn Fn(u16) -> Result<String, BridgeError>;
+
+/// A bridge announcing `krita` on the port configured for `gimp` must be refused
+/// as a handshake failure that does not repeat the announced name.
+fn check_another_application_is_refused(connect: Connect<'_>) -> Verdict {
+    let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::OtherApp, handler(|_| ok_reply()));
+    match connect(bridge.port()) {
+        Ok(app) => Err(format!("a bridge announcing {app} was accepted for gimp")),
+        Err(error @ BridgeError::Handshake(_)) => {
+            let shown = format!("{error} {error:?}");
+            ensure!(
+                !shown.contains("krita"),
+                "the announced name is repeated: {shown}"
+            );
+            Ok(())
+        }
+        Err(other) => Err(format!("not a handshake error: {other}")),
+    }
+}
+
+/// Defective on purpose: a client that checks everything in the hello but the
+/// application, written here without the Hub's code.
+fn connect_without_checking_the_application(port: u16) -> Result<String, BridgeError> {
+    let refused = || BridgeError::Handshake("defective client");
+    let mut stream = TcpStream::connect(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+        .map_err(BridgeError::Connect)?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .map_err(BridgeError::Connect)?;
+    let hello = json!({"type": "hello", "token": FAKE_TOKEN, "protocol": 1});
+    writeln!(stream, "{hello}").map_err(BridgeError::Connect)?;
+    let mut line = String::new();
+    BufReader::new(stream)
+        .read_line(&mut line)
+        .map_err(|_| refused())?;
+    let answer: Value = serde_json::from_str(&line).map_err(|_| refused())?;
+    let valid = answer["type"] == "hello" && answer["ok"] == true && answer["protocol"] == 1;
+    if !valid {
+        return Err(refused());
+    }
+    answer["app"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(refused)
+}
+
+#[test]
+fn a_bridge_announcing_another_application_is_refused() {
+    must_pass(check_another_application_is_refused(&|port| {
+        BridgeClient::connect(port, "gimp", &token(), &limits())
+            .map(|client| client.hello().app.clone())
+    }));
+}
+
+#[test]
+fn counter_proof_a_client_that_ignores_the_announced_application_is_detected() {
+    must_fail(check_another_application_is_refused(
+        &connect_without_checking_the_application,
+    ));
+}
+
 #[test]
 fn nothing_listening_is_a_connection_error() {
-    let error = BridgeClient::connect(free_port(), &token(), &limits()).expect_err("no bridge");
+    let error =
+        BridgeClient::connect(free_port(), "gimp", &token(), &limits()).expect_err("no bridge");
     assert!(matches!(error, BridgeError::Connect(_)), "{error}");
 }
 
@@ -135,7 +203,8 @@ fn check_endless_line_is_refused(client_limits: &Limits) -> Verdict {
         HelloMode::Normal,
         handler(|_| Reply::Raw(vec![b'x'; 200_000])),
     );
-    let client = BridgeClient::connect(bridge.port(), &token(), client_limits).expect("connect");
+    let client =
+        BridgeClient::connect(bridge.port(), "gimp", &token(), client_limits).expect("connect");
     match client.request(execute("x"), Duration::from_secs(2)) {
         Err(BridgeError::LineTooLong { .. }) => Ok(()),
         other => Err(format!("an endless line gave {other:?}")),
@@ -159,7 +228,8 @@ fn counter_proof_without_a_line_limit_the_endless_line_is_not_refused() {
 #[test]
 fn a_request_longer_than_the_limit_is_not_sent() {
     let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::Normal, handler(|_| ok_reply()));
-    let client = BridgeClient::connect(bridge.port(), &token(), &limits()).expect("connect");
+    let client =
+        BridgeClient::connect(bridge.port(), "gimp", &token(), &limits()).expect("connect");
     let error = client
         .request(execute(&"x".repeat(10_000)), Duration::from_secs(2))
         .expect_err("too long");
@@ -175,7 +245,8 @@ fn an_answer_with_another_id_is_a_protocol_error() {
         HelloMode::Normal,
         handler(|_| Reply::Raw(b"{\"id\":\"r99\",\"ok\":true}\n".to_vec())),
     );
-    let client = BridgeClient::connect(bridge.port(), &token(), &limits()).expect("connect");
+    let client =
+        BridgeClient::connect(bridge.port(), "gimp", &token(), &limits()).expect("connect");
     let error = client
         .request(execute("x"), Duration::from_secs(2))
         .expect_err("wrong id");
@@ -192,8 +263,9 @@ fn a_second_request_while_one_is_running_is_busy_at_once_and_not_sent() {
         HelloMode::Normal,
         handler(|_| Reply::Late(Duration::from_millis(700), json!({"ok": true}))),
     );
-    let client =
-        Arc::new(BridgeClient::connect(bridge.port(), &token(), &limits()).expect("connect"));
+    let client = Arc::new(
+        BridgeClient::connect(bridge.port(), "gimp", &token(), &limits()).expect("connect"),
+    );
     let first = {
         let client = Arc::clone(&client);
         std::thread::spawn(move || client.request(execute("first"), Duration::from_secs(5)))
@@ -226,7 +298,8 @@ fn after_a_timeout_the_client_stays_busy_until_the_late_answer_arrives() {
             }
         }),
     );
-    let client = BridgeClient::connect(bridge.port(), &token(), &limits()).expect("connect");
+    let client =
+        BridgeClient::connect(bridge.port(), "gimp", &token(), &limits()).expect("connect");
     let first = client.request(execute("slow"), Duration::from_millis(200));
     assert!(matches!(first, Err(BridgeError::Timeout)), "{first:?}");
     let second = client.request(execute("next"), Duration::from_secs(2));
@@ -243,7 +316,8 @@ fn after_a_timeout_the_client_stays_busy_until_the_late_answer_arrives() {
 #[test]
 fn a_connection_closed_after_the_request_is_reported_as_sent() {
     let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::Normal, handler(|_| Reply::Close));
-    let client = BridgeClient::connect(bridge.port(), &token(), &limits()).expect("connect");
+    let client =
+        BridgeClient::connect(bridge.port(), "gimp", &token(), &limits()).expect("connect");
     let error = client
         .request(execute("x"), Duration::from_secs(2))
         .expect_err("closed");
@@ -263,7 +337,8 @@ fn a_connection_closed_after_the_request_is_reported_as_sent() {
 #[test]
 fn close_releases_the_connection_and_sends_nothing() {
     let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::Normal, handler(|_| ok_reply()));
-    let client = BridgeClient::connect(bridge.port(), &token(), &limits()).expect("connect");
+    let client =
+        BridgeClient::connect(bridge.port(), "gimp", &token(), &limits()).expect("connect");
     client.close();
     assert!(!client.is_usable());
     std::thread::sleep(Duration::from_millis(50));

@@ -91,19 +91,28 @@ pub struct Hello {
 /// Everything needed to open a connection to one bridge.
 #[derive(Clone)]
 pub struct BridgeConnector {
+    app: &'static str,
     port: u16,
     token: Token,
     limits: Limits,
 }
 
 impl BridgeConnector {
+    /// `app` is the application configured on `port`: a bridge announcing any
+    /// other one is refused, so that a script never reaches the wrong program.
     #[must_use]
-    pub fn new(port: u16, token: Token, limits: Limits) -> Self {
+    pub fn new(app: &'static str, port: u16, token: Token, limits: Limits) -> Self {
         BridgeConnector {
+            app,
             port,
             token,
             limits,
         }
+    }
+
+    #[must_use]
+    pub fn app(&self) -> &'static str {
+        self.app
     }
 
     #[must_use]
@@ -116,13 +125,14 @@ impl BridgeConnector {
     /// # Errors
     /// See [`BridgeClient::connect`].
     pub fn connect(&self) -> Result<BridgeClient, BridgeError> {
-        BridgeClient::connect(self.port, &self.token, &self.limits)
+        BridgeClient::connect(self.port, self.app, &self.token, &self.limits)
     }
 }
 
 impl fmt::Debug for BridgeConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BridgeConnector")
+            .field("app", &self.app)
             .field("port", &self.port)
             .finish_non_exhaustive()
     }
@@ -269,7 +279,7 @@ fn text_field(object: &Map<String, Value>, key: &str) -> Option<String> {
     object.get(key).and_then(Value::as_str).map(str::to_owned)
 }
 
-fn check_hello(object: &Map<String, Value>) -> Result<Hello, BridgeError> {
+fn check_hello(object: &Map<String, Value>, expected_app: &str) -> Result<Hello, BridgeError> {
     if object.get("type").and_then(Value::as_str) != Some("hello") {
         return Err(BridgeError::Handshake("the answer is not a hello"));
     }
@@ -281,20 +291,29 @@ fn check_hello(object: &Map<String, Value>) -> Result<Hello, BridgeError> {
             "the bridge speaks another protocol version",
         ));
     }
-    match (
+    let hello = match (
         text_field(object, "app"),
         text_field(object, "app_version"),
         text_field(object, "bridge_version"),
     ) {
-        (Some(app), Some(app_version), Some(bridge_version)) => Ok(Hello {
+        (Some(app), Some(app_version), Some(bridge_version)) => Hello {
             app,
             app_version,
             bridge_version,
-        }),
-        _ => Err(BridgeError::Handshake(
-            "the hello lacks the application or a version",
-        )),
+        },
+        _ => {
+            return Err(BridgeError::Handshake(
+                "the hello lacks the application or a version",
+            ));
+        }
+    };
+    // The announced name is not repeated: it is text from the other end.
+    if hello.app != expected_app {
+        return Err(BridgeError::Handshake(
+            "the bridge announced another application than the one configured on this port",
+        ));
     }
+    Ok(hello)
 }
 
 /// One authenticated connection to a bridge.
@@ -313,12 +332,19 @@ pub struct BridgeClient {
 
 impl BridgeClient {
     /// Connect to the bridge listening on `port` of the loopback address, send the
-    /// `hello` with the token and check the answer.
+    /// `hello` with the token and check the answer, which must announce
+    /// `expected_app`.
     ///
     /// # Errors
     /// [`BridgeError::Connect`] when nothing listens, [`BridgeError::Handshake`]
-    /// for any answer other than a valid `hello` (including a closed connection).
-    pub fn connect(port: u16, token: &Token, limits: &Limits) -> Result<BridgeClient, BridgeError> {
+    /// for any answer other than a valid `hello` of `expected_app` (including a
+    /// closed connection).
+    pub fn connect(
+        port: u16,
+        expected_app: &str,
+        token: &Token,
+        limits: &Limits,
+    ) -> Result<BridgeClient, BridgeError> {
         let address = SocketAddr::V4(SocketAddrV4::new(BRIDGE_ADDRESS, port));
         let stream =
             TcpStream::connect_timeout(&address, CONNECT_TIMEOUT).map_err(BridgeError::Connect)?;
@@ -350,7 +376,7 @@ impl BridgeClient {
         };
         connection.write_line(&line, deadline).map_err(handshake)?;
         let answer = connection.read_line(deadline, true).map_err(handshake)?;
-        let hello = check_hello(&parse_object(&answer).map_err(handshake)?)?;
+        let hello = check_hello(&parse_object(&answer).map_err(handshake)?, expected_app)?;
         Ok(BridgeClient {
             connection: Mutex::new(connection),
             control,

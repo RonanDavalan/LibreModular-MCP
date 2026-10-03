@@ -255,12 +255,32 @@ fn status_refused_for_an_unknown_target() {
 }
 
 #[test]
+fn a_bridge_announcing_another_application_is_unavailable_and_gets_no_script() {
+    let base = common::private_tempdir();
+    let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::OtherApp, handler(|_| Reply::Silent));
+    let hub = build(
+        base.path(),
+        config_for("gimp", bridge.port(), ""),
+        Vec::new(),
+    );
+    let mut session = Session::start(hub.server.clone());
+    let answer = session.execute("gimp", "x = 1");
+    assert_eq!(answer["status"], "unavailable", "{answer}");
+    assert!(!answer.to_string().contains("krita"), "{answer}");
+    assert!(bridge.scripts().is_empty());
+    let state = session.state("gimp");
+    assert_eq!(state["connected"], false, "{state}");
+    assert_eq!(bridge.requests(), 0);
+}
+
+#[test]
 fn status_refused_for_a_disabled_target_even_with_an_injected_module() {
     let base = common::private_tempdir();
     let bridge = ok_bridge();
     let module: Arc<dyn libremodular_mcp::modules::Module> =
         Arc::new(libremodular_mcp::modules::TcpModule::new(
             libremodular_mcp::protocol::BridgeConnector::new(
+                "krita",
                 bridge.port(),
                 libremodular_mcp::security::Token::new(FAKE_TOKEN).expect("token"),
                 libremodular_mcp::config::Limits::default(),
