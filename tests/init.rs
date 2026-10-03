@@ -176,16 +176,28 @@ fn run_cli(args: &[&str], paths: &Paths) -> (u8, String, String) {
 }
 
 #[test]
-fn main_without_command_prints_help() {
+fn help_option_prints_help() {
     let base = common::private_tempdir();
     let paths = paths_in(base.path());
-    let (code, out, _) = run_cli(&["libremodular-mcp"], &paths);
+    let (code, out, _) = run_cli(&["libremodular-mcp", "--help"], &paths);
     assert_eq!(code, 0);
     assert!(out.contains("init"));
+    assert!(out.contains("serve"));
     assert!(
         !paths.config_dir.exists(),
         "printing help must not create anything"
     );
+}
+
+#[test]
+fn main_without_command_serves_and_refuses_to_start_without_a_token() {
+    let base = common::private_tempdir();
+    let paths = paths_in(base.path());
+    let (code, out, err) = run_cli(&["libremodular-mcp"], &paths);
+    assert_eq!(code, 1);
+    assert!(out.is_empty(), "nothing but the protocol on the standard output");
+    assert!(err.contains("token"), "{err}");
+    assert!(!paths.config_dir.exists(), "a refused start creates nothing");
 }
 
 #[test]

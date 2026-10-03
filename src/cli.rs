@@ -2,9 +2,10 @@
 //!
 //! Why this module exists
 //! The operator needs one explicit, safe way to create the configuration and the
-//! bridge token with the right permissions, and a launcher whose argument list is
+//! bridge token with the right permissions, a server that refuses to start when
+//! a security condition cannot be verified, and a launcher whose argument list is
 //! fixed by code and never built from text the model wrote. This is also the only
-//! module that writes to the standard output.
+//! module that writes to the standard output, apart from the MCP protocol itself.
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -13,11 +14,19 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, Subcommand};
 
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+
+use rmcp::ServiceExt;
+
+use crate::audit::{AuditLog, AuditUnavailable};
 use crate::config::{self, APP_DEFAULTS, ConfigError, Limits, Paths};
+use crate::registry::Registry;
 use crate::security::{
     ControlAccess, SecurityError, create_token, ensure_private_dir, harden_process, load_token,
     open_control_file,
 };
+use crate::server::{HubContext, HubServer, build_server};
 
 #[derive(Parser)]
 #[command(
@@ -32,6 +41,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Serve MCP on the standard input and output (also the default)
+    Serve,
     /// Create the configuration directory, an example configuration and the token
     Init {
         /// Replace the existing token
@@ -216,10 +227,126 @@ pub fn run_with(
                 1
             }
         },
-        None => {
-            let help = Cli::command().render_help().to_string();
-            let _ = write!(out, "{help}");
-            0
+        Some(Command::Serve) | None => match locate() {
+            Ok(paths) => run_serve(&paths, err),
+            Err(error) => {
+                let _ = writeln!(err, "error: {error}");
+                1
+            }
+        },
+    }
+}
+
+/// Help text of the command, as `--help` prints it.
+#[must_use]
+pub fn help_text() -> String {
+    Cli::command().render_help().to_string()
+}
+
+/// What prevents the server from starting.
+#[derive(Debug)]
+pub enum ServeError {
+    Config(ConfigError),
+    Security(SecurityError),
+    Audit(AuditUnavailable),
+    Runtime(std::io::Error),
+    Protocol(String),
+}
+
+impl std::fmt::Display for ServeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ServeError::Config(error) => error.fmt(f),
+            ServeError::Security(error) => error.fmt(f),
+            ServeError::Audit(error) => error.fmt(f),
+            ServeError::Runtime(error) => write!(f, "cannot start the runtime: {error}"),
+            ServeError::Protocol(message) => write!(f, "MCP session failed: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for ServeError {}
+
+impl From<ConfigError> for ServeError {
+    fn from(error: ConfigError) -> Self {
+        ServeError::Config(error)
+    }
+}
+
+impl From<SecurityError> for ServeError {
+    fn from(error: SecurityError) -> Self {
+        ServeError::Security(error)
+    }
+}
+
+impl From<AuditUnavailable> for ServeError {
+    fn from(error: AuditUnavailable) -> Self {
+        ServeError::Audit(error)
+    }
+}
+
+/// Build the server in the order that keeps every check ahead of what it guards:
+/// configuration, hardening, token, journal, volatile directory, registry.
+///
+/// # Errors
+/// Any security condition that cannot be verified.
+pub fn prepare_server(paths: &Paths) -> Result<HubServer, ServeError> {
+    let config = config::load(&paths.config_file())?;
+    harden_process()?;
+    let token = load_token(&paths.token_file())?;
+    let audit = AuditLog::new(paths.audit_file(), token.clone(), *config.limits())
+        .with_script_text(config.security().audit_script_text);
+    audit.probe()?;
+    let volatile_dir = paths.require_runtime_dir()?.to_path_buf();
+    ensure_private_dir(&volatile_dir)?;
+    ensure_private_dir(&volatile_dir.join("work"))?;
+    ensure_private_dir(&volatile_dir.join("captures"))?;
+    let registry = Registry::from_config(&config, &token);
+    let server = build_server(HubContext {
+        config,
+        registry,
+        audit,
+        token,
+        clock: Arc::new(SystemTime::now),
+        volatile_dir,
+        home_dir: config::home_dir_from_process(),
+    });
+    server.context().purge();
+    Ok(server)
+}
+
+/// Serve MCP on the standard input and output until the client closes it.
+fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(ServeError::Runtime)?;
+    let session = server.clone();
+    let outcome = runtime.block_on(async move {
+        let running = session
+            .serve(rmcp::transport::stdio())
+            .await
+            .map_err(|error| ServeError::Protocol(error.to_string()))?;
+        running
+            .waiting()
+            .await
+            .map(drop)
+            .map_err(|error| ServeError::Protocol(error.to_string()))
+    });
+    server.shutdown();
+    // A request still waiting on a bridge must not keep the process alive.
+    runtime.shutdown_timeout(Duration::from_secs(1));
+    outcome
+}
+
+/// Start the server and return the exit code. A refusal to start is reported on
+/// the error stream, never with the token.
+pub fn run_serve(paths: &Paths, err: &mut dyn Write) -> u8 {
+    match prepare_server(paths).and_then(serve_stdio) {
+        Ok(()) => 0,
+        Err(error) => {
+            let _ = writeln!(err, "error: {error}");
+            1
         }
     }
 }
