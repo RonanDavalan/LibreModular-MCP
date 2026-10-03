@@ -1,0 +1,1408 @@
+[
+ {
+  "name": "extra_annotation",
+  "script": "import os\nx: object = os.remove\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_async_await",
+  "script": "import os\nasync def f():\n    await os.remove('x')\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_bare_eval_name",
+  "script": "print(eval)\nf = exec\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "eval"
+   ],
+   [
+    2,
+    "G-5",
+    "exec"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_builtins_subscript",
+  "script": "__builtins__['eval']('1')\nimport builtins\nbuiltins.__import__('os')\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "__builtins__"
+   ],
+   [
+    3,
+    "G-5",
+    "__import__"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_bytes_path",
+  "script": "open(b'/etc/x', 'w')\nopen(path_var, 'w')\n",
+  "findings": [],
+  "warnings": [
+   "line 1: path not statically verifiable (open())",
+   "line 2: path not statically verifiable (open())"
+  ],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_call_result_attr",
+  "script": "get_module().remove('x')\nget_path().unlink()\nget_path().rmdir()\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": false
+ },
+ {
+  "name": "extra_codecs_open",
+  "script": "import codecs\ncodecs.open('/etc/x', 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /etc/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_control_flow",
+  "script": "import os\ntry:\n    pass\nexcept Exception as e:\n    os.remove('x')\nfinally:\n    os.rmdir('y')\nfor i in range(3):\n    while True:\n        with open('/etc/z', 'w') as f:\n            pass\nclass A:\n    r = os.remove\n",
+  "findings": [
+   [
+    5,
+    "G-1",
+    "os.remove"
+   ],
+   [
+    7,
+    "G-1",
+    "os.rmdir"
+   ],
+   [
+    10,
+    "G-4",
+    "open() to /etc/z"
+   ],
+   [
+    13,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_copy2_copytree",
+  "script": "import shutil\nshutil.copy2(a, '/root/x')\nshutil.copytree(a, '/root/y')\nshutil.copyfileobj(a, b)\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "shutil.copy2 to /root/x"
+   ],
+   [
+    3,
+    "G-4",
+    "shutil.copytree to /root/y"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_crlf",
+  "script": "import os\r\nx = 1\r\nos.remove('a')\r\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_decorator",
+  "script": "import subprocess\n@subprocess.run\ndef f():\n    pass\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "import subprocess"
+   ],
+   [
+    2,
+    "G-2",
+    "subprocess.run"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_del_then_use",
+  "script": "import os\ndel os\nos.remove('x')\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_eval_attr_and_rebind",
+  "script": "obj.eval('x')\neval = 3\neval('y')\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_format_spec",
+  "script": "x = 'a'\nopen(f'/tmp/{x:>10}', 'w')\nopen(str('/tmp/q'), 'w')\n",
+  "findings": [
+   [
+    3,
+    "G-4",
+    "open() to /tmp/q"
+   ]
+  ],
+  "warnings": [
+   "line 2: path not statically verifiable (open())"
+  ],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_from_path_join",
+  "script": "from os.path import join as j\nopen(j('/etc', 'x'), 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /etc/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_fstring_import",
+  "script": "x = f\"{__import__('os').system('x')}\"\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "__import__"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_fstring_inside",
+  "script": "open(f'{LMM_WORK_DIR}/a.txt', 'w')\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_fstring_outside",
+  "script": "name = 'a'\nopen(f'/tmp/{name}', 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /tmp/a"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_getattr_dynamic",
+  "script": "import os\nname = 'remove'\ngetattr(os, name)('x')\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_io_class",
+  "script": "import ctypes.util\nfrom importlib import import_module\nimport_module('os')\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "import ctypes.util"
+   ],
+   [
+    2,
+    "G-5",
+    "from importlib import ..."
+   ],
+   [
+    2,
+    "G-5",
+    "importlib.import_module"
+   ],
+   [
+    3,
+    "G-5",
+    "importlib.import_module"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_io_open",
+  "script": "import io\nio.open('/etc/x', 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /etc/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_join_alias",
+  "script": "import os\nx = os.path.join\nopen(x('/a', 'b'), 'w')\n",
+  "findings": [
+   [
+    3,
+    "G-4",
+    "open() to /a/b"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_lambda_comprehension",
+  "script": "import os\nf = lambda: os.system('x')\n[os.remove(p) for p in ps]\n",
+  "findings": [
+   [
+    2,
+    "G-2",
+    "os.system"
+   ],
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_move_mixed",
+  "script": "import shutil\nshutil.move(LMM_WORK_DIR + '/a', '/etc/b')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "shutil.move to /etc/b"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_multi_import",
+  "script": "import os, subprocess\nfrom os import (remove as r, system)\nr('x')\nsystem('y')\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "import subprocess"
+   ],
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ],
+   [
+    2,
+    "G-2",
+    "os.system"
+   ],
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ],
+   [
+    4,
+    "G-2",
+    "os.system"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_nested_alias",
+  "script": "def f():\n    import os as o\n    def g():\n        o.remove('x')\n    return g\n",
+  "findings": [
+   [
+    4,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_normpath",
+  "script": "import os\nopen(os.path.normpath(os.path.join(LMM_WORK_DIR, '..', 'x')), 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /run/user/1000/libremodular-mcp/work/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_open_modes",
+  "script": "open('/etc/a', mode='r+')\nopen('/etc/b', 'rb')\nopen('/etc/c', 'xb')\nopen('/etc/d', 'a+')\nopen('/etc/e', m)\n",
+  "findings": [
+   [
+    1,
+    "G-4",
+    "open() to /etc/a"
+   ],
+   [
+    3,
+    "G-4",
+    "open() to /etc/c"
+   ],
+   [
+    4,
+    "G-4",
+    "open() to /etc/d"
+   ]
+  ],
+  "warnings": [
+   "line 5: open mode not statically verifiable (open())"
+  ],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_os_open_inside",
+  "script": "import os\nos.open(LMM_WORK_DIR + '/x', os.O_RDWR)\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_os_open_int",
+  "script": "import os\nos.open('/etc/x', 577)\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "os.open to /etc/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_os_open_read",
+  "script": "import os\nos.open('/etc/x', os.O_RDONLY)\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_os_open_write",
+  "script": "import os\nos.open('/etc/x', os.O_WRONLY | os.O_CREAT)\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "os.open to /etc/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_path_class_write",
+  "script": "import pathlib\npathlib.Path.write_text(pathlib.Path('/etc/x'), 'x')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "write_text to /etc/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_path_expanduser",
+  "script": "from pathlib import Path\nPath('~/x').expanduser().write_text('x')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "write_text to /home/alice/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_path_home",
+  "script": "from pathlib import Path\n(Path.home() / 'x').write_text('x')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "write_text to /home/alice/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_path_open",
+  "script": "from pathlib import Path\nPath('/etc/x').open('w')\nPath('/etc/y').open()\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "Path.open() to /etc/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_path_work_escape",
+  "script": "from pathlib import Path\n(Path(LMM_WORK_DIR) / '..' / 'x').write_text('x')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "write_text to /run/user/1000/libremodular-mcp/work/gimp/../x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_path_work_inside",
+  "script": "from pathlib import Path\n(Path(LMM_WORK_DIR) / 'a').write_text('x')\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_rebind_os",
+  "script": "import os\nos = other()\nos.remove('x')\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_relative_import",
+  "script": "from . import x\nfrom .y import z\nx.remove('a')\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_rmdir_variants",
+  "script": "from pathlib import Path\nimport os\nPath('x').rmdir()\nos.rmdir('y')\nobj.rmdir()\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "Path.rmdir"
+   ],
+   [
+    4,
+    "G-1",
+    "os.rmdir"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": false
+ },
+ {
+  "name": "extra_star_args",
+  "script": "open(*args)\nopen(*args, mode='w')\n",
+  "findings": [],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_star_subprocess",
+  "script": "from subprocess import *\nrun(['ls'])\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "from subprocess import ..."
+   ],
+   [
+    2,
+    "G-2",
+    "subprocess.run"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_tilde_only",
+  "script": "open('~', 'w')\nopen('~/', 'w')\n",
+  "findings": [
+   [
+    1,
+    "G-4",
+    "open() to /home/alice"
+   ],
+   [
+    2,
+    "G-4",
+    "open() to /home/alice/"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_try_import",
+  "script": "try:\n    import requests\nexcept ImportError:\n    requests = None\n",
+  "findings": [
+   [
+    2,
+    "G-3",
+    "import requests"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_unicode_before",
+  "script": "s = 'ééé日本語'\nimport os\nos.remove('a')\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_unlink_path_chain",
+  "script": "import pathlib\np = pathlib.Path('a').with_suffix('.x').parent\np.unlink()\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "Path.unlink"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_urllib_alias",
+  "script": "import urllib.request as ur\nur.urlopen('x')\nimport os.path as p\np.join('a')\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "import urllib.request"
+   ],
+   [
+    2,
+    "G-3",
+    "urllib.request.urlopen"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_walrus",
+  "script": "import os\n(f := os.remove)('x')\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "extra_with_two",
+  "script": "import os\nwith open(os.path.join(LMM_WORK_DIR, 'a'), 'w') as f, open('/etc/y', 'w') as g:\n    pass\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /etc/y"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_000",
+  "script": "import os\nos.remove('/home/alice/a')\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_001",
+  "script": "import os\nos.unlink(p)\nos.rmdir(p)\nos.removedirs(p)\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.unlink"
+   ],
+   [
+    3,
+    "G-1",
+    "os.rmdir"
+   ],
+   [
+    4,
+    "G-1",
+    "os.removedirs"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_002",
+  "script": "import shutil\nshutil.rmtree(d)\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "shutil.rmtree"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_003",
+  "script": "from pathlib import Path\np = Path('/home/alice/a')\np.unlink()\n",
+  "findings": [
+   [
+    3,
+    "G-1",
+    "Path.unlink"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_004",
+  "script": "import pathlib\npathlib.Path('/home/alice/d').rmdir()\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "Path.rmdir"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": false
+ },
+ {
+  "name": "table_005",
+  "script": "import os\nf = os.remove\nf('x')\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ],
+   [
+    3,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_006",
+  "script": "import os\nlist(map(os.remove, files))\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_007",
+  "script": "import subprocess\nsubprocess.run(['ls'])\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "import subprocess"
+   ],
+   [
+    2,
+    "G-2",
+    "subprocess.run"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_008",
+  "script": "import os\nos.system('ls')\n",
+  "findings": [
+   [
+    2,
+    "G-2",
+    "os.system"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_009",
+  "script": "import os\nos.popen('ls')\n",
+  "findings": [
+   [
+    2,
+    "G-2",
+    "os.popen"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_010",
+  "script": "import os\nos.execv('/bin/ls', ['ls'])\n",
+  "findings": [
+   [
+    2,
+    "G-2",
+    "os.execv"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_011",
+  "script": "import os\nos.spawnl(os.P_WAIT, '/bin/ls', 'ls')\n",
+  "findings": [
+   [
+    2,
+    "G-2",
+    "os.spawnl"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_012",
+  "script": "import pty\npty.spawn('sh')\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "import pty"
+   ],
+   [
+    2,
+    "G-2",
+    "pty.spawn"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_013",
+  "script": "from subprocess import Popen\nPopen(['ls'])\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "from subprocess import ..."
+   ],
+   [
+    1,
+    "G-2",
+    "subprocess.Popen"
+   ],
+   [
+    2,
+    "G-2",
+    "subprocess.Popen"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_014",
+  "script": "import socket\ns = socket.socket()\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "import socket"
+   ],
+   [
+    2,
+    "G-3",
+    "socket.socket"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_015",
+  "script": "import urllib.request\nurllib.request.urlopen('http://x')\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "import urllib.request"
+   ],
+   [
+    2,
+    "G-3",
+    "urllib.request.urlopen"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_016",
+  "script": "from http.client import HTTPSConnection\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "from http.client import ..."
+   ],
+   [
+    1,
+    "G-3",
+    "http.client.HTTPSConnection"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_017",
+  "script": "from http import client\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "http.client"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_018",
+  "script": "import requests\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "import requests"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_019",
+  "script": "import smtplib\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "import smtplib"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_020",
+  "script": "import ftplib\n",
+  "findings": [
+   [
+    1,
+    "G-3",
+    "import ftplib"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_021",
+  "script": "with open('/etc/passwd', 'w') as f:\n    f.write('x')\n",
+  "findings": [
+   [
+    1,
+    "G-4",
+    "open() to /etc/passwd"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_022",
+  "script": "open('/home/alice/o.txt', 'a').write('x')\n",
+  "findings": [
+   [
+    1,
+    "G-4",
+    "open() to /home/alice/o.txt"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_023",
+  "script": "open('/home/alice/o.bin', mode='wb')\n",
+  "findings": [
+   [
+    1,
+    "G-4",
+    "open() to /home/alice/o.bin"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_024",
+  "script": "from pathlib import Path\nPath('/home/alice/x').write_text('x')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "write_text to /home/alice/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_025",
+  "script": "from pathlib import Path\nPath('/home/alice/x').write_bytes(b'x')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "write_bytes to /home/alice/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_026",
+  "script": "import shutil\nshutil.copy('a', '/home/alice/b')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "shutil.copy to /home/alice/b"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_027",
+  "script": "import shutil\nshutil.copyfile('a', '/home/alice/b')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "shutil.copyfile to /home/alice/b"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_028",
+  "script": "import shutil\nshutil.move('/home/alice/a', LMM_WORK_DIR)\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "shutil.move to /home/alice/a"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_029",
+  "script": "OUT = '/home/alice/o.txt'\nopen(OUT, 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /home/alice/o.txt"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_030",
+  "script": "import os\nopen(os.path.join('/home/alice', 'x'), 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /home/alice/x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_031",
+  "script": "import os\nopen(os.path.join(LMM_WORK_DIR, '..', '..', 'x'), 'w')\n",
+  "findings": [
+   [
+    2,
+    "G-4",
+    "open() to /run/user/1000/libremodular-mcp/work/gimp/../../x"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_032",
+  "script": "open('~/x.txt', 'w')\n",
+  "findings": [
+   [
+    1,
+    "G-4",
+    "open() to /home/alice/x.txt"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_033",
+  "script": "eval('1+1')\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "eval"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_034",
+  "script": "exec('x = 1')\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "exec"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_035",
+  "script": "compile('1', 'f', 'eval')\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "compile"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_036",
+  "script": "__import__('os').getcwd()\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "__import__"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_037",
+  "script": "import importlib\nimportlib.import_module('os')\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "import importlib"
+   ],
+   [
+    2,
+    "G-5",
+    "importlib.import_module"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_038",
+  "script": "import ctypes\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "import ctypes"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_039",
+  "script": "import builtins\nbuiltins.eval('1')\n",
+  "findings": [
+   [
+    2,
+    "G-5",
+    "eval"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_040",
+  "script": "getattr(__builtins__, 'eval')('1')\n",
+  "findings": [
+   [
+    1,
+    "G-5",
+    "__builtins__"
+   ],
+   [
+    1,
+    "G-5",
+    "eval"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_041",
+  "script": "import os as o\no.remove('x')\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_042",
+  "script": "from shutil import rmtree as r\nr('x')\n",
+  "findings": [
+   [
+    1,
+    "G-1",
+    "shutil.rmtree"
+   ],
+   [
+    2,
+    "G-1",
+    "shutil.rmtree"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_043",
+  "script": "from os import system as run\nrun('ls')\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "os.system"
+   ],
+   [
+    2,
+    "G-2",
+    "os.system"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_044",
+  "script": "import subprocess as sp\nsp.call(['ls'])\n",
+  "findings": [
+   [
+    1,
+    "G-2",
+    "import subprocess"
+   ],
+   [
+    2,
+    "G-2",
+    "subprocess.call"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_045",
+  "script": "from os import *\nremove('x')\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_046",
+  "script": "import os\ngetattr(os, 'remove')('x')\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "os.remove"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ },
+ {
+  "name": "table_047",
+  "script": "import shutil as s\nfn = s.rmtree\nfn('x')\n",
+  "findings": [
+   [
+    2,
+    "G-1",
+    "shutil.rmtree"
+   ],
+   [
+    3,
+    "G-1",
+    "shutil.rmtree"
+   ]
+  ],
+  "warnings": [],
+  "same_as_reference": true
+ }
+]

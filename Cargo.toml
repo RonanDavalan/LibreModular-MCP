@@ -1,0 +1,40 @@
+[package]
+name = "libremodular-mcp"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "A universal MCP hub that lets a language model drive desktop applications through scripts."
+publish = false
+
+[lib]
+name = "libremodular_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "libremodular-mcp"
+path = "src/main.rs"
+
+[[bin]]
+name = "libremodular-launch"
+path = "src/bin/libremodular-launch.rs"
+
+[dependencies]
+clap = { version = "=4.6.7", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
+getrandom = "=0.4.3"
+ruff_python_ast = "=0.0.16"
+ruff_python_parser = "=0.0.16"
+ruff_text_size = "=0.0.16"
+rustix = { version = "=1.1.5", default-features = false, features = ["std", "fs", "process"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.11.0"
+toml = "=1.1.6"
+
+[dev-dependencies]
+tempfile = "=3.27.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"
