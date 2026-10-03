@@ -41,7 +41,7 @@ Decisions taken while porting:
 - A configuration error reports a kind and a position, never text from the file, because the parser's own
   message quotes the surrounding lines.
 - The guard runs on its own thread. The stack is 16 MiB plus 512 bytes per byte of script, measured worst
-  case being about 128 bytes per byte, and a script that would need more than 1 GiB (about 1.9 MiB of text)
+  case being about 128 bytes per byte, and a script that would need more than 1 GiB (a little under 2 MiB of text)
   is refused instead of attempted. A panic of the parser is caught and refuses the script.
 - Bracket nesting deeper than 200 is refused: CPython itself rejects it, so no valid script is lost.
 - Name resolution has a work budget of two million steps, and a name met on its own is resolved once.

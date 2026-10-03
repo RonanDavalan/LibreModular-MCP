@@ -345,3 +345,17 @@ fn a_missing_runtime_directory_never_falls_back_to_a_temporary_one() {
     let resolved = paths(&[("HOME", "/home/alice"), ("TMPDIR", "/tmp")]).expect("paths");
     assert_eq!(resolved.runtime_dir, None);
 }
+
+#[test]
+fn deeply_nested_values_in_the_file_are_an_error_not_a_crash() {
+    let arrays = format!("a = {}1{}\n", "[".repeat(100_000), "]".repeat(100_000));
+    let tables = format!("a = {}1{}\n", "{b=".repeat(25_000), "}".repeat(25_000));
+    for text in [arrays, tables] {
+        let error = parse(&text).expect_err("must be refused").to_string();
+        assert!(
+            error.len() < 200,
+            "the error repeats the file: {} bytes",
+            error.len()
+        );
+    }
+}

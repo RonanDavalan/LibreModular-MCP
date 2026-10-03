@@ -682,3 +682,11 @@ fn without_a_known_home_directory_a_tilde_path_is_a_warning_not_a_finding() {
     let report = guard_script("open('~/x', 'w')\n", &policy);
     assert!(report.findings.is_empty() && !report.warnings.is_empty());
 }
+
+#[test]
+fn a_script_larger_than_the_default_size_still_gets_a_stack_that_fits_its_depth() {
+    // One level of nesting per byte is the worst a script can do; the stack follows the size.
+    let script = format!("x = {}1\n", "-".repeat(1_000_000));
+    let report = analyse(&script);
+    assert!(report.findings.is_empty(), "{:?}", report.findings.first());
+}
