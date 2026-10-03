@@ -49,7 +49,16 @@ pub fn must_fail(verdict: Verdict) {
 pub fn fresh(base: &Path) -> PathBuf {
     let path = base.join(format!("case-{}", unique()));
     fs::create_dir(&path).expect("create a fresh directory");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).expect("make it private");
     path
+}
+
+/// A temporary directory that is private whatever the umask of the test process
+/// is: the Hub refuses to put its files anywhere else.
+pub fn private_tempdir() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("temporary directory");
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700)).expect("make it private");
+    dir
 }
 
 fn unique() -> u64 {

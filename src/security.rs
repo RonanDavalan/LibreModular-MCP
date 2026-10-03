@@ -843,10 +843,11 @@ fn classify(name: &str) -> Option<Category> {
     {
         return Some(Category::ProcessLaunch);
     }
-    if let Some(rest) = name.strip_prefix("os.") {
-        if !rest.contains('.') && (rest.starts_with("exec") || rest.starts_with("spawn")) {
-            return Some(Category::ProcessLaunch);
-        }
+    if let Some(rest) = name.strip_prefix("os.")
+        && !rest.contains('.')
+        && (rest.starts_with("exec") || rest.starts_with("spawn"))
+    {
+        return Some(Category::ProcessLaunch);
     }
     if in_modules(
         name,
@@ -1235,10 +1236,8 @@ impl<'a> Analyzer<'a> {
         // A name met on its own always resolves the same way, so it is resolved
         // once: a script that reassigns one name thousands of times stays cheap.
         let cacheable = seen.is_empty();
-        if cacheable {
-            if let Some(hit) = self.name_cache.borrow().get(&(name, depth)) {
-                return hit.clone();
-            }
+        if cacheable && let Some(hit) = self.name_cache.borrow().get(&(name, depth)) {
+            return hit.clone();
         }
         let resolved = self.resolve_name(name, depth, seen);
         if cacheable && !self.exhausted.get() {
@@ -1416,14 +1415,13 @@ impl<'a> Analyzer<'a> {
             let attr = method.attr.as_str();
             if matches!(attr, "expanduser" | "resolve" | "absolute")
                 && call.arguments.args.is_empty()
+                && let Some(inner) = self.literal_path(&method.value, depth)
             {
-                if let Some(inner) = self.literal_path(&method.value, depth) {
-                    return Some(if attr == "expanduser" {
-                        self.expand_user(&inner)
-                    } else {
-                        inner
-                    });
-                }
+                return Some(if attr == "expanduser" {
+                    self.expand_user(&inner)
+                } else {
+                    inner
+                });
             }
             if attr == "joinpath" {
                 let base = self.literal_path(&method.value, depth)?;
@@ -1448,10 +1446,10 @@ impl<'a> Analyzer<'a> {
                 posix_join(&strs)
             });
         }
-        if let Some(member) = path_class_member(name) {
-            if member == "home" {
-                return Some(self.expand_user("~"));
-            }
+        if let Some(member) = path_class_member(name)
+            && member == "home"
+        {
+            return Some(self.expand_user("~"));
         }
         if matches!(name.as_str(), "os.path.join" | "posixpath.join") && !strs.is_empty() {
             return Some(posix_join(&strs));
@@ -1635,28 +1633,28 @@ impl<'a> Analyzer<'a> {
                 if let Some(target) = call_arg(call, 0, "self") {
                     self.check_write_path(target, line, member);
                 }
-            } else if path_class_member(name) == Some("open") {
-                if let Some(target) = call_arg(call, 0, "self") {
-                    self.check_open(line, Some(target), call_arg(call, 1, "mode"), "Path.open()");
-                }
+            } else if path_class_member(name) == Some("open")
+                && let Some(target) = call_arg(call, 0, "self")
+            {
+                self.check_open(line, Some(target), call_arg(call, 1, "mode"), "Path.open()");
             }
         }
-        if let Expr::Attribute(method) = &*call.func {
-            if self.is_path_expr(&method.value, 0) {
-                match method.attr.as_str() {
-                    attr @ ("write_text" | "write_bytes") => {
-                        self.check_write_path(&method.value, line, attr);
-                    }
-                    "open" => {
-                        self.check_open(
-                            line,
-                            Some(&method.value),
-                            call_arg(call, 0, "mode"),
-                            "Path.open()",
-                        );
-                    }
-                    _ => {}
+        if let Expr::Attribute(method) = &*call.func
+            && self.is_path_expr(&method.value, 0)
+        {
+            match method.attr.as_str() {
+                attr @ ("write_text" | "write_bytes") => {
+                    self.check_write_path(&method.value, line, attr);
                 }
+                "open" => {
+                    self.check_open(
+                        line,
+                        Some(&method.value),
+                        call_arg(call, 0, "mode"),
+                        "Path.open()",
+                    );
+                }
+                _ => {}
             }
         }
     }
@@ -1745,12 +1743,11 @@ impl<'a> Analyzer<'a> {
         let mut purity: HashMap<usize, bool> = HashMap::new();
         let mut inner: BTreeSet<usize> = BTreeSet::new();
         for node in nodes {
-            if let AnyNodeRef::ExprAttribute(attribute) = *node {
-                if is_pure_chain(attribute, &mut purity) {
-                    if let Some(address) = node_address(&attribute.value) {
-                        inner.insert(address);
-                    }
-                }
+            if let AnyNodeRef::ExprAttribute(attribute) = *node
+                && is_pure_chain(attribute, &mut purity)
+                && let Some(address) = node_address(&attribute.value)
+            {
+                inner.insert(address);
             }
         }
         for node in nodes {
