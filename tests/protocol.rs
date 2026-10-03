@@ -11,6 +11,7 @@ mod common;
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -18,7 +19,8 @@ use std::time::{Duration, Instant};
 use common::fake_bridge::{FakeBridge, HelloMode, Reply, handler, raw_exchange};
 use common::{FAKE_TOKEN, Verdict, must_fail, must_pass};
 use libremodular_mcp::config::Limits;
-use libremodular_mcp::protocol::{BridgeClient, BridgeError};
+use libremodular_mcp::modules::{Module, RECONNECT_DELAY, TcpModule};
+use libremodular_mcp::protocol::{BridgeClient, BridgeConnector, BridgeError};
 use libremodular_mcp::security::Token;
 use serde_json::{Value, json};
 
@@ -343,4 +345,50 @@ fn close_releases_the_connection_and_sends_nothing() {
     assert!(!client.is_usable());
     std::thread::sleep(Duration::from_millis(50));
     assert_eq!(bridge.requests(), 0);
+}
+
+// --- reconnecting after the bridge closed the connection ---------------------------
+
+/// The bridge closes the connection, then turns away any connection made within
+/// 50 ms of that close; `health` right afterwards must still reach it.
+fn check_health_reconnects_after_a_close(reconnect_delay: Duration) -> Verdict {
+    let bridge = FakeBridge::start_slow_to_release(
+        FAKE_TOKEN,
+        HelloMode::Normal,
+        handler(|_| Reply::Close),
+        Duration::from_millis(50),
+    );
+    let module = TcpModule::new(
+        BridgeConnector::new("gimp", bridge.port(), token(), limits()),
+        Duration::from_secs(2),
+    )
+    .with_reconnect_delay(reconnect_delay);
+    ensure!(module.health().connected, "the first health check failed");
+    let closed = module.execute("x = 1", 2, Path::new("/home/alice/work"));
+    ensure!(
+        closed.is_err(),
+        "the bridge was expected to close the connection"
+    );
+    let health = module.health();
+    let turned_away = bridge.stats().turned_away.load(Ordering::SeqCst);
+    ensure!(
+        turned_away >= 1,
+        "the bridge never turned a connection away: the race was not exercised"
+    );
+    ensure!(
+        health.connected,
+        "health failed right after the bridge closed the connection"
+    );
+    Ok(())
+}
+
+#[test]
+fn health_reaches_a_bridge_that_frees_its_place_late() {
+    must_pass(check_health_reconnects_after_a_close(RECONNECT_DELAY));
+    assert_eq!(RECONNECT_DELAY, Duration::from_millis(100));
+}
+
+#[test]
+fn counter_proof_a_module_that_reconnects_at_once_is_turned_away() {
+    must_fail(check_health_reconnects_after_a_close(Duration::ZERO));
 }

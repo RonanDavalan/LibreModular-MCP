@@ -15,6 +15,10 @@ use crate::protocol::{BridgeClient, BridgeConnector, BridgeError};
 
 /// How long the Hub waits for the answer to a `ping`.
 pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long the `tcp` module waits before it connects again after a lost
+/// connection: a bridge frees its single place a moment after the previous
+/// connection closed, and an immediate attempt would be turned away.
+pub const RECONNECT_DELAY: Duration = Duration::from_millis(100);
 /// The reason given for an enabled application that has no module in this build.
 pub const NOT_IN_BUILD: &str = "module not available in this build";
 
@@ -169,18 +173,28 @@ fn is_busy(object: &Map<String, Value>) -> bool {
 pub struct TcpModule {
     connector: BridgeConnector,
     state_timeout: Duration,
+    reconnect_delay: Duration,
     slot: Mutex<Option<Arc<BridgeClient>>>,
 }
 
 impl TcpModule {
-    /// `state_timeout` bounds the wait for a `state` answer.
+    /// `state_timeout` bounds the wait for a `state` answer. A second attempt to
+    /// connect waits [`RECONNECT_DELAY`].
     #[must_use]
     pub fn new(connector: BridgeConnector, state_timeout: Duration) -> Self {
         TcpModule {
             connector,
             state_timeout,
+            reconnect_delay: RECONNECT_DELAY,
             slot: Mutex::new(None),
         }
+    }
+
+    /// The same module with another wait before a second attempt to connect.
+    #[must_use]
+    pub fn with_reconnect_delay(mut self, delay: Duration) -> Self {
+        self.reconnect_delay = delay;
+        self
     }
 
     fn client(&self) -> Result<Arc<BridgeClient>, BridgeError> {
@@ -214,7 +228,10 @@ impl TcpModule {
         timeout: Duration,
     ) -> Result<(Value, Arc<BridgeClient>), BridgeError> {
         let mut last = BridgeError::Disconnected { sent: false };
-        for _ in 0..2 {
+        for attempt in 0..2 {
+            if attempt > 0 {
+                std::thread::sleep(self.reconnect_delay);
+            }
             let client = match self.client() {
                 Ok(client) => client,
                 Err(error) => {
