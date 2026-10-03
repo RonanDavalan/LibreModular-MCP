@@ -87,6 +87,33 @@ def load_adapter(name):
     return load_text(path.read_text(encoding="utf-8"), "lmm_adapter_" + name, str(path))
 
 
+def defective_adapter(name, old, new):
+    """The adapter `name` with one place changed on purpose."""
+    text = (ADAPTERS / (name + ".py")).read_text(encoding="utf-8")
+    return load_text(
+        defective_text(text, old, new), "lmm_defective_" + name, "<defective %s adapter>" % name
+    )
+
+
+def returns_in_time(function, seconds=3.0):
+    """Call `function` in a fresh daemon thread; (True, value) when it returned
+    within `seconds`, (False, None) when it is still waiting."""
+    import threading
+
+    outcome = {}
+
+    def call():
+        outcome["value"] = function()
+        outcome["thread"] = threading.current_thread()
+
+    worker = threading.Thread(target=call, daemon=True)
+    worker.start()
+    worker.join(timeout=seconds)
+    if worker.is_alive() or "value" not in outcome:
+        return False, None
+    return True, outcome
+
+
 class PrivateDir:
     """A temporary directory in mode 700, removed by `cleanup`."""
 
