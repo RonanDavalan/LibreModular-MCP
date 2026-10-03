@@ -645,3 +645,40 @@ fn an_analysis_that_finds_nothing_passes_through_the_isolation_unchanged() {
     let report = run_isolated(10, GuardReport::default);
     assert_eq!(report, GuardReport::default());
 }
+
+#[test]
+fn a_leading_tilde_expands_to_the_home_directory_and_keeps_the_rest_of_the_text() {
+    let found_construct = |script: &str| -> Option<String> {
+        analyse(script)
+            .findings
+            .first()
+            .map(|f| f.construct.clone())
+    };
+    assert_eq!(
+        found_construct("open('~/', 'w')\n").as_deref(),
+        Some("open() to /home/alice/")
+    );
+    assert_eq!(
+        found_construct("open('~', 'w')\n").as_deref(),
+        Some("open() to /home/alice")
+    );
+    assert_eq!(
+        found_construct("open('~/a/b.txt', 'w')\n").as_deref(),
+        Some("open() to /home/alice/a/b.txt")
+    );
+    // `~user` needs the user database, which the guard does not read: it stays unexpanded
+    // and unverifiable, so it is reported as a warning.
+    let report = analyse("open('~bob/x', 'w')\n");
+    assert!(report.findings.is_empty() && !report.warnings.is_empty());
+}
+
+#[test]
+fn without_a_known_home_directory_a_tilde_path_is_a_warning_not_a_finding() {
+    let policy = GuardPolicy {
+        work_dir: WORK_DIR,
+        extra_write_roots: &[],
+        home_dir: None,
+    };
+    let report = guard_script("open('~/x', 'w')\n", &policy);
+    assert!(report.findings.is_empty() && !report.warnings.is_empty());
+}

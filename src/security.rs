@@ -1104,23 +1104,19 @@ impl<'a> Analyzer<'a> {
         *self.bindings.entry(name).or_insert(0) += 1;
     }
 
+    /// Expand a leading `~` with the home directory, keeping the rest of the text
+    /// as it is. `~user` forms are left alone: they need the user database.
     fn expand_user(&self, text: &str) -> String {
-        let rest = if text == "~" {
-            Some("")
-        } else {
-            text.strip_prefix("~/")
-        };
+        let rest = text
+            .strip_prefix('~')
+            .filter(|rest| rest.is_empty() || rest.starts_with('/'));
         match (rest, &self.home) {
             (Some(rest), Some(home)) => {
-                let home = home.trim_end_matches('/');
-                if rest.is_empty() {
-                    if home.is_empty() {
-                        "/".to_owned()
-                    } else {
-                        home.to_owned()
-                    }
+                let joined = format!("{}{rest}", home.trim_end_matches('/'));
+                if joined.is_empty() {
+                    "/".to_owned()
                 } else {
-                    format!("{home}/{rest}")
+                    joined
                 }
             }
             _ => text.to_owned(),
