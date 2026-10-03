@@ -13,6 +13,8 @@ use serde_json::{Map, Value, json};
 
 use crate::protocol::{BridgeClient, BridgeConnector, BridgeError};
 
+pub mod inkscape;
+
 /// How long the Hub waits for the answer to a `ping`.
 pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long the `tcp` module waits before it connects again after a lost
