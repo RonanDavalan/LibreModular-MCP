@@ -1109,3 +1109,146 @@ fn counter_proof_a_bridge_reaching_out_is_detected() {
         "LISTEN_ADDRESS = \"127.0.0.1\"\nBRIDGE_VERSION = \"1\"",
     ));
 }
+
+// --- starting processes: only the Inkscape module ----------------------------------
+
+/// The source files allowed to start a process.
+const PROCESS_STARTERS: [&str; 1] = ["modules/inkscape.rs"];
+
+/// Whether `word` appears in `line` as a whole identifier.
+fn has_word(line: &str, word: &str) -> bool {
+    line.match_indices(word).any(|(at, _)| {
+        let before = line[..at].chars().next_back();
+        let after = line[at + word.len()..].chars().next();
+        let part = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        !part(before) && !part(after)
+    })
+}
+
+fn process_starts(files: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (name, source) in files {
+        if PROCESS_STARTERS.contains(&name.as_str()) {
+            continue;
+        }
+        for (index, line) in code_lines(source).into_iter().enumerate() {
+            let at = format!("{name}:{}", index + 1);
+            let imports_command = line.contains("process::")
+                && (has_word(line, "Command") || has_word(line, "CommandExt"));
+            if imports_command || line.contains("Command::new(") || line.contains(".spawn()") {
+                problems.push(format!("{at}: starts a process"));
+            }
+        }
+    }
+    problems
+}
+
+#[test]
+fn only_the_inkscape_module_starts_processes() {
+    let files = source_files();
+    assert!(files.iter().any(|(name, _)| name == "modules/inkscape.rs"));
+    let problems = process_starts(&files);
+    assert!(problems.is_empty(), "{problems:?}");
+    let inkscape = source_of("modules/inkscape.rs");
+    assert!(inkscape.contains("Command::new(&spec.program)"));
+}
+
+#[test]
+fn counter_proof_a_process_started_elsewhere_is_detected() {
+    let check = |name: &str, source: &str| -> Verdict {
+        let problems = process_starts(&[(name.to_owned(), source.to_owned())]);
+        ensure!(problems.is_empty(), "{problems:?}");
+        Ok(())
+    };
+    for (name, defective) in [
+        ("server.rs", "use std::process::Command;"),
+        ("cli.rs", "use std::process::{Command, Stdio};"),
+        (
+            "modules/mod.rs",
+            "let child = std::process::Command::new(\"sh\");",
+        ),
+        ("registry.rs", "let child = command.spawn()?;"),
+        (
+            "bin/libremodular-launch.rs",
+            "use std::os::unix::process::CommandExt;",
+        ),
+    ] {
+        must_fail(check(name, defective));
+    }
+    must_pass(check(
+        "cli.rs",
+        "use std::process::ExitCode;\nSome(Command::Serve) | None => {}\nlet t = std::thread::spawn(f);",
+    ));
+}
+
+// --- the Inkscape module answers only through the trait --------------------------------
+
+/// The Inkscape module returns its answers and writes nowhere else, and only the
+/// registry builds it: the server sees nothing but the `Module` trait.
+fn inkscape_bypasses(files: &[(String, String)]) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (name, source) in files {
+        for (index, line) in code_lines(source).into_iter().enumerate() {
+            let at = format!("{name}:{}", index + 1);
+            if name == "modules/inkscape.rs" {
+                for needle in [
+                    "crate::output",
+                    "crate::server",
+                    "crate::audit",
+                    "crate::cli",
+                    "print!",
+                    "println!",
+                    "eprint!",
+                    "eprintln!",
+                    "io::stdout(",
+                    "io::stderr(",
+                ] {
+                    if line.contains(needle) {
+                        problems.push(format!("{at}: {needle}"));
+                    }
+                }
+            } else if name != "registry.rs"
+                && (line.contains("InkscapeModule") || line.contains("modules::inkscape"))
+            {
+                problems.push(format!("{at}: reaches the Inkscape module directly"));
+            }
+        }
+    }
+    problems
+}
+
+#[test]
+fn the_inkscape_module_answers_only_through_the_module_trait() {
+    let files = source_files();
+    let problems = inkscape_bypasses(&files);
+    assert!(problems.is_empty(), "{problems:?}");
+    let inkscape = source_of("modules/inkscape.rs");
+    assert!(inkscape.contains("impl Module for InkscapeModule"));
+}
+
+#[test]
+fn counter_proof_an_inkscape_answer_taking_another_way_is_detected() {
+    let check = |name: &str, source: &str| -> Verdict {
+        let problems = inkscape_bypasses(&[(name.to_owned(), source.to_owned())]);
+        ensure!(problems.is_empty(), "{problems:?}");
+        Ok(())
+    };
+    for (name, defective) in [
+        ("modules/inkscape.rs", "eprintln!(\"{reply:?}\");"),
+        (
+            "modules/inkscape.rs",
+            "let text = crate::output::to_text(&reply);",
+        ),
+        (
+            "modules/inkscape.rs",
+            "std::io::stdout().write_all(&finished.stdout)?;",
+        ),
+        ("server.rs", "use crate::modules::inkscape::InkscapeModule;"),
+    ] {
+        must_fail(check(name, defective));
+    }
+    must_pass(check(
+        "registry.rs",
+        "use crate::modules::inkscape::{InkscapeModule, InkscapePaths};",
+    ));
+}
