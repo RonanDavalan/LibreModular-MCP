@@ -13,7 +13,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use common::fake_bridge::{FakeBridge, HelloMode, Reply, handler, raw_exchange};
@@ -391,4 +391,67 @@ fn health_reaches_a_bridge_that_frees_its_place_late() {
 #[test]
 fn counter_proof_a_module_that_reconnects_at_once_is_turned_away() {
     must_fail(check_health_reconnects_after_a_close(Duration::ZERO));
+}
+
+// --- the second attempt of `execute` also waits ----------------------------------------
+
+/// A script times out and the bridge then closes the connection without having
+/// answered. The next script finds the connection gone before writing anything,
+/// so it may be sent on a new one, but not before the bridge frees its place:
+/// the bridge turns away any connection made within 50 ms of the close.
+fn check_execute_reconnects_after_a_late_close(reconnect_delay: Duration) -> Verdict {
+    let requests = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&requests);
+    let bridge = FakeBridge::start_slow_to_release(
+        FAKE_TOKEN,
+        HelloMode::Normal,
+        handler(move |_| {
+            if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+                // Longer than the one second the first script is given.
+                Reply::CloseAfter(Duration::from_millis(1300))
+            } else {
+                ok_reply()
+            }
+        }),
+        Duration::from_millis(50),
+    );
+    let module = TcpModule::new(
+        BridgeConnector::new("gimp", bridge.port(), token(), limits()),
+        Duration::from_secs(2),
+    )
+    .with_reconnect_delay(reconnect_delay);
+    let first = module.execute("x = 1", 1, Path::new("/home/alice/work"));
+    ensure!(
+        matches!(first, Err(libremodular_mcp::modules::ModuleError::Timeout)),
+        "the first script was expected to time out: {first:?}"
+    );
+    // Call again the moment the bridge has closed, inside its 50 ms of grace.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while bridge.stats().closed.load(Ordering::SeqCst) == 0 {
+        ensure!(
+            Instant::now() < deadline,
+            "the bridge never closed the connection"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let second = module
+        .execute("x = 2", 2, Path::new("/home/alice/work"))
+        .map_err(|error| format!("the second script was not sent: {error}"))?;
+    ensure!(second.ok, "{second:?}");
+    ensure!(
+        bridge.scripts() == vec!["x = 1".to_owned(), "x = 2".to_owned()],
+        "scripts seen by the bridge: {:?}",
+        bridge.scripts()
+    );
+    Ok(())
+}
+
+#[test]
+fn execute_waits_before_its_second_attempt_to_connect() {
+    must_pass(check_execute_reconnects_after_a_late_close(RECONNECT_DELAY));
+}
+
+#[test]
+fn counter_proof_an_execute_that_reconnects_at_once_is_turned_away() {
+    must_fail(check_execute_reconnects_after_a_late_close(Duration::ZERO));
 }

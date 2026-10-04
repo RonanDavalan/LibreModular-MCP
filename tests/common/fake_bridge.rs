@@ -50,6 +50,8 @@ pub enum Reply {
     Late(Duration, Value),
     /// Close the connection after reading the request.
     Close,
+    /// Say nothing for this long, then close the connection.
+    CloseAfter(Duration),
 }
 
 /// Decides the reply to each request (the parsed line, `id` included).
@@ -59,6 +61,8 @@ pub type Handler = Arc<dyn Fn(&Value) -> Reply + Send + Sync>;
 #[derive(Default)]
 pub struct Stats {
     pub connections: AtomicUsize,
+    /// Connections whose service is over, counted once the bridge is free again.
+    pub closed: AtomicUsize,
     /// Connections closed at once because the previous one closed too recently.
     pub turned_away: AtomicUsize,
     pub authenticated: AtomicUsize,
@@ -125,6 +129,7 @@ impl FakeBridge {
                             // One connection at a time, like a real bridge.
                             serve(stream, &token, hello, &handler, &stats, &stop);
                             last_closed = Some(Instant::now());
+                            stats.closed.fetch_add(1, Ordering::SeqCst);
                         }
                         Err(error) if error.kind() == ErrorKind::WouldBlock => {
                             std::thread::sleep(POLL);
@@ -321,6 +326,13 @@ fn serve(
                 send(&mut stream, &with_id(value))
             }
             Reply::Close => false,
+            Reply::CloseAfter(delay) => {
+                let until = Instant::now() + delay;
+                while Instant::now() < until && !stop.load(Ordering::SeqCst) {
+                    std::thread::sleep(POLL);
+                }
+                false
+            }
         };
         if !delivered {
             return;

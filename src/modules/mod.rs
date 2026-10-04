@@ -173,8 +173,9 @@ fn is_busy(object: &Map<String, Value>) -> bool {
 /// listening on a loopback port.
 ///
 /// The connection is opened on first use. `health` and `state` may reconnect
-/// once when the connection was lost; `execute` never sends a script again once
-/// it may have reached the bridge.
+/// once when the connection was lost; `execute` does so only when nothing of the
+/// script was written, and never sends a script again once it may have reached
+/// the bridge. Every second attempt waits [`RECONNECT_DELAY`] first.
 pub struct TcpModule {
     connector: BridgeConnector,
     state_timeout: Duration,
@@ -302,6 +303,11 @@ impl Module for TcpModule {
         let mut attempt = 0;
         let (answer, client) = loop {
             attempt += 1;
+            if attempt > 1 {
+                // A bridge frees its single place a moment after the connection
+                // that held it closed: an immediate attempt would be turned away.
+                std::thread::sleep(self.reconnect_delay);
+            }
             let client = self.client().map_err(module_error)?;
             match client.request(payload.clone(), timeout) {
                 Ok(answer) => break (answer, client),
