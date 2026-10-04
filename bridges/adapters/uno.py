@@ -228,8 +228,11 @@ class UnoAdapter:
     families = tuple(FAMILY_SERVICES)
 
     def app_version(self):
+        # One attempt, never a wait: the core asks again at each hello and each
+        # state while the answer is "unknown", and the Hub stops waiting for a
+        # hello after a few seconds, which is the length of the wait of _connect.
         try:
-            context, _ = _connect()
+            context, _ = _connect(0)
             provider = context.ServiceManager.createInstanceWithContext(
                 "com.sun.star.configuration.ConfigurationProvider", context
             )

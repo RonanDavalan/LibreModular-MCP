@@ -351,9 +351,11 @@ def _run_script(adapter, script, work_dir, extra=()):
 # --------------------------------------------------------------------------
 
 
-def _version_of(adapter):
+def _version_of(adapter, on_main=False):
+    """The version the adapter reports, or UNKNOWN_VERSION. `on_main` asks it
+    where the adapter runs the application's calls instead of in this thread."""
     try:
-        version = adapter.app_version()
+        version = adapter.run_on_main(adapter.app_version) if on_main else adapter.app_version()
     except Exception:
         return UNKNOWN_VERSION
     return version if isinstance(version, str) and version else UNKNOWN_VERSION
@@ -391,8 +393,8 @@ class _Bridge:
         self._adapter = adapter
         self._app = app
         self._families = _families_of(adapter)
-        # Read here, in the thread that starts the bridge: the application's
-        # API is not called from the connection threads for the hello.
+        # Read here, in the thread that starts the bridge. While it is unknown the
+        # application may simply not be ready yet: _current_version asks again.
         self._app_version = _version_of(adapter)
         self._token = token
         self._hello_timeout = hello_timeout
@@ -472,6 +474,16 @@ class _Bridge:
                 if self._active is connection:
                     self._active = None
 
+    def _current_version(self):
+        """The application's version. Once it is known it is kept; until then each
+        call asks the adapter again, where the adapter runs the application's calls,
+        so that a bridge started before its application reports the version as soon
+        as the application is there. One connection is served at a time, so no two
+        threads ask at once."""
+        if self._app_version == UNKNOWN_VERSION:
+            self._app_version = _version_of(self._adapter, on_main=True)
+        return self._app_version
+
     def _hello_is_valid(self, line):
         greeting = _parse_object(line)
         if greeting is None or greeting.get("type") != "hello":
@@ -501,7 +513,7 @@ class _Bridge:
                 "ok": True,
                 "protocol": PROTOCOL_VERSION,
                 "app": self._app,
-                "app_version": self._app_version,
+                "app_version": self._current_version(),
                 "bridge_version": BRIDGE_VERSION,
             },
         )
@@ -587,10 +599,6 @@ class _Bridge:
         extra = self._family_arguments(request)
         adapter = self._adapter
         warnings = []
-        if self._app_version == UNKNOWN_VERSION:
-            warnings.append(
-                "the %s scripting API cannot be imported in this process" % self._app
-            )
         state = {}
         try:
             reported = adapter.run_on_main(lambda: adapter.state(*extra))
@@ -600,6 +608,11 @@ class _Bridge:
         except Exception as error:
             # Type and message only: a traceback would describe the bridge, not the document.
             warnings.append("state unavailable: %s: %s" % (type(error).__name__, _text_of(error)))
+        # After the state, which may have waited for the application to be there.
+        if self._current_version() == UNKNOWN_VERSION:
+            warnings.insert(
+                0, "the %s scripting API cannot be imported in this process" % self._app
+            )
         screenshot = None
         if capture_path:
             try:
@@ -959,8 +972,11 @@ class UnoAdapter:
     families = tuple(FAMILY_SERVICES)
 
     def app_version(self):
+        # One attempt, never a wait: the core asks again at each hello and each
+        # state while the answer is "unknown", and the Hub stops waiting for a
+        # hello after a few seconds, which is the length of the wait of _connect.
         try:
-            context, _ = _connect()
+            context, _ = _connect(0)
             provider = context.ServiceManager.createInstanceWithContext(
                 "com.sun.star.configuration.ConfigurationProvider", context
             )

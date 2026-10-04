@@ -13,6 +13,7 @@ import contextlib
 import os
 import re
 import sys
+import time
 import unittest
 
 import fake_uno
@@ -21,6 +22,7 @@ from bridge_support import (
     TINY_PNG,
     Client,
     PrivateDir,
+    core_reading_the_version_once,
     defective_adapter,
     execute,
     load_adapter,
@@ -244,6 +246,53 @@ class ConnectionTests(CheckCase):
 # --------------------------------------------------------------------------
 
 
+def check_the_version_is_asked_without_waiting(module):
+    """LibreOffice does not listen: the version is "unknown" after one attempt, so
+    that a hello is answered long before the Hub stops waiting for it."""
+    problems = []
+    office = office_with(listening=False)
+    with installed(office), quick(module, total=0.3, step=0.02):
+        returned, outcome = returns_in_time(module.UnoAdapter().app_version, 2.0)
+    if not returned:
+        problems.append("the version was never answered")
+    elif outcome["value"] != "unknown":
+        problems.append("version %r" % (outcome["value"],))
+    if office.attempts != 1:
+        problems.append("%d attempts, expected 1" % office.attempts)
+    return problems
+
+
+def check_a_bridge_started_before_libreoffice_finds_the_version(core):
+    """The operator's cold start: the bridge starts and a first connection comes
+    while LibreOffice is not listening yet. Both see "unknown", with the warning on
+    the state. Once LibreOffice listens, the next connection announces its version
+    and the state carries no warning."""
+    problems = []
+    office = office_with(Document("calc", "Budget"), listening=False, version="25.2.3.2")
+    office.desktop.current = office.desktop.documents[0]
+    with installed(office), quick(ADAPTER):
+        with running(core, adapter=ADAPTER.UnoAdapter()) as bridge:
+            client = Client(bridge.port)
+            early = client.hello()
+            warned = ask(client, "state", "calc", capture_path=None)
+            client.close()
+            if early is None or early["app_version"] != "unknown":
+                problems.append("early hello: %r" % (early,))
+            if not any("cannot be imported" in text for text in warned["warnings"]):
+                problems.append("no warning while the version is unknown: %r" % (warned,))
+            office.listening = True
+            time.sleep(0.3)
+            client = Client(bridge.port)
+            late = client.hello()
+            fine = ask(client, "state", "calc", capture_path=None)
+            client.close()
+            if late is None or late["app_version"] != "25.2.3.2":
+                problems.append("late hello: %r" % (late,))
+            if fine["warnings"] != []:
+                problems.append("warnings once LibreOffice listens: %r" % (fine["warnings"],))
+    return problems
+
+
 class VersionTests(CheckCase):
     def test_the_version_comes_from_the_configuration_node_of_the_product(self):
         office = office_with(version="25.2.3")
@@ -267,6 +316,21 @@ class VersionTests(CheckCase):
         for value in (None, 0, ""):
             with installed(office_with(version=value)), quick(ADAPTER):
                 self.assertEqual(ADAPTER.UnoAdapter().app_version(), "unknown", repr(value))
+
+    def test_asking_for_the_version_is_one_attempt_and_never_a_wait(self):
+        self.must_pass(check_the_version_is_asked_without_waiting(ADAPTER))
+
+    def test_counter_proof_a_version_that_waits_for_libreoffice_is_detected(self):
+        defective = defective_adapter("uno", "            context, _ = _connect(0)\n", "            context, _ = _connect()\n")
+        self.must_fail(check_the_version_is_asked_without_waiting(defective))
+
+    def test_a_bridge_started_before_libreoffice_announces_the_version_once_it_listens(self):
+        self.must_pass(check_a_bridge_started_before_libreoffice_finds_the_version(CORE))
+
+    def test_counter_proof_the_core_that_reads_the_version_once_is_detected(self):
+        self.must_fail(
+            check_a_bridge_started_before_libreoffice_finds_the_version(core_reading_the_version_once())
+        )
 
     def test_the_hello_carries_the_version_and_the_name_libreoffice(self):
         with installed(office_with(version="25.2.3")), quick(ADAPTER):

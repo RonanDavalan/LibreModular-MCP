@@ -95,6 +95,16 @@ def defective_adapter(name, old, new):
     )
 
 
+def core_reading_the_version_once():
+    """The core as it was before it asked again: the version is read at the start
+    and never again, whatever it was."""
+    return defective_core(
+        "        if self._app_version == UNKNOWN_VERSION:\n"
+        "            self._app_version = _version_of(self._adapter, on_main=True)\n",
+        "",
+    )
+
+
 def returns_in_time(function, seconds=3.0):
     """Call `function` in a fresh daemon thread; (True, value) when it returned
     within `seconds`, (False, None) when it is still waiting."""
@@ -164,6 +174,75 @@ class FakeAdapter:
         if self.screenshot_error is not None:
             raise self.screenshot_error
         return True
+
+
+class LateVersionAdapter(FakeAdapter):
+    """An adapter whose application is not ready at first: `app_version` reports
+    "unknown" for the first `unknown_reads` reads and `ready` afterwards. It records
+    every read and the thread each one ran in."""
+
+    def __init__(self, unknown_reads, ready="25.2.3.2", main_thread=None):
+        super().__init__(version="unknown")
+        self.unknown_reads = unknown_reads
+        self.ready = ready
+        self.reads = 0
+        self.read_threads = []
+        self._main_thread = main_thread
+
+    def app_version(self):
+        import threading
+
+        self.reads += 1
+        self.read_threads.append(threading.current_thread())
+        return "unknown" if self.reads <= self.unknown_reads else self.ready
+
+    def run_on_main(self, function):
+        """Without `main_thread`, the call is direct. With one (a `MainThread`), the
+        call runs there and this thread waits, as an application's main loop does."""
+        self.main_calls += 1
+        if self._main_thread is None:
+            return function()
+        return self._main_thread.call(function)
+
+
+class MainThread:
+    """A thread of its own that runs the functions handed to `call`, standing for
+    the main thread of an application."""
+
+    def __init__(self):
+        import queue
+        import threading
+
+        self._queue = queue.Queue()
+        self.thread = threading.Thread(target=self._loop, name="fake-main", daemon=True)
+        self.thread.start()
+
+    def _loop(self):
+        while True:
+            item = self._queue.get()
+            if item is None:
+                return
+            function, outcome, done = item
+            try:
+                outcome["value"] = function()
+            except BaseException as error:  # handed back to the caller
+                outcome["error"] = error
+            done.set()
+
+    def call(self, function):
+        import threading
+
+        outcome, done = {}, threading.Event()
+        self._queue.put((function, outcome, done))
+        if not done.wait(timeout=10.0):
+            raise TimeoutError("the fake main thread did not answer")
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["value"]
+
+    def stop(self):
+        self._queue.put(None)
+        self.thread.join(timeout=5.0)
 
 
 class FamilyAdapter:
