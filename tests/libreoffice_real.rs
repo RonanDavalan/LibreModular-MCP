@@ -265,11 +265,18 @@ fn drive(base: &Path) -> Verdict {
         "the version of LibreOffice was not read: {version:?}"
     );
 
-    // 2. With no document open, no script runs, and the state says why.
-    let refused = session.execute("libreoffice-calc", "result = 1");
-    show("execute without a document", &refused);
-    ensure!(refused["status"] == "error", "{refused}");
-    ensure!(refused["error"]["type"] == "NoActiveDocument", "{refused}");
+    // 2. With no document open, a script still runs, with `doc` set to None, and the
+    // state says there is no active document.
+    let bare = session.execute(
+        "libreoffice-calc",
+        "result = {'doc_is_none': doc is None, 'has_desktop': desktop is not None}",
+    );
+    show("execute without a document", &bare);
+    ensure!(bare["status"] == "ok", "{bare}");
+    ensure!(
+        bare["result"] == json!({"doc_is_none": true, "has_desktop": true}),
+        "{bare}"
+    );
     let empty = session.state("libreoffice-calc");
     show("get_state without a document", &empty);
     ensure!(empty["connected"] == true, "{empty}");
@@ -283,13 +290,10 @@ fn drive(base: &Path) -> Verdict {
     );
     ensure!(empty["screenshot"] == Value::Null, "{empty}");
 
-    // 3. A person opens a spreadsheet; the model then works on it through the Hub.
-    uno_snippet(
-        &path,
-        uno_port,
-        "desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())\nprint('opened')",
-    )?;
+    // 3. The model creates the first document with a script, then writes into it.
     let script = "\
+if doc is None:
+    doc = desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())
 sheet = doc.Sheets.getByIndex(0)
 sheet.getCellByPosition(0, 0).setValue(42)
 sheet.getCellByPosition(1, 1).setString('hello')
@@ -381,8 +385,10 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
     );
 
     // 7. A slide deck and a text document, one after the other, each on its own target.
-    for (target, factory, probe, expected, active) in [
+    // Each one is created by a script of the target that was current until then.
+    for (creator, target, factory, probe, expected, active) in [
         (
+            "libreoffice-calc",
             "libreoffice-impress",
             "private:factory/simpress",
             "result = {'slides': doc.DrawPages.Count}",
@@ -390,6 +396,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
             json!({"slides": 1}),
         ),
         (
+            "libreoffice-impress",
             "libreoffice-writer",
             "private:factory/swriter",
             "text = doc.Text\n\
@@ -406,11 +413,14 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
             json!({"paragraphs": 2, "pages": 1}),
         ),
     ] {
-        uno_snippet(
-            &path,
-            uno_port,
-            &format!("desktop.loadComponentFromURL('{factory}', '_blank', 0, ())\nprint('opened')"),
-        )?;
+        let created = session.execute(
+            creator,
+            &format!("desktop.loadComponentFromURL('{factory}', '_blank', 0, ())"),
+        );
+        ensure!(
+            created["status"] == "ok",
+            "{creator} creating {factory}: {created}"
+        );
         let answer = session.execute(target, probe);
         show(&format!("execute on {target}"), &answer);
         ensure!(answer["status"] == "ok", "{target}: {answer}");
@@ -431,6 +441,87 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
     }
     hub.server.shutdown();
     Ok(())
+}
+
+/// The cold start: the bridge is up and LibreOffice is not, then LibreOffice starts.
+fn drive_cold_start(base: &Path) -> Verdict {
+    let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
+    let (uno_port, bridge_port) = (free_port(), free_port());
+    let token_file = base.join("token");
+    write_file(&token_file, 0o600, FILE_TOKEN);
+    let bridge_file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("bridges")
+        .join("generated")
+        .join("uno_bridge.py");
+    let plan = Plan {
+        uno_port,
+        bridge_port,
+        bridge_file,
+        token_file,
+    };
+    // The bridge starts first: nothing listens on the UNO port yet.
+    let (_bridge, bridge_port) = start_bridge(&plan, &path)?;
+    let hub = build_with_token(
+        base,
+        config(&format!(
+            "[apps.libreoffice-calc]\nenabled = true\nuno_port = {uno_port}\nbridge_port = {bridge_port}\n"
+        )),
+        Vec::new(),
+        Token::new(FILE_TOKEN).map_err(|error| error.to_string())?,
+    );
+    let mut session = Session::start(hub.server.clone());
+    let announced = |listing: &Value| -> String {
+        listing["state"]["modules"][0]["app_version"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned()
+    };
+
+    // 1. Without LibreOffice the bridge is there and does not know the version.
+    let early = session.state("hub");
+    show("get_state hub, before LibreOffice", &early);
+    ensure!(early["state"]["modules"][0]["connected"] == true, "{early}");
+    ensure!(announced(&early) == "unknown", "{early}");
+    let without = session.state("libreoffice-calc");
+    show("get_state, before LibreOffice", &without);
+    ensure!(
+        without["warnings"]
+            .to_string()
+            .contains("cannot be imported"),
+        "{without}"
+    );
+
+    // 2. LibreOffice starts; the same connection of the Hub asks for the state again.
+    let _libreoffice = start_libreoffice(base, &path, uno_port)?;
+    eprintln!("{}", wait_for_libreoffice(&path, uno_port)?);
+    let later = session.state("libreoffice-calc");
+    show("get_state, once LibreOffice listens", &later);
+    ensure!(
+        !later["warnings"].to_string().contains("cannot be imported"),
+        "the bridge still reports a missing API: {later}"
+    );
+    ensure!(later["state"]["documents"] == json!([]), "{later}");
+    // The Hub keeps the version of the hello of its connection.
+    ensure!(later["app_version"] == "unknown", "{later}");
+
+    // 3. A new connection of the Hub announces the version the bridge now knows.
+    hub.server.shutdown();
+    let after = session.state("hub");
+    show("get_state hub, on a new connection", &after);
+    let version = announced(&after);
+    ensure!(
+        version.chars().next().is_some_and(|c| c.is_ascii_digit()),
+        "the version was not announced on the new connection: {after}"
+    );
+    hub.server.shutdown();
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs LibreOffice and its python3-uno"]
+fn a_bridge_started_before_libreoffice_announces_the_version_once_it_listens() {
+    let base = common::private_tempdir();
+    must_pass(drive_cold_start(base.path()));
 }
 
 #[test]

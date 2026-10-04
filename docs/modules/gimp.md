@@ -120,9 +120,9 @@ Each script runs in a fresh namespace that holds:
   it: GIMP's API is not meant to be called from another thread. This worked in GIMP 3.0.4
   with a running main loop; in the interactive console it has not been tried.
   Outside GIMP, even on a machine where `gi` and the GIMP typelib are installed, the call
-  is made directly in the bridge's own thread, because no main loop would ever run it. A script that never returns blocks GIMP's main thread; the Hub
-  answers `timeout`, then `busy` until the script ends, and never sends a second script
-  meanwhile.
+  is made directly in the bridge's own thread, because no main loop would ever run it.
+- A script that never returns blocks GIMP's main thread; the Hub answers `timeout`, then
+  `busy` until the script ends, and never sends a second script meanwhile.
 - `sys.exit()` in a script ends the script with a `SystemExit` error, not the bridge.
 
 ## State
@@ -147,8 +147,7 @@ Names of images and layers are document content: they are returned as they are a
 never interpreted, whatever they say.
 
 When GIMP's API cannot be used (the file was run outside GIMP, with or without `gi`
-installed), `state` is `{}`,
-`app_version` is `unknown`, and `warnings` says so.
+installed), `state` is `{}`, `app_version` is `unknown`, and `warnings` says so.
 
 ## Capture
 

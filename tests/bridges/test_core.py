@@ -25,10 +25,14 @@ from bridge_support import (
     Client,
     FakeAdapter,
     FamilyAdapter,
+    LateVersionAdapter,
+    MainThread,
     PrivateDir,
+    core_reading_the_version_once,
     core_text,
     defective_core,
     execute,
+    hello_when_free,
     load_core,
     quiet_error_streams,
     running,
@@ -670,6 +674,176 @@ class StateTests(CheckCase):
         self.assertEqual(
             answer["warnings"], ["the gimp scripting API cannot be imported in this process"]
         )
+
+
+# --------------------------------------------------------------------------
+# the version of an application that is not ready when the bridge starts
+# --------------------------------------------------------------------------
+
+API_WARNING = "the gimp scripting API cannot be imported in this process"
+
+
+def _hello_version(port):
+    """The version a new connection is told, or None when the bridge never answered."""
+    client, answer = hello_when_free(port)
+    if client is not None:
+        client.close()
+    return answer["app_version"] if answer else None
+
+
+def check_the_version_is_read_again_at_the_next_connection(core):
+    """The application answers "unknown" at the start and at the first connection,
+    then is ready: the second connection announces the version, and once it is
+    announced the adapter is not asked again."""
+    problems = []
+    adapter = LateVersionAdapter(unknown_reads=2)
+    with running(core, adapter=adapter) as bridge:
+        announced = [_hello_version(bridge.port) for _ in range(2)]
+        if announced != ["unknown", "25.2.3.2"]:
+            problems.append("announced %r, expected unknown then 25.2.3.2" % (announced,))
+        announced = _hello_version(bridge.port)
+        if announced != "25.2.3.2":
+            problems.append("the version did not stay: %r" % (announced,))
+    if adapter.reads != 3:
+        problems.append("%d reads, expected 3 (start, two connections)" % adapter.reads)
+    return problems
+
+
+def check_the_state_reads_the_version_again_and_drops_the_warning(core):
+    """The application is still not ready at the start and at the hello, then it is:
+    the first state finds the version and carries no warning about the missing
+    API, and the adapter is not asked again after that."""
+    problems = []
+    adapter = LateVersionAdapter(unknown_reads=2)
+    with running(core, adapter=adapter) as bridge:
+        client = Client(bridge.port)
+        client.hello()
+        first = client.request({"id": "s1", "type": "state", "capture_path": None})
+        second = client.request({"id": "s2", "type": "state", "capture_path": None})
+        client.close()
+    if first is None or first["warnings"] != []:
+        problems.append("the state that found the version warned: %r" % (first,))
+    if second is None or second["warnings"] != []:
+        problems.append("the next state warned: %r" % (second,))
+    if adapter.reads != 3:
+        problems.append("%d reads, expected 3 (start, hello, first state)" % adapter.reads)
+    return problems
+
+
+def check_a_state_keeps_the_warning_while_the_version_is_unknown(core):
+    problems = []
+    adapter = LateVersionAdapter(unknown_reads=1000)
+    with running(core, adapter=adapter) as bridge:
+        client = Client(bridge.port)
+        client.hello()
+        answers = [
+            client.request({"id": "s%d" % n, "type": "state", "capture_path": None})
+            for n in range(2)
+        ]
+        client.close()
+    for answer in answers:
+        if answer is None or answer["warnings"] != [API_WARNING]:
+            problems.append("warnings %r" % (None if answer is None else answer["warnings"],))
+    if adapter.reads != 4:
+        problems.append("%d reads, expected 4 (start, hello, two states)" % adapter.reads)
+    return problems
+
+
+def check_a_stranger_does_not_make_the_bridge_ask_the_application(core):
+    """Only a valid hello may lead to a call into the application."""
+    problems = []
+    adapter = LateVersionAdapter(unknown_reads=1000)
+    with running(core, adapter=adapter) as bridge:
+        for label, line in STRANGERS:
+            client = Client(bridge.port)
+            client.send(line.encode("utf-8") + b"\n")
+            client.outcome()
+            client.close()
+        if adapter.reads != 1:
+            problems.append("a stranger caused %d read(s) after the start" % (adapter.reads - 1))
+    return problems
+
+
+def check_the_version_is_read_where_the_application_runs_its_calls(core):
+    """After the start, the adapter is asked in its own main thread, never in the
+    connection thread that answers the hello."""
+    problems = []
+    main = MainThread()
+    try:
+        adapter = LateVersionAdapter(unknown_reads=1, main_thread=main)
+        with running(core, adapter=adapter) as bridge:
+            _hello_version(bridge.port)
+        later = adapter.read_threads[1:]
+        if not later:
+            problems.append("the adapter was not asked after the start")
+        elif any(thread is not main.thread for thread in later):
+            problems.append("asked in %r, not in the main thread" % [t.name for t in later])
+    finally:
+        main.stop()
+    return problems
+
+
+class VersionTests(CheckCase):
+    def test_the_hello_announces_the_version_once_the_application_is_ready(self):
+        self.must_pass(check_the_version_is_read_again_at_the_next_connection(CORE))
+
+    def test_counter_proof_a_core_reading_the_version_only_at_the_start_is_detected(self):
+        self.must_fail(check_the_version_is_read_again_at_the_next_connection(core_reading_the_version_once()))
+
+    def test_the_state_finds_the_version_and_drops_the_warning(self):
+        self.must_pass(check_the_state_reads_the_version_again_and_drops_the_warning(CORE))
+
+    def test_counter_proof_a_core_reading_the_version_only_at_the_start_keeps_the_warning(self):
+        self.must_fail(
+            check_the_state_reads_the_version_again_and_drops_the_warning(core_reading_the_version_once())
+        )
+
+    def test_the_warning_stays_while_the_version_is_unknown(self):
+        self.must_pass(check_a_state_keeps_the_warning_while_the_version_is_unknown(CORE))
+
+    def test_counter_proof_a_core_that_never_warns_is_detected(self):
+        defective = defective_core(
+            "        if self._current_version() == UNKNOWN_VERSION:\n            warnings.insert(",
+            "        if False:\n            warnings.insert(",
+        )
+        self.must_fail(check_a_state_keeps_the_warning_while_the_version_is_unknown(defective))
+
+    def test_a_stranger_does_not_make_the_bridge_ask_the_application(self):
+        self.must_pass(check_a_stranger_does_not_make_the_bridge_ask_the_application(CORE))
+
+    def test_counter_proof_a_core_asking_before_it_checks_the_hello_is_detected(self):
+        defective = defective_core(
+            "        first = reader.read_line(time.monotonic() + self._hello_timeout)\n",
+            "        first = reader.read_line(time.monotonic() + self._hello_timeout)\n"
+            "        self._current_version()\n",
+        )
+        self.must_fail(check_a_stranger_does_not_make_the_bridge_ask_the_application(defective))
+
+    def test_the_version_is_read_in_the_main_thread_of_the_application(self):
+        self.must_pass(check_the_version_is_read_where_the_application_runs_its_calls(CORE))
+
+    def test_counter_proof_a_core_asking_in_the_connection_thread_is_detected(self):
+        defective = defective_core(
+            "            self._app_version = _version_of(self._adapter, on_main=True)\n",
+            "            self._app_version = _version_of(self._adapter)\n",
+        )
+        self.must_fail(check_the_version_is_read_where_the_application_runs_its_calls(defective))
+
+    def test_an_adapter_that_raises_when_asked_again_leaves_the_version_unknown(self):
+        class Failing(LateVersionAdapter):
+            def app_version(self):
+                self.reads += 1
+                if self.reads > 1:
+                    raise RuntimeError("not ready")
+                return "unknown"
+
+        adapter = Failing(unknown_reads=0)
+        with running(CORE, adapter=adapter) as bridge:
+            self.assertEqual(_hello_version(bridge.port), "unknown")
+            ping, answer = hello_when_free(bridge.port)
+            self.assertIsNotNone(answer, "the bridge stopped answering")
+            self.assertEqual(ping.request({"id": "p", "type": "ping"}), {"id": "p", "ok": True})
+            ping.close()
 
 
 # --------------------------------------------------------------------------

@@ -21,8 +21,10 @@ from bridge_support import (
     TINY_PNG,
     Client,
     PrivateDir,
+    core_reading_the_version_once,
     defective_adapter,
     execute,
+    hello_when_free,
     load_adapter,
     load_core,
     returns_in_time,
@@ -244,6 +246,53 @@ class ConnectionTests(CheckCase):
 # --------------------------------------------------------------------------
 
 
+def check_the_version_is_asked_without_waiting(module):
+    """LibreOffice does not listen: the version is "unknown" after one attempt, so
+    that a hello is answered long before the Hub stops waiting for it."""
+    problems = []
+    office = office_with(listening=False)
+    with installed(office), quick(module, total=0.3, step=0.02):
+        returned, outcome = returns_in_time(module.UnoAdapter().app_version, 2.0)
+    if not returned:
+        problems.append("the version was never answered")
+    elif outcome["value"] != "unknown":
+        problems.append("version %r" % (outcome["value"],))
+    if office.attempts != 1:
+        problems.append("%d attempts, expected 1" % office.attempts)
+    return problems
+
+
+def check_a_bridge_started_before_libreoffice_finds_the_version(core):
+    """The operator's cold start: the bridge starts and a first connection comes
+    while LibreOffice is not listening yet. Both see "unknown", with the warning on
+    the state. Once LibreOffice listens, the next connection announces its version
+    and the state carries no warning."""
+    problems = []
+    office = office_with(Document("calc", "Budget"), listening=False, version="25.2.3.2")
+    office.desktop.current = office.desktop.documents[0]
+    with installed(office), quick(ADAPTER):
+        with running(core, adapter=ADAPTER.UnoAdapter()) as bridge:
+            client = Client(bridge.port)
+            early = client.hello()
+            warned = ask(client, "state", "calc", capture_path=None)
+            client.close()
+            if early is None or early["app_version"] != "unknown":
+                problems.append("early hello: %r" % (early,))
+            if not any("cannot be imported" in text for text in warned["warnings"]):
+                problems.append("no warning while the version is unknown: %r" % (warned,))
+            office.listening = True
+            client, late = hello_when_free(bridge.port)
+            if client is None:
+                return problems + ["the bridge did not answer the second connection"]
+            fine = ask(client, "state", "calc", capture_path=None)
+            client.close()
+            if late is None or late["app_version"] != "25.2.3.2":
+                problems.append("late hello: %r" % (late,))
+            if fine["warnings"] != []:
+                problems.append("warnings once LibreOffice listens: %r" % (fine["warnings"],))
+    return problems
+
+
 class VersionTests(CheckCase):
     def test_the_version_comes_from_the_configuration_node_of_the_product(self):
         office = office_with(version="25.2.3")
@@ -267,6 +316,21 @@ class VersionTests(CheckCase):
         for value in (None, 0, ""):
             with installed(office_with(version=value)), quick(ADAPTER):
                 self.assertEqual(ADAPTER.UnoAdapter().app_version(), "unknown", repr(value))
+
+    def test_asking_for_the_version_is_one_attempt_and_never_a_wait(self):
+        self.must_pass(check_the_version_is_asked_without_waiting(ADAPTER))
+
+    def test_counter_proof_a_version_that_waits_for_libreoffice_is_detected(self):
+        defective = defective_adapter("uno", "            context, _ = _connect(0)\n", "            context, _ = _connect()\n")
+        self.must_fail(check_the_version_is_asked_without_waiting(defective))
+
+    def test_a_bridge_started_before_libreoffice_announces_the_version_once_it_listens(self):
+        self.must_pass(check_a_bridge_started_before_libreoffice_finds_the_version(CORE))
+
+    def test_counter_proof_the_core_that_reads_the_version_once_is_detected(self):
+        self.must_fail(
+            check_a_bridge_started_before_libreoffice_finds_the_version(core_reading_the_version_once())
+        )
 
     def test_the_hello_carries_the_version_and_the_name_libreoffice(self):
         with installed(office_with(version="25.2.3")), quick(ADAPTER):
@@ -406,9 +470,10 @@ class StateTests(CheckCase):
 # --------------------------------------------------------------------------
 
 
-def check_no_script_runs_on_the_wrong_document(module):
-    """Without a current document, or with one of another family, the answer says
-    so and not one line of the script runs. The documents are never converted."""
+def check_no_script_runs_on_a_document_of_another_family(module):
+    """With a current document of another family, or of none of the three, the
+    answer says so and not one line of the script runs. The documents are never
+    converted."""
     problems = []
     directory = PrivateDir()
     try:
@@ -416,16 +481,15 @@ def check_no_script_runs_on_the_wrong_document(module):
         script = "open(LMM_WORK_DIR + '/ran', 'w').write('x')\nresult = 'ran'"
         writer, calc, _ = three_families()
         cases = (
-            ("no document", office_with(writer, calc, current=None), "calc", "NoActiveDocument"),
-            ("a writer document for calc", office_with(writer, calc, current=writer), "calc", "WrongDocumentType"),
-            ("a calc document for writer", office_with(writer, calc, current=calc), "writer", "WrongDocumentType"),
-            ("a drawing for impress", office_with(Other(), current=Other()), "impress", "WrongDocumentType"),
+            ("a writer document for calc", office_with(writer, calc, current=writer), "calc"),
+            ("a calc document for writer", office_with(writer, calc, current=calc), "writer"),
+            ("a drawing for impress", office_with(Other(), current=Other()), "impress"),
         )
-        for label, office, family, kind in cases:
+        for label, office, family in cases:
             answer = run_script(module, office, family, script, str(directory.path))
             if answer.get("ok") is not False:
                 problems.append("%s: the script was run: %r" % (label, answer))
-            elif answer["error"]["type"] != kind:
+            elif answer["error"]["type"] != "WrongDocumentType":
                 problems.append("%s: error %r" % (label, answer["error"]["type"]))
             if marker.exists():
                 problems.append("%s: a line of the script ran" % label)
@@ -433,9 +497,82 @@ def check_no_script_runs_on_the_wrong_document(module):
             for document in office.desktop.documents:
                 if document.exports or document.forbidden_calls:
                     problems.append("%s: the document was touched" % label)
+            if office.desktop.loaded:
+                problems.append("%s: a document was created" % label)
     finally:
         directory.cleanup()
     return problems
+
+
+def check_a_script_without_a_document_runs_with_doc_none(module):
+    """No current document, even with documents open that are not current: the
+    script runs, receives the other names as always, and doc is None."""
+    problems = []
+    writer, calc, _ = three_families()
+    script = (
+        "result = {'doc_is_none': doc is None,"
+        " 'names': sorted(n for n in globals() if not n.startswith('__')),"
+        " 'has_desktop': desktop is not None}"
+    )
+    for family in ("writer", "calc", "impress"):
+        answer = run_script(module, office_with(writer, calc, current=None), family, script)
+        if answer.get("ok") is not True:
+            problems.append("%s: the script was refused: %r" % (family, answer.get("error")))
+            continue
+        expected = {
+            "doc_is_none": True,
+            "names": ["LMM_WORK_DIR", "ctx", "desktop", "doc", "uno"],
+            "has_desktop": True,
+        }
+        if answer["result"] != expected:
+            problems.append("%s: %r" % (family, answer["result"]))
+    return problems
+
+
+CREATE_THE_FIRST_DOCUMENT = (
+    "document = desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())\n"
+    "result = {'doc_before': doc is None, 'created': document.Title}"
+)
+
+
+def check_a_script_creates_the_first_document_and_the_next_request_sees_it(module):
+    """The first script runs without a document and creates one through the
+    desktop it receives; the next request finds it as its current document."""
+    problems = []
+    office = office_with(current=None)
+    with installed(office), quick(module):
+        with running(CORE, adapter=module.ADAPTER()) as bridge:
+            client = Client(bridge.port)
+            client.hello()
+            first = client.request(dict(execute(CREATE_THE_FIRST_DOCUMENT), family="calc"))
+            second = client.request(
+                dict(execute("result = {'title': doc.Title, 'same': doc is not None}", request_id="r2"), family="calc")
+            )
+            state = ask(client, "state", "calc", capture_path=None)
+            client.close()
+    if first.get("ok") is not True:
+        problems.append("the first script did not run: %r" % (first.get("error"),))
+    elif first["result"] != {"doc_before": True, "created": "Untitled 1"}:
+        problems.append("first result %r" % (first["result"],))
+    if second.get("ok") is not True:
+        problems.append("the next script did not run: %r" % (second.get("error"),))
+    elif second["result"] != {"title": "Untitled 1", "same": True}:
+        problems.append("next result %r" % (second["result"],))
+    if state.get("state", {}).get("active") != {"sheets": [{"name": "Sheet1", "last_column": 0, "last_row": 0}]}:
+        problems.append("state %r" % (state.get("state"),))
+    if office.desktop.loaded != [("private:factory/scalc", "_blank", 0, ())]:
+        problems.append("loaded %r" % (office.desktop.loaded,))
+    return problems
+
+
+def _adapter_refusing_when_there_is_no_document():
+    """An adapter that stops the request when LibreOffice has no current document:
+    the defect that kept the Hub from creating the first document."""
+    return defective_adapter(
+        "uno",
+        "    if component is None:\n        return None\n",
+        "    if component is None:\n        raise RuntimeError('LibreOffice has no active document')\n",
+    )
 
 
 class ScriptTests(CheckCase):
@@ -466,18 +603,38 @@ class ScriptTests(CheckCase):
         )
         self.assertEqual(answer["result"], "Letter")
 
-    def test_no_script_runs_without_a_current_document_or_on_the_wrong_one(self):
-        self.must_pass(check_no_script_runs_on_the_wrong_document(ADAPTER))
+    def test_no_script_runs_on_a_current_document_of_another_family(self):
+        self.must_pass(check_no_script_runs_on_a_document_of_another_family(ADAPTER))
 
     def test_counter_proof_a_script_run_on_the_wrong_family_is_detected(self):
         defective = defective_adapter("uno", "    if actual != family:\n", "    if False:\n")
-        self.must_fail(check_no_script_runs_on_the_wrong_document(defective))
+        self.must_fail(check_no_script_runs_on_a_document_of_another_family(defective))
 
-    def test_counter_proof_a_script_run_without_a_document_is_detected(self):
-        defective = defective_adapter(
-            "uno", "    if component is None:\n        raise NoActiveDocument", "    if False:\n        raise NoActiveDocument"
+    def test_a_script_runs_without_a_document_and_receives_doc_none_and_the_desktop(self):
+        self.must_pass(check_a_script_without_a_document_runs_with_doc_none(ADAPTER))
+
+    def test_counter_proof_the_adapter_that_refused_a_script_without_a_document_is_detected(self):
+        self.must_fail(
+            check_a_script_without_a_document_runs_with_doc_none(_adapter_refusing_when_there_is_no_document())
         )
-        self.must_fail(check_no_script_runs_on_the_wrong_document(defective))
+
+    def test_a_script_creates_the_first_document_and_the_next_request_sees_it(self):
+        self.must_pass(check_a_script_creates_the_first_document_and_the_next_request_sees_it(ADAPTER))
+
+    def test_counter_proof_the_adapter_that_refused_a_script_without_a_document_cannot_create_one(self):
+        self.must_fail(
+            check_a_script_creates_the_first_document_and_the_next_request_sees_it(
+                _adapter_refusing_when_there_is_no_document()
+            )
+        )
+
+    def test_a_document_created_by_a_script_is_not_offered_to_another_family(self):
+        office = office_with(current=None)
+        first = run_script(ADAPTER, office, "calc", CREATE_THE_FIRST_DOCUMENT)
+        self.assertTrue(first["ok"], first)
+        answer = run_script(ADAPTER, office, "writer", "result = 'ran'")
+        self.assertFalse(answer["ok"])
+        self.assertEqual(answer["error"]["type"], "WrongDocumentType")
 
     def test_an_error_of_the_application_keeps_its_standard_trace(self):
         calc = Document("calc", "Budget")
@@ -619,6 +776,14 @@ class ProcessTests(CheckCase):
         calls = []
         self.assertEqual(ADAPTER.UnoAdapter().run_on_main(lambda: calls.append(1) or "value"), "value")
         self.assertEqual(calls, [1])
+
+    def test_the_adapter_never_creates_or_opens_a_document_itself(self):
+        # Only a script does, through the desktop it receives.
+        self.assertNotIn("loadComponentFromURL", _adapter_text())
+
+    def test_the_adapter_raises_exactly_two_errors_of_its_own(self):
+        defined = re.findall(r"^class (\w+)\(Exception\)", _adapter_text(), re.MULTILINE)
+        self.assertEqual(defined, ["LibreOfficeUnavailable", "WrongDocumentType"])
 
     def test_the_adapter_does_not_handle_the_secret_at_all(self):
         self.assertNotIn(FAKE_TOKEN, _adapter_text())
