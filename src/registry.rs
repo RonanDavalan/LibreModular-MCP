@@ -8,10 +8,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::config::{AppSettings, Config, Limits, Mode};
+use std::path::Path;
+
+use crate::config::{self, AppSettings, Config, Limits, Mode};
+use crate::modules::inkscape::{INHERITED_VARIABLES, InkscapeModule, InkscapePaths, WorkFiles};
 use crate::modules::{Module, NOT_IN_BUILD, TcpModule, UnavailableModule};
 use crate::protocol::BridgeConnector;
-use crate::security::Token;
+use crate::security::{self, Token};
 
 /// How a known application is reached and how its module is built.
 pub struct KnownApp {
@@ -39,8 +42,39 @@ fn build_tcp(
     }
 }
 
+/// The Hub's side of the files the Inkscape module works with: every check is
+/// the security module's, the module only names the paths.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HubWorkFiles;
+
+impl WorkFiles for HubWorkFiles {
+    fn ensure_document(&self, path: &Path, initial: &[u8]) -> Result<(), String> {
+        security::ensure_private_file(path, initial).map_err(|error| error.to_string())
+    }
+
+    fn write_script(&self, path: &Path, text: &[u8]) -> Result<(), String> {
+        security::replace_private_file(path, text).map_err(|error| error.to_string())
+    }
+}
+
+/// Inkscape runs one process per script, with fixed program paths and the
+/// Hub's file checks; it never receives the token.
+fn build_inkscape(
+    _app: &'static str,
+    _settings: &AppSettings,
+    _token: &Token,
+    limits: &Limits,
+) -> Arc<dyn Module> {
+    Arc::new(InkscapeModule::new(
+        InkscapePaths::default(),
+        *limits,
+        config::environment_values(&INHERITED_VARIABLES),
+        Arc::new(HubWorkFiles),
+    ))
+}
+
 /// The applications that have a module in this build.
-pub const KNOWN_APPS: [KnownApp; 3] = [
+pub const KNOWN_APPS: [KnownApp; 4] = [
     KnownApp {
         name: "gimp",
         mode: Mode::Tcp,
@@ -55,6 +89,11 @@ pub const KNOWN_APPS: [KnownApp; 3] = [
         name: "blender",
         mode: Mode::Tcp,
         build: build_tcp,
+    },
+    KnownApp {
+        name: "inkscape",
+        mode: Mode::Cli,
+        build: build_inkscape,
     },
 ];
 

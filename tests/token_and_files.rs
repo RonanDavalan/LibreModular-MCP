@@ -513,3 +513,63 @@ fn bounded_never_splits_a_character_whatever_the_limit() {
         }
     }
 }
+
+// --- private work files ------------------------------------------------------------
+
+type Replacer<'a> = &'a dyn Fn(&Path, &[u8]) -> Result<(), String>;
+
+/// Writing over a symbolic link must replace the link with a private regular
+/// file and leave the link's target untouched.
+fn check_replace_never_writes_through_a_link(replace: Replacer<'_>, base: &Path) -> Verdict {
+    let dir = fresh(base);
+    let outside = dir.join("outside.txt");
+    write_file(&outside, 0o644, "untouched");
+    let path = dir.join("script.py");
+    symlink(&outside, &path).map_err(|e| e.to_string())?;
+    replace(&path, b"print('new')")?;
+    ensure!(
+        fs::read_to_string(&outside).map_err(|e| e.to_string())? == "untouched",
+        "the target of the link was written"
+    );
+    let info = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    ensure!(info.file_type().is_file(), "the link is still there");
+    ensure!(mode_of(&path) == 0o600, "mode {:o}", mode_of(&path));
+    ensure!(
+        fs::read_to_string(&path).map_err(|e| e.to_string())? == "print('new')",
+        "the new content is missing"
+    );
+    Ok(())
+}
+
+#[test]
+fn replacing_a_private_file_removes_a_link_instead_of_following_it() {
+    let base = common::private_tempdir();
+    must_pass(check_replace_never_writes_through_a_link(
+        &|path, bytes| {
+            libremodular_mcp::security::replace_private_file(path, bytes).map_err(|e| e.to_string())
+        },
+        base.path(),
+    ));
+    must_fail(check_replace_never_writes_through_a_link(
+        &|path, bytes| fs::write(path, bytes).map_err(|e| e.to_string()),
+        base.path(),
+    ));
+}
+
+#[test]
+fn ensuring_a_private_file_creates_it_once_and_refuses_links_and_loose_modes() {
+    use libremodular_mcp::security::ensure_private_file;
+    let base = common::private_tempdir();
+    let dir = fresh(base.path());
+    let document = dir.join("current.svg");
+    ensure_private_file(&document, b"<svg/>").expect("created");
+    assert_eq!(mode_of(&document), 0o600);
+    ensure_private_file(&document, b"other").expect("kept");
+    assert_eq!(fs::read_to_string(&document).expect("read"), "<svg/>");
+    let loose = dir.join("loose.svg");
+    write_file(&loose, 0o644, "<svg/>");
+    assert!(ensure_private_file(&loose, b"<svg/>").is_err());
+    let link = dir.join("link.svg");
+    symlink(&document, &link).expect("link");
+    assert!(ensure_private_file(&link, b"<svg/>").is_err());
+}

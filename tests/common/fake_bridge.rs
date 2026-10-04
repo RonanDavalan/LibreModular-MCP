@@ -59,6 +59,8 @@ pub type Handler = Arc<dyn Fn(&Value) -> Reply + Send + Sync>;
 #[derive(Default)]
 pub struct Stats {
     pub connections: AtomicUsize,
+    /// Connections closed at once because the previous one closed too recently.
+    pub turned_away: AtomicUsize,
     pub authenticated: AtomicUsize,
     pub requests: AtomicUsize,
     pub kinds: Mutex<Vec<String>>,
@@ -84,6 +86,18 @@ fn same_secret(given: &[u8], expected: &[u8]) -> bool {
 impl FakeBridge {
     /// Start listening on an ephemeral loopback port.
     pub fn start(token: &str, hello: HelloMode, handler: Handler) -> FakeBridge {
+        FakeBridge::start_slow_to_release(token, hello, handler, Duration::ZERO)
+    }
+
+    /// Like [`FakeBridge::start`], but a connection that arrives less than
+    /// `release` after the previous served connection closed is closed at once,
+    /// as a real bridge does while it has not yet freed its single place.
+    pub fn start_slow_to_release(
+        token: &str,
+        hello: HelloMode,
+        handler: Handler,
+        release: Duration,
+    ) -> FakeBridge {
         let listener =
             TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).expect("bind loopback");
         listener.set_nonblocking(true).expect("nonblocking");
@@ -95,15 +109,22 @@ impl FakeBridge {
             let stats = Arc::clone(&stats);
             let stop = Arc::clone(&stop);
             std::thread::spawn(move || {
+                let mut last_closed: Option<Instant> = None;
                 while !stop.load(Ordering::SeqCst) {
                     match listener.accept() {
                         Ok((stream, peer)) => {
                             if !peer.ip().is_loopback() {
                                 continue;
                             }
+                            if last_closed.is_some_and(|closed| closed.elapsed() < release) {
+                                stats.turned_away.fetch_add(1, Ordering::SeqCst);
+                                drop(stream);
+                                continue;
+                            }
                             stats.connections.fetch_add(1, Ordering::SeqCst);
                             // One connection at a time, like a real bridge.
                             serve(stream, &token, hello, &handler, &stats, &stop);
+                            last_closed = Some(Instant::now());
                         }
                         Err(error) if error.kind() == ErrorKind::WouldBlock => {
                             std::thread::sleep(POLL);

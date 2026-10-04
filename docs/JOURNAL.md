@@ -211,3 +211,74 @@ The end-to-end Rust test now says which step failed.
 Still unconfirmed: starting the bridge from the interactive Python console (menu path, the
 environment variables reaching it, its lifetime when the console closes), several open images
 (which one is listed first), a non-empty selection.
+
+## 2026-10-04 — Krita and Blender bridges, the Inkscape module, a reconnection delay
+
+Three more applications: Krita and Blender in the `tcp` mode, each with an adapter and a
+generated bridge, and Inkscape in the `cli` mode, a Rust module that starts one Python process
+per script. None of them has been tried in the real application.
+
+Done, with the command that shows it:
+
+- The `tcp` module waits 100 ms before its second attempt to connect, so a bridge that frees
+  its single place late is not reported unavailable: `cargo test --locked --test protocol`
+  (`health_reaches_a_bridge_that_frees_its_place_late`, and its counter-proof without the wait).
+- Blender adapter: one persistent timer, registered once from the thread that runs the bridge
+  file, drains a queue in Blender's main thread; outside Blender's interface (background mode,
+  the stand-alone `bpy` package) calls are direct. Krita adapter: a Qt object living in the
+  interface thread receives calls through a queued signal; without a Krita instance and a Qt
+  application, calls are direct. Both: `python3 -m unittest discover -s tests/bridges`
+  (90 tests, also on Python 3.9.23), including a double whose mechanism never runs anything,
+  and its counter-proof that always queues and waits forever.
+- The three generated bridges driven end to end by the Hub's `TcpModule`, passing whether or
+  not the application's module is installed: `cargo test --locked --test bridges`.
+- Inkscape module: argument list without shell, new process group, environment cleared to
+  `PATH`, `HOME`, `LANG`, `LC_ALL`, `PYTHONPATH`, `LMM_DOCUMENT`, `LMM_WORK_DIR`, script in a
+  private file, limits applied by a fixed bootstrap, whole group killed on timeout, output
+  bounded without blocking, entities refused when reading the state, a linked document refused:
+  `cargo test --locked --test inkscape` (24 tests, with the test's Python and a fake
+  `inkscape`).
+- Private work files created once or replaced without following a link:
+  `cargo test --locked --test token_and_files`.
+- No process started in `src/` outside the Inkscape module, which answers only through the
+  `Module` trait: `cargo test --locked --test invariants`.
+- Whole suite, formatting, lints, release build, bridges:
+  `cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked && cargo build --release --locked && python3 -m compileall -q bridges && python3 scripts/build_bridges.py --check`.
+
+Decisions:
+
+- Blender: a single persistent timer registered from the main thread, rather than one
+  registration per call from the connection thread. Blender's own documentation shows the
+  queue-and-timer pattern for work coming from another thread; whether registering a timer
+  from another thread is safe is unconfirmed. `app_version` is the first word of
+  `bpy.app.version_string`, so `4.2.3 LTS` reads `4.2.3`.
+- Krita: a queued signal to an object of the interface thread, rather than `QTimer.singleShot`,
+  which, called from a thread without a Qt event loop, would never fire. The capture saves
+  `Document.projection`, a copy; the document is never saved or exported.
+- Inkscape: the module never opens a file. The registry gives it the Hub's file operations
+  (`ensure_private_file`, `replace_private_file` in `security.rs`) through a `WorkFiles`
+  trait, since modules may not import the security module. The process environment values
+  are read by `config.rs`, the only reader of the environment.
+- Inkscape: the work directory is the one the Hub passes to `execute`; the module remembers
+  it for `state`, which has no work directory in its signature. Before any script, `state` is
+  `{}` with a warning. The script file is removed once its process ends.
+- Inkscape: the bootstrap is given the script file and the limits as arguments (CPU seconds,
+  address space, open files), since the environment is fixed. It drops the current directory
+  from `sys.path` before importing anything, so a file a script left in the work directory
+  cannot shadow a module the bootstrap needs. `SystemExit` is reported as an error, as in the
+  bridges. The address space limit is 2 GiB, open files 256.
+- Inkscape: the process group is killed after every run, not only on timeout; the leader is
+  left unreaped (`waitid` with `WNOWAIT`) until then, so its group id cannot be reused. A
+  process that leaves its group on purpose is not followed.
+- Inkscape: the capture runs `inkscape` with the reduced environment and its own process
+  group, without the resource limits of scripts.
+- The test of applications without a module now uses LibreOffice, since Inkscape has one.
+
+Not covered yet:
+
+- Nothing has run in a real Krita, Blender or Inkscape: the Scripter gesture and the queued
+  signal, `blender --python` and the timer, whether `blender --background --python` keeps
+  running long enough for requests, `Document.projection`, `inkex` on `PYTHONPATH`, and the
+  `inkscape` command line are unconfirmed.
+- `execute` in the `tcp` module still reconnects at once after a connection lost before the
+  request was sent; only `health` and `state` wait.
