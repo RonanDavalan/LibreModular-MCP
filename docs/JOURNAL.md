@@ -406,3 +406,18 @@ Not covered yet:
   is on another window.
 - The UNO port has no authentication: any process that can reach it drives LibreOffice without the token,
   the guard or the journal. Whether LibreOffice filters by user is unconfirmed.
+
+## 2026-10-04 — LibreOffice tried in LibreOffice 25.2.3.2
+
+- `cargo test --locked --test libreoffice_real -- --ignored --nocapture` passes against LibreOffice
+  25.2.3.2 (Debian 13 packages, `/usr/bin/python3` 3.13.5), 1 test in 3.1 s, no process left.
+- The real `libremodular-launch libreoffice` and the real `libremodular-mcp serve` on a virtual X
+  display, in a throwaway home: `get_state("hub")` lists the three targets connected in mode `uno`
+  with `app_version` `25.2.3.2` and `bridge_version` `1`; a Calc script is refused with
+  `NoActiveDocument` while no document is open; after a Calc document is opened, a script writes
+  `A1` and `B2` and returns them, `get_state("libreoffice-calc")` describes the sheet and returns a
+  PNG path, a Writer script is refused with `WrongDocumentType`; `--stop` ends the bridge and
+  leaves LibreOffice running. The sheet is named `Feuille1` there: names follow the locale.
+- A bridge file checked out under a `umask` of `002` has mode `664` and the launcher refuses it
+  (`chmod go-w`); the guide now says so.
+

@@ -1,27 +1,28 @@
 # LibreOffice module
 
-**Status: tried in LibreOffice 24.2.7.2, not in 25.2.3.2.** The adapter and the launcher were
-written from the public UNO API and from measurements the operator made on LibreOffice
-25.2.3.2; they then ran against LibreOffice 24.2.7.2 (the Ubuntu 24.04 packages `libreoffice-core`, `-writer`, `-calc`,
-`-impress` and `python3-uno`), with the system `/usr/bin/python3` (3.11.15), in two ways:
+**Status: tried in LibreOffice 24.2.7.2 and 25.2.3.2.** The adapter and the launcher were
+written from the public UNO API and from measurements made on LibreOffice 25.2.3.2; they then
+ran against LibreOffice 24.2.7.2 (the Ubuntu 24.04 packages `libreoffice-core`, `-writer`,
+`-calc`, `-impress` and `python3-uno`, with the system `/usr/bin/python3` 3.11.15) and against
+LibreOffice 25.2.3.2 (the Debian 13 packages, with the system `/usr/bin/python3` 3.13.5), in two
+ways:
 
 - without interface, through `cargo test --test libreoffice_real -- --ignored --nocapture`,
   which starts its own LibreOffice on a throwaway profile and port, starts the generated
   bridge with the environment the launcher gives it, and drives the three targets through
-  the Hub;
+  the Hub (passes on both versions);
 - with a window on a virtual X display, started by the real `libremodular-launch`, driven by
   the real `libremodular-mcp` over MCP on stdio: `get_state("hub")` listed the three targets
-  as connected in mode `uno` with version `24.2.7.2`; a script refused with
-  `NoActiveDocument` while no document was open; after a Calc document was opened in the
-  window, a script wrote two cells, `get_state` described the sheet and returned a PNG
-  capture, a script for Writer was refused with `WrongDocumentType`, `--stop` ended the
+  as connected in mode `uno` with the version of LibreOffice (`24.2.7.2`, then `25.2.3.2`); a
+  script refused with `NoActiveDocument` while no document was open; after a Calc document was
+  opened in the window, a script wrote two cells, `get_state` described the sheet and returned
+  a PNG capture, a script for Writer was refused with `WrongDocumentType`, `--stop` ended the
   bridge and left LibreOffice running.
 
-Not part of those runs: LibreOffice 25.2.3.2, a real desktop session, the Python 3.13.5 of
-Debian 13, a document with several sheets or pages (what its capture shows), documents of
-other kinds open next to the three families, and a LibreOffice that takes longer to start
-than the bridge waits for (see the version under *Limits*). The adapter's unit tests use a
-fake `uno` and run the same whether or not LibreOffice is installed.
+Not part of those runs: a real desktop session, a document with several sheets or pages (what
+its capture shows), documents of other kinds open next to the three families, and a LibreOffice
+that takes longer to start than the bridge waits for (see the version under *Limits*). The
+adapter's unit tests use a fake `uno` and run the same whether or not LibreOffice is installed.
 
 ## What it does
 
@@ -127,7 +128,10 @@ What the launcher does, and does not do:
 - Both processes are detached, in groups of their own, with their input and output sent
   nowhere. They go on when the launcher returns.
 - The bridge file must be an absolute path to a regular file, not a link, owned by you and
-  not writable by the group or others.
+  not writable by the group or others. A fresh clone made with a `umask` of `002` (the default
+  of many Debian accounts) gives mode `664`, which the launcher refuses: run
+  `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py` once. The directory
+  that holds the file is not checked.
 - **It refuses to start if a LibreOffice of yours is already running** (a `soffice.bin`
   process of your user, read from `/proc`). It never attaches to an instance that may hold
   unsaved work, and never closes one it did not start. Close LibreOffice and run it again,
