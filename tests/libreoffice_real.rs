@@ -443,6 +443,87 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
     Ok(())
 }
 
+/// The cold start: the bridge is up and LibreOffice is not, then LibreOffice starts.
+fn drive_cold_start(base: &Path) -> Verdict {
+    let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
+    let (uno_port, bridge_port) = (free_port(), free_port());
+    let token_file = base.join("token");
+    write_file(&token_file, 0o600, FILE_TOKEN);
+    let bridge_file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("bridges")
+        .join("generated")
+        .join("uno_bridge.py");
+    let plan = Plan {
+        uno_port,
+        bridge_port,
+        bridge_file,
+        token_file,
+    };
+    // The bridge starts first: nothing listens on the UNO port yet.
+    let (_bridge, bridge_port) = start_bridge(&plan, &path)?;
+    let hub = build_with_token(
+        base,
+        config(&format!(
+            "[apps.libreoffice-calc]\nenabled = true\nuno_port = {uno_port}\nbridge_port = {bridge_port}\n"
+        )),
+        Vec::new(),
+        Token::new(FILE_TOKEN).map_err(|error| error.to_string())?,
+    );
+    let mut session = Session::start(hub.server.clone());
+    let announced = |listing: &Value| -> String {
+        listing["state"]["modules"][0]["app_version"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned()
+    };
+
+    // 1. Without LibreOffice the bridge is there and does not know the version.
+    let early = session.state("hub");
+    show("get_state hub, before LibreOffice", &early);
+    ensure!(early["state"]["modules"][0]["connected"] == true, "{early}");
+    ensure!(announced(&early) == "unknown", "{early}");
+    let without = session.state("libreoffice-calc");
+    show("get_state, before LibreOffice", &without);
+    ensure!(
+        without["warnings"]
+            .to_string()
+            .contains("cannot be imported"),
+        "{without}"
+    );
+
+    // 2. LibreOffice starts; the same connection of the Hub asks for the state again.
+    let _libreoffice = start_libreoffice(base, &path, uno_port)?;
+    eprintln!("{}", wait_for_libreoffice(&path, uno_port)?);
+    let later = session.state("libreoffice-calc");
+    show("get_state, once LibreOffice listens", &later);
+    ensure!(
+        !later["warnings"].to_string().contains("cannot be imported"),
+        "the bridge still reports a missing API: {later}"
+    );
+    ensure!(later["state"]["documents"] == json!([]), "{later}");
+    // The Hub keeps the version of the hello of its connection.
+    ensure!(later["app_version"] == "unknown", "{later}");
+
+    // 3. A new connection of the Hub announces the version the bridge now knows.
+    hub.server.shutdown();
+    let after = session.state("hub");
+    show("get_state hub, on a new connection", &after);
+    let version = announced(&after);
+    ensure!(
+        version.chars().next().is_some_and(|c| c.is_ascii_digit()),
+        "the version was not announced on the new connection: {after}"
+    );
+    hub.server.shutdown();
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs LibreOffice and its python3-uno"]
+fn a_bridge_started_before_libreoffice_announces_the_version_once_it_listens() {
+    let base = common::private_tempdir();
+    must_pass(drive_cold_start(base.path()));
+}
+
 #[test]
 #[ignore = "needs LibreOffice and its python3-uno"]
 fn the_hub_drives_a_real_libreoffice_through_the_generated_bridge() {

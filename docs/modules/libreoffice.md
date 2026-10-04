@@ -22,7 +22,8 @@ What a script does when no document is open (it runs, with `doc` set to `None`, 
 create the first document) was added after those two runs. It ran against LibreOffice
 24.2.7.2 only, without interface (`cargo test --test libreoffice_real`) and with a window on a
 virtual X display (the example at the end of this page). A bridge that starts before
-LibreOffice listens, and the version it then reports, ran against fakes only: see *Limits*.
+LibreOffice listens, and the version it then reports, ran against 24.2.7.2 without interface
+only: see *Limits*.
 
 Not part of those runs: a real desktop session, a document with several sheets or pages (what
 its capture shows), documents of other kinds open next to the three families, and a LibreOffice
@@ -344,8 +345,10 @@ The `get_state` that followed returned, under `state`:
   show `unknown` until the Hub connects again, even though the bridge knows the version by
   then. LibreOffice answered on UNO 1.3 seconds after it started in one test run; on its very
   first start in another environment (cold caches) it had not answered after 8 seconds and had
-  by 14. This behaviour ran against fakes (`python3 -m unittest discover -s tests/bridges`),
-  not against a LibreOffice that starts late.
+  by 14. Tried against LibreOffice 24.2.7.2: a bridge started before LibreOffice, then
+  LibreOffice started, then the state asked again and the Hub connected again
+  (`cargo test --test libreoffice_real -- --ignored`; the same test fails against the bridge
+  file of before this change, with the warning still there).
 - Only the **current** document is reachable. With several documents of a family open, a
   script gets whichever LibreOffice reports as current; the other ones are listed in
   `documents` and are not offered. Which document is current when the focus is on another
