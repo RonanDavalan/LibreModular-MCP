@@ -96,10 +96,13 @@ pub trait Module: Send + Sync {
     ) -> Result<ExecReply, ModuleError>;
 
     /// Ask for the current state, and for a capture written to `capture_path`.
+    /// `work_dir` is the same directory [`Module::execute`] receives for this
+    /// application, so that a module whose document lives there can read it
+    /// without having run a script first.
     ///
     /// # Errors
     /// [`ModuleError`] when there is no answer from the application.
-    fn state(&self, capture_path: &Path) -> Result<StateReply, ModuleError>;
+    fn state(&self, capture_path: &Path, work_dir: &Path) -> Result<StateReply, ModuleError>;
 
     /// Release the connection. Never closes or stops the application.
     fn close(&self);
@@ -129,7 +132,7 @@ impl Module for UnavailableModule {
         Err(ModuleError::Unavailable(self.reason.clone()))
     }
 
-    fn state(&self, _: &Path) -> Result<StateReply, ModuleError> {
+    fn state(&self, _: &Path, _: &Path) -> Result<StateReply, ModuleError> {
         Err(ModuleError::Unavailable(self.reason.clone()))
     }
 
@@ -339,7 +342,7 @@ impl Module for TcpModule {
         })
     }
 
-    fn state(&self, capture_path: &Path) -> Result<StateReply, ModuleError> {
+    fn state(&self, capture_path: &Path, _: &Path) -> Result<StateReply, ModuleError> {
         let payload = json!({
             "type": "state",
             "capture_path": capture_path.to_string_lossy(),

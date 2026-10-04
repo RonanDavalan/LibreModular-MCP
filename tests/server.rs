@@ -8,14 +8,15 @@
 mod common;
 
 use std::fs;
-use std::os::unix::fs::{PermissionsExt, symlink};
-use std::path::Path;
-use std::sync::Arc;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt, symlink};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use common::fake_bridge::{FakeBridge, HelloMode, Reply, TINY_PNG, handler};
 use common::hub::{Session, TestHub, build, config, config_for};
 use common::{FAKE_TOKEN, Verdict, must_fail, must_pass};
+use libremodular_mcp::modules::{ExecReply, Health, Module, ModuleError, StateReply};
 use libremodular_mcp::server::{DATA_NOT_INSTRUCTIONS, HubServer};
 use rmcp::handler::server::router::tool::{ToolRoute, ToolRouter};
 use rmcp::model::Tool;
@@ -739,6 +740,135 @@ fn every_get_state_asks_the_application_again() {
     session.state("gimp");
     session.state("gimp");
     assert_eq!(bridge.kinds(), vec!["state", "state"]);
+}
+
+// --- the work directory handed to the state --------------------------------------
+
+/// A module that records the work directory of each call and answers nothing else.
+#[derive(Default)]
+struct RecordingModule {
+    executed_in: Mutex<Vec<PathBuf>>,
+    described_in: Mutex<Vec<PathBuf>>,
+}
+
+impl Module for RecordingModule {
+    fn health(&self) -> Health {
+        Health::default()
+    }
+
+    fn execute(&self, _: &str, _: u32, work_dir: &Path) -> Result<ExecReply, ModuleError> {
+        self.executed_in
+            .lock()
+            .expect("executed")
+            .push(work_dir.to_path_buf());
+        Ok(ExecReply {
+            ok: true,
+            stdout: String::new(),
+            stderr: String::new(),
+            result: Value::Null,
+            error: Value::Null,
+        })
+    }
+
+    fn state(&self, _: &Path, work_dir: &Path) -> Result<StateReply, ModuleError> {
+        self.described_in
+            .lock()
+            .expect("described")
+            .push(work_dir.to_path_buf());
+        Ok(StateReply {
+            state: json!({}),
+            screenshot: None,
+            warnings: Vec::new(),
+            app_version: None,
+            bridge_version: None,
+        })
+    }
+
+    fn close(&self) {}
+}
+
+fn hub_with_recorder(base: &Path) -> (TestHub, Arc<RecordingModule>) {
+    let recorder = Arc::new(RecordingModule::default());
+    let module: Arc<dyn Module> = recorder.clone();
+    let hub = build(
+        base,
+        config("[apps.gimp]\nenabled = true\n"),
+        vec![("gimp".to_owned(), module)],
+    );
+    (hub, recorder)
+}
+
+#[test]
+fn get_state_prepares_the_private_work_directory_and_hands_over_the_one_execute_gets() {
+    let base = common::private_tempdir();
+    let (hub, recorder) = hub_with_recorder(base.path());
+    let mut session = Session::start(hub.server.clone());
+    let work = hub.volatile.join("work").join("gimp");
+    // The state comes first: the directory must exist, private, before any script.
+    assert_eq!(session.state("gimp")["connected"], true);
+    assert_eq!(common::mode_of(&work), 0o700);
+    assert_eq!(common::mode_of(&hub.volatile.join("work")), 0o700);
+    assert_eq!(session.execute("gimp", "x = 1")["status"], "ok");
+    assert_eq!(
+        *recorder.described_in.lock().expect("described"),
+        vec![work.clone()]
+    );
+    assert_eq!(*recorder.executed_in.lock().expect("executed"), vec![work]);
+}
+
+/// With the work directory of the application made unsafe by `damage`, the state
+/// must be refused and the module must not be asked anything.
+fn check_the_state_refuses_an_unsafe_work_directory(base: &Path, damage: fn(&Path)) -> Verdict {
+    let (hub, recorder) = hub_with_recorder(base);
+    let work = hub.volatile.join("work").join("gimp");
+    // Every directory above is private, so only `damage` decides the outcome.
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&work)
+        .map_err(|error| error.to_string())?;
+    damage(&work);
+    let mut session = Session::start(hub.server.clone());
+    let answer = session.state("gimp");
+    ensure!(answer["connected"] == false, "{answer}");
+    ensure!(
+        answer["warnings"]
+            .to_string()
+            .contains("cannot prepare the work directory"),
+        "{answer}"
+    );
+    ensure!(
+        recorder.described_in.lock().expect("described").is_empty(),
+        "the module was asked for the state"
+    );
+    Ok(())
+}
+
+fn open_to_others(work: &Path) {
+    fs::set_permissions(work, fs::Permissions::from_mode(0o755)).expect("mode");
+}
+
+fn keep_private(work: &Path) {
+    fs::set_permissions(work, fs::Permissions::from_mode(0o700)).expect("mode");
+}
+
+#[test]
+fn get_state_refuses_a_work_directory_open_to_others() {
+    let base = common::private_tempdir();
+    must_pass(check_the_state_refuses_an_unsafe_work_directory(
+        &common::fresh(base.path()),
+        open_to_others,
+    ));
+}
+
+#[test]
+fn counter_proof_a_state_that_ignores_the_work_directory_check_is_detected() {
+    // A private directory is accepted, so the module is asked: the check must say so.
+    let base = common::private_tempdir();
+    must_fail(check_the_state_refuses_an_unsafe_work_directory(
+        &common::fresh(base.path()),
+        keep_private,
+    ));
 }
 
 // --- purge ----------------------------------------------------------------------

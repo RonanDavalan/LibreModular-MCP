@@ -179,7 +179,7 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path, app: &'static str) -> Ver
             "{traceback}"
         );
         let state = module
-            .state(&captures.join(format!("{app}-e2e.png")))
+            .state(&captures.join(format!("{app}-e2e.png")), &work_dir)
             .map_err(|error| format!("state: {error}"))?;
         ensure!(state.state.is_object(), "state: not an object: {state:?}");
         ensure!(

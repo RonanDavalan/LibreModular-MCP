@@ -582,7 +582,6 @@ pub struct InkscapeModule {
     inherited: Vec<(OsString, OsString)>,
     files: Arc<dyn WorkFiles>,
     busy: Mutex<()>,
-    work_dir: Mutex<Option<PathBuf>>,
 }
 
 impl InkscapeModule {
@@ -602,7 +601,6 @@ impl InkscapeModule {
             inherited,
             files,
             busy: Mutex::new(()),
-            work_dir: Mutex::new(None),
         }
     }
 
@@ -625,16 +623,6 @@ impl InkscapeModule {
         }
         parse_version(&String::from_utf8_lossy(&finished.stdout))
             .or_else(|| parse_version(&String::from_utf8_lossy(&finished.stderr)))
-    }
-
-    fn remember(&self, work_dir: &Path) {
-        if let Ok(mut known) = self.work_dir.lock() {
-            *known = Some(work_dir.to_path_buf());
-        }
-    }
-
-    fn known_work_dir(&self) -> Option<PathBuf> {
-        self.work_dir.lock().ok().and_then(|known| known.clone())
     }
 
     fn document(&self, work_dir: &Path) -> Result<PathBuf, ModuleError> {
@@ -724,6 +712,15 @@ impl InkscapeModule {
     }
 }
 
+/// Whether anything, a link included, is named like the working document. A
+/// stat only: whatever is there is checked by the Hub's file operations.
+fn document_exists(path: &Path) -> bool {
+    !matches!(
+        std::fs::symlink_metadata(path),
+        Err(error) if error.kind() == io::ErrorKind::NotFound
+    )
+}
+
 fn run_error(error: RunError) -> ModuleError {
     match error {
         RunError::TimedOut => ModuleError::Timeout,
@@ -757,7 +754,6 @@ impl Module for InkscapeModule {
             Err(TryLockError::WouldBlock) => return Err(ModuleError::Busy),
             Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
         };
-        self.remember(work_dir);
         let document = self.document(work_dir)?;
         let script_file = work_dir.join(SCRIPT_NAME);
         self.files
@@ -785,14 +781,16 @@ impl Module for InkscapeModule {
             .map_err(run_error)
     }
 
-    fn state(&self, capture_path: &Path) -> Result<StateReply, ModuleError> {
+    fn state(&self, capture_path: &Path, work_dir: &Path) -> Result<StateReply, ModuleError> {
         let _running = match self.busy.try_lock() {
             Ok(guard) => guard,
             Err(TryLockError::WouldBlock) => return Err(ModuleError::Busy),
             Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
         };
         let app_version = self.version();
-        let Some(work_dir) = self.known_work_dir() else {
+        // Looking is not creating: the document is made by the first script, and
+        // an absent one is reported as such rather than made up.
+        if !document_exists(&work_dir.join(DOCUMENT_NAME)) {
             return Ok(StateReply {
                 state: json!({}),
                 screenshot: None,
@@ -803,10 +801,10 @@ impl Module for InkscapeModule {
                 app_version,
                 bridge_version: None,
             });
-        };
+        }
         let mut warnings = Vec::new();
-        let (document, state) = self.read_state(&work_dir, &mut warnings)?;
-        let screenshot = self.capture(&work_dir, &document, capture_path, &mut warnings);
+        let (document, state) = self.read_state(work_dir, &mut warnings)?;
+        let screenshot = self.capture(work_dir, &document, capture_path, &mut warnings);
         Ok(StateReply {
             state,
             screenshot,

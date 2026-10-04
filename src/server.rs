@@ -268,6 +268,16 @@ fn from_module_error(error: &ModuleError) -> ExecAnswer {
     ExecAnswer::hub(status, error.to_string())
 }
 
+/// The private directory the Hub keeps for `target`, created and checked on
+/// every call: `execute_script` and `get_state` give the same one to a module.
+fn prepare_work_dir(context: &HubContext, target: &str) -> Result<PathBuf, String> {
+    let work_dir = context.work_root().join(target);
+    ensure_private_dir(&context.work_root())
+        .and_then(|()| ensure_private_dir(&work_dir))
+        .map_err(|error| format!("cannot prepare the work directory: {error}"))?;
+    Ok(work_dir)
+}
+
 /// Every step of `execute_script`, in order; returns the payload and the journal entry.
 fn run_execute(context: &HubContext, target: &str, script: &str) -> (Value, AuditEntry) {
     let started = Instant::now();
@@ -301,15 +311,10 @@ fn execute_steps(
     if let Err(error) = check_script_size(script, context.config.limits().max_script_bytes) {
         return (refuse(error.to_string()), None);
     }
-    let work_dir = context.work_root().join(target);
-    let prepared =
-        ensure_private_dir(&context.work_root()).and_then(|()| ensure_private_dir(&work_dir));
-    if let Err(error) = prepared {
-        return (
-            refuse(format!("cannot prepare the work directory: {error}")),
-            None,
-        );
-    }
+    let work_dir = match prepare_work_dir(context, target) {
+        Ok(work_dir) => work_dir,
+        Err(reason) => return (refuse(reason), None),
+    };
     let Some(work_text) = path_text(&work_dir) else {
         return (
             refuse("the work directory is not valid UTF-8".to_owned()),
@@ -464,6 +469,10 @@ fn state_steps(context: &HubContext, target: &str) -> StateAnswer {
     let Some(module) = registry.get(target) else {
         return StateAnswer::without_state("refused", false, "unknown target".to_owned());
     };
+    let work_dir = match prepare_work_dir(context, target) {
+        Ok(work_dir) => work_dir,
+        Err(reason) => return StateAnswer::without_state("refused", false, reason),
+    };
     let captures = context.captures_dir();
     let capture = ensure_private_dir(&captures)
         .and_then(|()| capture_path_for(&captures, target, &capture_stamp((context.clock)())));
@@ -477,7 +486,7 @@ fn state_steps(context: &HubContext, target: &str) -> StateAnswer {
             );
         }
     };
-    let reply = match module.state(&capture) {
+    let reply = match module.state(&capture, &work_dir) {
         Ok(reply) => reply,
         Err(error) => {
             let (status, connected) = match error {
