@@ -311,11 +311,12 @@ def _script_result(namespace):
         )
 
 
-def _run_script(adapter, script, work_dir):
+def _run_script(adapter, script, work_dir, extra=()):
     """Compile and run one script in a fresh namespace; never raises for what
-    the script does, including SystemExit."""
+    the script does, including SystemExit. `extra` holds the arguments an adapter
+    that serves several families takes after the usual ones."""
     namespace = {"__name__": "__main__"}
-    namespace.update(adapter.namespace())
+    namespace.update(adapter.namespace(*extra))
     namespace["LMM_WORK_DIR"] = work_dir
     stdout, stderr = _Capture(), _Capture()
     outcome = {}
@@ -365,6 +366,21 @@ def _discard(connection):
         pass
 
 
+def _families_of(adapter):
+    """The families an adapter serves with one bridge, or None when it serves a
+    single application: its `families` attribute, a tuple of names."""
+    families = getattr(adapter, "families", None)
+    if families is None:
+        return None
+    if (
+        not isinstance(families, tuple)
+        or not families
+        or not all(isinstance(name, str) and name for name in families)
+    ):
+        raise BridgeError("the adapter's families must be a non-empty tuple of names")
+    return families
+
+
 class _Bridge:
     """One listening socket and at most one connection served at a time."""
 
@@ -374,6 +390,7 @@ class _Bridge:
             raise BridgeError("the adapter has no application name")
         self._adapter = adapter
         self._app = app
+        self._families = _families_of(adapter)
         # Read here, in the thread that starts the bridge: the application's
         # API is not called from the connection threads for the hello.
         self._app_version = _version_of(adapter)
@@ -509,6 +526,28 @@ class _Bridge:
             return self._state(request)
         return _failure("UnknownRequest", "unknown request type")
 
+    def _unknown_family(self, request):
+        """The failure to answer when this adapter serves families and the request
+        names none of them, before any line of the adapter runs; None otherwise."""
+        if self._families is None:
+            return None
+        family = request.get("family")
+        if isinstance(family, str) and family in self._families:
+            return None
+        return _failure(
+            "UnknownFamily",
+            "the request must name one of the families of this bridge: %s"
+            % ", ".join(self._families),
+        )
+
+    def _family_arguments(self, request):
+        """What an adapter that serves families receives after its usual
+        arguments: the family of the request. Nothing for the others, which never
+        see the field."""
+        if self._families is None:
+            return ()
+        return (request["family"],)
+
     def _execute(self, request):
         script = request.get("script")
         work_dir = request.get("work_dir")
@@ -516,10 +555,15 @@ class _Bridge:
             return _failure(
                 "InvalidRequest", "an execute request needs a script and a work_dir as text"
             )
+        unknown = self._unknown_family(request)
+        if unknown is not None:
+            unknown.update({"stdout": "", "stderr": "", "result": None})
+            return unknown
+        extra = self._family_arguments(request)
         started = time.monotonic()
         adapter = self._adapter
         try:
-            answer = adapter.run_on_main(lambda: _run_script(adapter, script, work_dir))
+            answer = adapter.run_on_main(lambda: _run_script(adapter, script, work_dir, extra))
         except Exception as error:
             answer = _failure(
                 type(error).__name__,
@@ -537,6 +581,10 @@ class _Bridge:
         capture_path = request.get("capture_path")
         if capture_path is not None and not isinstance(capture_path, str):
             return _failure("InvalidRequest", "capture_path must be text or null")
+        unknown = self._unknown_family(request)
+        if unknown is not None:
+            return unknown
+        extra = self._family_arguments(request)
         adapter = self._adapter
         warnings = []
         if self._app_version == UNKNOWN_VERSION:
@@ -545,7 +593,7 @@ class _Bridge:
             )
         state = {}
         try:
-            reported = adapter.run_on_main(adapter.state)
+            reported = adapter.run_on_main(lambda: adapter.state(*extra))
             if not isinstance(reported, dict):
                 raise TypeError("the adapter returned a %s" % type(reported).__name__)
             state = _json_copy(reported)
@@ -556,7 +604,7 @@ class _Bridge:
         if capture_path:
             try:
                 written = adapter.run_on_main(
-                    lambda: _with_private_umask(adapter.screenshot, capture_path)
+                    lambda: _with_private_umask(adapter.screenshot, capture_path, *extra)
                 )
             except Exception as error:
                 warnings.append(

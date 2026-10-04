@@ -166,6 +166,38 @@ class FakeAdapter:
         return True
 
 
+class FamilyAdapter:
+    """An adapter that serves several families with one bridge, as the LibreOffice
+    one does. It records every call the core makes to it after the start."""
+
+    app = "libreoffice"
+    families = ("writer", "calc", "impress")
+
+    def __init__(self):
+        self.calls = []
+
+    def app_version(self):
+        return "25.2.3.2"
+
+    def namespace(self, family):
+        self.calls.append(("namespace", family))
+        return {"FAMILY": family}
+
+    def run_on_main(self, function):
+        self.calls.append(("run_on_main",))
+        return function()
+
+    def state(self, family):
+        self.calls.append(("state", family))
+        return {"family": family}
+
+    def screenshot(self, path, family):
+        self.calls.append(("screenshot", family))
+        with open(path, "wb") as handle:
+            handle.write(TINY_PNG)
+        return True
+
+
 class Running:
     def __init__(self, core, port, stderr):
         self.core = core

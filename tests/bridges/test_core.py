@@ -24,6 +24,7 @@ from bridge_support import (
     WRONG_TOKEN,
     Client,
     FakeAdapter,
+    FamilyAdapter,
     PrivateDir,
     core_text,
     defective_core,
@@ -669,6 +670,191 @@ class StateTests(CheckCase):
         self.assertEqual(
             answer["warnings"], ["the gimp scripting API cannot be imported in this process"]
         )
+
+
+# --------------------------------------------------------------------------
+# families: one bridge, several kinds of document
+# --------------------------------------------------------------------------
+
+UNNAMED_FAMILIES = [
+    ("no family", {}),
+    ("a null family", {"family": None}),
+    ("a number", {"family": 5}),
+    ("a list", {"family": ["calc"]}),
+    ("another case", {"family": "CALC"}),
+    ("a name the adapter does not serve", {"family": "draw"}),
+    ("an empty name", {"family": ""}),
+]
+
+
+def check_the_family_reaches_the_adapter(core):
+    """Each call carries the family of its request to the adapter, and only that."""
+    problems = []
+    adapter = FamilyAdapter()
+    directory = PrivateDir()
+    try:
+        with running(core, adapter=adapter) as bridge:
+            client = Client(bridge.port)
+            client.hello()
+            answer = client.request(dict(execute("result = FAMILY"), family="calc"))
+            if answer.get("result") != "calc":
+                problems.append("execute: the script saw %r" % (answer.get("result"),))
+            capture = str(directory.path / "family.png")
+            answer = client.request(
+                {"id": "s", "type": "state", "capture_path": capture, "family": "impress"}
+            )
+            if answer.get("state") != {"family": "impress"}:
+                problems.append("state: the adapter saw %r" % (answer.get("state"),))
+            if answer.get("screenshot") != capture:
+                problems.append("screenshot: no capture, warnings %r" % (answer.get("warnings"),))
+            client.close()
+    finally:
+        directory.cleanup()
+    expected = [
+        ("run_on_main",),
+        ("namespace", "calc"),
+        ("run_on_main",),
+        ("state", "impress"),
+        ("run_on_main",),
+        ("screenshot", "impress"),
+    ]
+    if adapter.calls != expected:
+        problems.append("calls %r" % (adapter.calls,))
+    return problems
+
+
+def check_an_unknown_family_is_refused_before_the_adapter_runs(core):
+    """No family, a wrong type or an unserved name is answered `UnknownFamily`,
+    and not one line of the adapter runs: no namespace, no state, no main thread."""
+    problems = []
+    adapter = FamilyAdapter()
+    with running(core, adapter=adapter) as bridge:
+        client = Client(bridge.port)
+        client.hello()
+        for label, extra in UNNAMED_FAMILIES:
+            for kind, request in (
+                ("execute", dict(execute("result = 1"), **extra)),
+                ("state", dict({"id": "s", "type": "state", "capture_path": None}, **extra)),
+            ):
+                try:
+                    answer = client.request(request)
+                except OSError:
+                    answer = None
+                if answer is None:
+                    problems.append("%s with %s: the connection was dropped" % (kind, label))
+                    client.close()
+                    return problems
+                if answer.get("ok") is not False:
+                    problems.append("%s with %s was served: %r" % (kind, label, answer))
+                    continue
+                error = answer.get("error") or {}
+                if error.get("type") != "UnknownFamily":
+                    problems.append("%s with %s: error %r" % (kind, label, error))
+        ping = client.request({"id": "p", "type": "ping"})
+        if ping != {"id": "p", "ok": True}:
+            problems.append("the bridge stopped serving: %r" % (ping,))
+        client.close()
+    if adapter.calls:
+        problems.append("the adapter was called: %r" % (adapter.calls,))
+    return problems
+
+
+def check_an_adapter_without_families_never_sees_the_field(core):
+    """GIMP, Krita and Blender keep their calls: the family is not handed over,
+    whatever a request says, and is not even checked."""
+    problems = []
+    adapter = FakeAdapter()
+    with running(core, adapter=adapter) as bridge:
+        client = Client(bridge.port)
+        client.hello()
+        for label, extra in [("a name", {"family": "calc"}), ("a number", {"family": 5}), ("none", {})]:
+            answer = client.request(dict(execute("result = FAKE_API"), **extra))
+            if answer.get("result") != "fake application API":
+                problems.append("execute with %s: %r" % (label, answer))
+            answer = client.request(
+                dict({"id": "s", "type": "state", "capture_path": None}, **extra)
+            )
+            if answer.get("state") != {"documents": 1}:
+                problems.append("state with %s: %r" % (label, answer))
+        client.close()
+    return problems
+
+
+class FamilyTests(CheckCase):
+    def test_the_family_of_a_request_reaches_the_adapter_and_only_it(self):
+        self.must_pass(check_the_family_reaches_the_adapter(CORE))
+
+    def test_counter_proof_a_core_that_keeps_the_family_to_itself_is_detected(self):
+        defective = defective_core(
+            "namespace.update(adapter.namespace(*extra))", "namespace.update(adapter.namespace())"
+        )
+        self.must_fail(check_the_family_reaches_the_adapter(defective))
+
+    def test_counter_proof_a_core_that_forgets_the_family_of_the_state_is_detected(self):
+        defective = defective_core(
+            "adapter.run_on_main(lambda: adapter.state(*extra))",
+            "adapter.run_on_main(lambda: adapter.state('writer'))",
+        )
+        self.must_fail(check_the_family_reaches_the_adapter(defective))
+
+    def test_an_unknown_family_is_refused_before_any_line_of_the_adapter_runs(self):
+        self.must_pass(check_an_unknown_family_is_refused_before_the_adapter_runs(CORE))
+
+    def test_counter_proof_a_core_that_accepts_any_name_is_detected(self):
+        defective = defective_core(
+            "if isinstance(family, str) and family in self._families:",
+            "if isinstance(family, str):",
+        )
+        self.must_fail(check_an_unknown_family_is_refused_before_the_adapter_runs(defective))
+
+    def test_counter_proof_a_core_that_refuses_nothing_is_detected(self):
+        defective = defective_core(
+            "        if self._families is None:\n            return None\n        family = request.get",
+            "        if True:\n            return None\n        family = request.get",
+        )
+        self.must_fail(check_an_unknown_family_is_refused_before_the_adapter_runs(defective))
+
+    def test_counter_proof_a_core_that_checks_after_the_adapter_ran_is_detected(self):
+        # The refusal comes too late: the adapter has already built its namespace.
+        defective = defective_core(
+            "        unknown = self._unknown_family(request)\n"
+            "        if unknown is not None:\n"
+            '            unknown.update({"stdout": "", "stderr": "", "result": None})\n'
+            "            return unknown\n"
+            "        extra = self._family_arguments(request)\n"
+            "        started = time.monotonic()\n",
+            "        extra = self._family_arguments(request)\n"
+            "        started = time.monotonic()\n"
+            "        self._adapter.run_on_main(lambda: None)\n"
+            "        unknown = self._unknown_family(request)\n"
+            "        if unknown is not None:\n"
+            '            unknown.update({"stdout": "", "stderr": "", "result": None})\n'
+            "            return unknown\n",
+        )
+        self.must_fail(check_an_unknown_family_is_refused_before_the_adapter_runs(defective))
+
+    def test_an_adapter_without_families_never_sees_the_field(self):
+        self.must_pass(check_an_adapter_without_families_never_sees_the_field(CORE))
+
+    def test_counter_proof_a_core_that_hands_the_field_to_every_adapter_is_detected(self):
+        defective = defective_core(
+            "        if self._families is None:\n            return ()\n        return (request[\"family\"],)",
+            "        return (request.get(\"family\"),)",
+        )
+        self.must_fail(check_an_adapter_without_families_never_sees_the_field(defective))
+
+    def test_the_families_an_adapter_declares_must_be_a_tuple_of_names(self):
+        for bad in ((), [], "writer", ("writer", 3), ("",), ("calc", None)):
+            adapter = FamilyAdapter()
+            adapter.families = bad
+            directory = PrivateDir()
+            try:
+                with quiet_error_streams():
+                    with self.assertRaises(CORE.BridgeError, msg=repr(bad)):
+                        CORE.start(adapter, 0, str(directory.token()))
+            finally:
+                CORE.stop()
+                directory.cleanup()
 
 
 # --------------------------------------------------------------------------
