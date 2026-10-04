@@ -13,11 +13,16 @@ ways:
   the Hub (passes on both versions);
 - with a window on a virtual X display, started by the real `libremodular-launch`, driven by
   the real `libremodular-mcp` over MCP on stdio: `get_state("hub")` listed the three targets
-  as connected in mode `uno` with the version of LibreOffice (`24.2.7.2`, then `25.2.3.2`); a
-  script refused with `NoActiveDocument` while no document was open; after a Calc document was
-  opened in the window, a script wrote two cells, `get_state` described the sheet and returned
-  a PNG capture, a script for Writer was refused with `WrongDocumentType`, `--stop` ended the
-  bridge and left LibreOffice running.
+  as connected in mode `uno` with the version of LibreOffice (`24.2.7.2`, then `25.2.3.2`);
+  after a Calc document was opened in the window, a script wrote two cells, `get_state`
+  described the sheet and returned a PNG capture, a script for Writer was refused with
+  `WrongDocumentType`, `--stop` ended the bridge and left LibreOffice running.
+
+What a script does when no document is open (it runs, with `doc` set to `None`, and can
+create the first document) was added after those two runs. It ran against LibreOffice
+24.2.7.2 only, without interface (`cargo test --test libreoffice_real`) and with a window on a
+virtual X display (the example at the end of this page). A bridge that starts before
+LibreOffice listens, and the version it then reports, ran against fakes only: see *Limits*.
 
 Not part of those runs: a real desktop session, a document with several sheets or pages (what
 its capture shows), documents of other kinds open next to the three families, and a LibreOffice
@@ -41,9 +46,10 @@ UNO: it talks to the bridge on `bridge_port` like to any other bridge, and names
 of the target in each request. A script running on one target makes a request on another
 answer `busy`, since the bridge runs one script at a time.
 
-- `execute_script` runs a complete Python script against the **active document** of the
-  target's family and returns what it printed, the value of its `result` variable, and the
-  trace of the error if it failed.
+- `execute_script` runs a complete Python script against the **current document** of the
+  target's family, or with `doc` set to `None` when LibreOffice has no current document, and
+  returns what it printed, the value of its `result` variable, and the trace of the error if
+  it failed.
 - `get_state` lists the open documents and describes the active one, and returns the path
   of a PNG capture of it.
 
@@ -109,7 +115,7 @@ It starts LibreOffice with its window, then the bridge, and returns. Output of a
 ```text
 LibreOffice started (process 32212), listening for UNO on 127.0.0.1:2002
 bridge started (process 32213), listening on 127.0.0.1:9304
-open or create a document in LibreOffice: a script only runs on the active document
+a script runs on the current document of its target's family, or with doc set to None when none is open
 stop the bridge with 'libremodular-launch libreoffice --stop'; LibreOffice is yours to close
 ```
 
@@ -189,10 +195,19 @@ belongs to another user, is open to the group or others, or is not a token made 
 
 ### The first document
 
-**A script only runs on an active document of its target's family, and the Hub cannot create
-one:** with no document open, every `execute_script` answers `NoActiveDocument`. Open or
-create the document yourself in LibreOffice's window. In a run without interface, starting
-`soffice` with `--calc` opened no document (measured); with a window it is unconfirmed.
+**A script runs even when no document is open.** Then `doc` is `None`, and `uno`, `ctx` and
+`desktop` are provided as usual, so the script can create the document itself:
+
+```python
+if doc is None:
+    doc = desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())
+```
+
+The document it creates becomes LibreOffice's current document: the next request finds it as
+its `doc`. The factory names are `private:factory/swriter`, `private:factory/scalc` and
+`private:factory/simpress`. A script of a target creates a document of any family; the next
+request is refused with `WrongDocumentType` when the target's family is not the one of the
+current document (see *Errors*).
 
 To check the connection from the model's side, call `get_state` with the target `hub`: the
 three targets are listed with `connected: true` and the version LibreOffice reported.
@@ -206,7 +221,7 @@ A script runs in the bridge, which is a separate process, in a fresh namespace t
 | `uno` | The `uno` module |
 | `ctx` | The remote component context of LibreOffice |
 | `desktop` | `com.sun.star.frame.Desktop`, the application |
-| `doc` | The active document, of the family of the target |
+| `doc` | The current document, of the family of the target; `None` when LibreOffice has no current document |
 | `LMM_WORK_DIR` | The private directory the Hub prepared for this application's files |
 
 - The script is compiled under the name `<libremodular>`: line numbers in a trace are the
@@ -216,8 +231,9 @@ A script runs in the bridge, which is a separate process, in a fresh namespace t
   appended to `stderr`. UNO objects are not JSON: return plain values.
 - The connection to LibreOffice is made for each request, and tried again for up to five
   seconds while LibreOffice has not finished starting.
-- The family is checked before anything of the script runs. The document is never
-  converted: a Calc document is not offered to a Writer script.
+- The family is checked before anything of the script runs, when there is a current
+  document. The document is never converted: a Calc document is not offered to a Writer
+  script.
 - An exception raised by UNO is reported with its full UNO name, for example
   `com.sun.star.container.NoSuchElementException`.
 - Whatever the script does through UNO (save, close, export) is done with your rights; the
@@ -268,20 +284,23 @@ still `False` and the document is still modified. Nothing in the bridge calls `s
 | `error.type` | When |
 |---|---|
 | `LibreOfficeUnavailable` | `uno` cannot be imported by the bridge's interpreter, or LibreOffice does not accept a connection within the wait. The message says which |
-| `NoActiveDocument` | LibreOffice has no current document. Nothing of the script ran |
 | `WrongDocumentType` | The current document is not of the target's family. Nothing of the script ran |
 | `UnknownFamily` | The request named no family the bridge serves. The Hub always names one, so this only means the Hub and the bridge file do not match |
 
-The first three are raised by the bridge itself, so their trace shows the bridge's own frames
-and the path of the bridge file, not lines of the script. The message is the part to read.
+The first two are raised by the bridge itself, so their trace shows the bridge's own frames and
+the path of the bridge file, not lines of the script. The message is the part to read.
 
 ## Example
 
-A Calc script that writes two cells and returns what it wrote. It ran as written on a new
-spreadsheet; the answer below is what the Hub returned in that run, with fields in the
-order the Hub writes them.
+A Calc script that creates the document when none is open, writes two cells and returns what it
+wrote. It ran as written, with no document open, in LibreOffice 24.2.7.2 (the Ubuntu 24.04
+packages, with a window on a virtual X display), through the real `libremodular-mcp`; the
+answer below is what the Hub returned in that run, with fields in the order the Hub writes
+them. Run again with the document now open, it returns the same values.
 
 ```python
+if doc is None:
+    doc = desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())
 sheet = doc.Sheets.getByIndex(0)
 sheet.getCellByPosition(0, 0).setValue(42)
 sheet.getCellByPosition(1, 1).setString('hello')
@@ -292,7 +311,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
 ```json
 {
   "app": "libreoffice-calc",
-  "duration_ms": 53,
+  "duration_ms": 170,
   "error": null,
   "result": {
     "a1": 42.0,
@@ -317,14 +336,16 @@ The `get_state` that followed returned, under `state`:
 
 ## Limits
 
-- **The version is read once, when the bridge starts.** If LibreOffice does not listen yet,
-  the bridge waits for it for up to five seconds, then reports `unknown` in its `hello`, and
-  every `get_state` then carries a warning that the API cannot be imported, although
-  requests work. LibreOffice answered on UNO 1.3 seconds after it started in the test run;
-  on its very first start in the environment where this was written (cold caches) it had not
-  answered after 8 seconds and had by 14. If `get_state("hub")` shows `unknown`, stop the
-  bridge with `--stop` and start it by hand, as shown above, once LibreOffice is up: the
-  launcher itself refuses to start next to a running LibreOffice.
+- **The version is read again while it is `unknown`.** The bridge reads it when it starts and
+  makes a single attempt, without waiting. If LibreOffice does not listen yet it reports
+  `unknown`, and asks again at each new connection of the Hub and at each `get_state`, until it
+  has the version; the warning that the API cannot be imported goes with it. The Hub keeps the
+  version from the `hello` of its current connection, so `get_state` and `get_state("hub")`
+  show `unknown` until the Hub connects again, even though the bridge knows the version by
+  then. LibreOffice answered on UNO 1.3 seconds after it started in one test run; on its very
+  first start in another environment (cold caches) it had not answered after 8 seconds and had
+  by 14. This behaviour ran against fakes (`python3 -m unittest discover -s tests/bridges`),
+  not against a LibreOffice that starts late.
 - Only the **current** document is reachable. With several documents of a family open, a
   script gets whichever LibreOffice reports as current; the other ones are listed in
   `documents` and are not offered. Which document is current when the focus is on another

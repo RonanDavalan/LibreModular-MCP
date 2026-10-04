@@ -790,10 +790,6 @@ class LibreOfficeUnavailable(Exception):
     """The `uno` module cannot be imported, or LibreOffice does not accept the connection."""
 
 
-class NoActiveDocument(Exception):
-    """LibreOffice has no current document."""
-
-
 class WrongDocumentType(Exception):
     """The current document is not of the family the request names."""
 
@@ -911,11 +907,12 @@ def _documents(desktop):
     return found
 
 
-def _active_document(desktop, family):
-    """The current document, which must be of `family`."""
+def _current_document(desktop, family):
+    """The current document, which must be of `family`; None when LibreOffice has
+    no current document, so that a script can create the first one."""
     component = desktop.getCurrentComponent()
     if component is None:
-        raise NoActiveDocument("LibreOffice has no active document: open a %s document" % family)
+        return None
     actual = _family_of(component)
     if actual != family:
         raise WrongDocumentType(
@@ -991,10 +988,11 @@ class UnoAdapter:
 
     def namespace(self, family):
         """The names a script receives: the uno module, the remote context, the
-        desktop and the active document of `family`. Nothing is run when there is
-        none: the request is answered with the reason instead."""
+        desktop and the current document of `family`, which is None when there is
+        no current document. A current document of another family stops the request
+        before any line of the script runs: documents are never converted."""
         context, desktop = _connect()
-        document = _active_document(desktop, family)
+        document = _current_document(desktop, family)
         return {"uno": _uno(), "ctx": context, "desktop": desktop, "doc": document}
 
     def run_on_main(self, function):

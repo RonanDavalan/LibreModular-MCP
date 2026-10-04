@@ -601,7 +601,7 @@ pub fn launch(
     )?;
     say(
         out,
-        "open or create a document in LibreOffice: a script only runs on the active document",
+        "a script runs on the current document of its target's family, or with doc set to None when none is open",
     )?;
     say(
         out,

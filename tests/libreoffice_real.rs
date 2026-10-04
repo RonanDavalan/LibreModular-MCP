@@ -265,11 +265,18 @@ fn drive(base: &Path) -> Verdict {
         "the version of LibreOffice was not read: {version:?}"
     );
 
-    // 2. With no document open, no script runs, and the state says why.
-    let refused = session.execute("libreoffice-calc", "result = 1");
-    show("execute without a document", &refused);
-    ensure!(refused["status"] == "error", "{refused}");
-    ensure!(refused["error"]["type"] == "NoActiveDocument", "{refused}");
+    // 2. With no document open, a script still runs, with `doc` set to None, and the
+    // state says there is no active document.
+    let bare = session.execute(
+        "libreoffice-calc",
+        "result = {'doc_is_none': doc is None, 'has_desktop': desktop is not None}",
+    );
+    show("execute without a document", &bare);
+    ensure!(bare["status"] == "ok", "{bare}");
+    ensure!(
+        bare["result"] == json!({"doc_is_none": true, "has_desktop": true}),
+        "{bare}"
+    );
     let empty = session.state("libreoffice-calc");
     show("get_state without a document", &empty);
     ensure!(empty["connected"] == true, "{empty}");
@@ -283,13 +290,10 @@ fn drive(base: &Path) -> Verdict {
     );
     ensure!(empty["screenshot"] == Value::Null, "{empty}");
 
-    // 3. A person opens a spreadsheet; the model then works on it through the Hub.
-    uno_snippet(
-        &path,
-        uno_port,
-        "desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())\nprint('opened')",
-    )?;
+    // 3. The model creates the first document with a script, then writes into it.
     let script = "\
+if doc is None:
+    doc = desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())
 sheet = doc.Sheets.getByIndex(0)
 sheet.getCellByPosition(0, 0).setValue(42)
 sheet.getCellByPosition(1, 1).setString('hello')
@@ -381,8 +385,10 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
     );
 
     // 7. A slide deck and a text document, one after the other, each on its own target.
-    for (target, factory, probe, expected, active) in [
+    // Each one is created by a script of the target that was current until then.
+    for (creator, target, factory, probe, expected, active) in [
         (
+            "libreoffice-calc",
             "libreoffice-impress",
             "private:factory/simpress",
             "result = {'slides': doc.DrawPages.Count}",
@@ -390,6 +396,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
             json!({"slides": 1}),
         ),
         (
+            "libreoffice-impress",
             "libreoffice-writer",
             "private:factory/swriter",
             "text = doc.Text\n\
@@ -406,11 +413,14 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
             json!({"paragraphs": 2, "pages": 1}),
         ),
     ] {
-        uno_snippet(
-            &path,
-            uno_port,
-            &format!("desktop.loadComponentFromURL('{factory}', '_blank', 0, ())\nprint('opened')"),
-        )?;
+        let created = session.execute(
+            creator,
+            &format!("desktop.loadComponentFromURL('{factory}', '_blank', 0, ())"),
+        );
+        ensure!(
+            created["status"] == "ok",
+            "{creator} creating {factory}: {created}"
+        );
         let answer = session.execute(target, probe);
         show(&format!("execute on {target}"), &answer);
         ensure!(answer["status"] == "ok", "{target}: {answer}");

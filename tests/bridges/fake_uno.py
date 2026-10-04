@@ -126,14 +126,32 @@ class Document:
     dispose = _refuse("dispose")
 
 
+FACTORIES = {
+    "private:factory/swriter": "writer",
+    "private:factory/scalc": "calc",
+    "private:factory/simpress": "impress",
+}
+
+
 class Desktop:
     def __init__(self, documents=(), current=None):
         self.documents = list(documents)
         self.current = current
         self.forbidden_calls = []
+        self.loaded = []
 
     def getCurrentComponent(self):
         return self.current
+
+    def loadComponentFromURL(self, url, target, flags, arguments):
+        """What a script calls to create a document: a new one of the family the
+        factory names, which becomes the current document, as in LibreOffice."""
+        self.loaded.append((url, target, flags, tuple(arguments)))
+        family = FACTORIES[url]
+        document = Document(family, "Untitled %d" % (len(self.documents) + 1))
+        self.documents.append(document)
+        self.current = document
+        return document
 
     def getComponents(self):
         return types.SimpleNamespace(createEnumeration=lambda: Enumeration(self.documents))
