@@ -421,3 +421,85 @@ Not covered yet:
 - A bridge file checked out under a `umask` of `002` has mode `664` and the launcher refuses it
   (`chmod go-w`); the guide now says so.
 
+
+## 2026-10-04 — Two corrections of the LibreOffice bridge, the public files, the invariants, the cold recipe
+
+Two defects found on the operator's machine are fixed, each in its own commit. The repository gets
+the files a public repository needs, the mechanical invariants are reviewed and completed, and a
+smoke test runs the compiled binary. Nothing is published: no tag, no release.
+
+Done, with the command that shows it:
+
+- The core reads the application version again at each valid hello and at each state while it is
+  `unknown`, and keeps the first real answer: `python3 -m unittest discover -s tests/bridges`
+  (`VersionTests` of `test_core.py`; counter-proof `core_reading_the_version_once()` of
+  `bridge_support.py`, the core as it was). The adapters of GIMP, Krita and Blender and their tests
+  are unchanged. The question goes through `run_on_main`, and a hello that does not carry the token
+  never reaches the adapter.
+- A bridge started before LibreOffice, then LibreOffice, then the state and a new connection:
+  `cargo test --locked --test libreoffice_real -- --ignored --nocapture a_bridge_started_before`,
+  against LibreOffice 24.2.7.2 (Ubuntu 24.04 packages installed in the build environment, without
+  interface). Run against the bridge file of before the change it fails with the warning of the cold
+  start still there.
+- With no document open a LibreOffice script runs with `doc` set to `None` and can create the first
+  document with `desktop.loadComponentFromURL`; the next request receives it; a current document of
+  another family still gives `WrongDocumentType` before any line runs; `NoActiveDocument` is gone from
+  the adapter, its tests and the guide (history entries above keep the name): `test_uno_adapter.py`
+  (`ScriptTests`, with the adapter that refuses as counter-proof) and
+  `cargo test --locked --test libreoffice_real -- --ignored --nocapture the_hub_drives`, which now
+  creates the Calc, Impress and Writer documents through scripts of the Hub.
+- The example of the guide is the script that creates the document and writes two cells; its answer
+  comes from the real `libremodular-mcp` driven over MCP on stdio, with LibreOffice 24.2.7.2 in a
+  window on a virtual X display, started by the real `libremodular-launch`.
+- `README.md`, `docs/GUIDE_LLM.md`, `SECURITY.md`, `LICENSE` (MIT), `.github/workflows/ci.yml`, and
+  `scripts/generate_changelog.py` with its test (`tests/bridges/test_changelog.py`: exact output for a
+  fixed log, a script that misfiles a title and a check that never fails are detected).
+- Invariants: `cargo test --locked --test invariants` (36 tests). New: exact approved dependencies
+  pinned as `=x.y.z`; no path other than the `/home/alice` examples and no token, journal, capture or
+  operator configuration in the tree; `server.rs` declares exactly two tools and reaches no application
+  module; the README never says AI, Windows or macOS; the README and the guides agree on the versions
+  and the example. Each has its counter-proof. The check that the single place opening a file does not
+  follow links had none: it has one now.
+- `tests/smoke.rs`: the compiled binary through `init`, then a session of a script that succeeds, one
+  that raises, one refused by the guard and one for an unknown target; four journal lines in order and
+  no script text, only the protocol on the standard output, the token only in its own file. Two
+  counter-proofs: a journal asked to keep the script text, a token copied into another file.
+- Whole suite, formatting, lints, release build, bridges:
+  `cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked && cargo build --release --locked && python3 -m compileall -q bridges && python3 scripts/build_bridges.py --check`
+  (322 Rust tests and 3 ignored, 174 Python tests; the Python ones also on 3.9.23 and with `python3 -S`).
+- From a fresh clone made under a `umask` of `002`, with the commands of the README:
+  `cargo build --release --locked`, `target/release/libremodular-mcp init`, `cargo test --locked`,
+  `python3 -m unittest discover -s tests/bridges`, `python3 scripts/build_bridges.py --check`.
+
+Decisions:
+
+- The version is asked through `run_on_main`, as the earlier entry on the bridge core decided for the
+  hello: the application is not called from a connection thread. In `state` it is asked after the
+  adapter's own call, which may have waited for the application, and the warning goes first.
+- The UNO adapter makes one attempt to read the version instead of waiting up to five seconds. With the
+  re-read, a wait there would have been paid at every hello while LibreOffice is down, and the Hub gives
+  up on a hello after five seconds: measured, 5.0 s. The bridge no longer waits at its start either.
+- The launcher said "a script only runs on the active document": one line of its output now says what
+  is true. No other behaviour of the Hub changed.
+- `server.rs` does import from `security`: it chains the checks. The invariant pins the exact list of
+  items it takes, and that it defines none, instead of forbidding the import.
+- The README states the launcher check as the code makes it: a bridge file the group or others can
+  write is refused, mode 644 is accepted.
+- The changelog lists titles under a single `Unreleased` section, sorted by their first word.
+
+Findings, not fixed:
+
+- The Hub keeps the version of the hello of its current connection: after the bridge has found the
+  version, `get_state` still says `unknown` until the Hub connects again (shown by the real cold start
+  test, which asserts it).
+- The errors the LibreOffice adapter raises itself still come back with the frames of the bridge file in
+  their trace, and the directory that holds the bridge file is still not checked.
+- `CHANGELOG.md` is built from the history: any commit after it makes `python3 scripts/generate_changelog.py --check`
+  fail until the file is generated again, which is the point of that check before a publication.
+
+Not covered yet:
+
+- LibreOffice 25.2.3.2 for the two corrections, and a launcher start where LibreOffice is slow: it
+  answered on UNO about one second after its start here.
+- The CI workflow has never run on the forge. Private vulnerability reporting, which `SECURITY.md`
+  names, must be enabled in the repository settings before publication; it cannot be checked from here.
