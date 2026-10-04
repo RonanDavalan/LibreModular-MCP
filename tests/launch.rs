@@ -17,6 +17,7 @@ use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use common::{FAKE_TOKEN, FILE_TOKEN, Verdict, must_fail, must_pass, write_file};
@@ -30,6 +31,18 @@ use serde_json::Value;
 
 const UNO_PORT: u16 = 2002;
 const BRIDGE_PORT: u16 = 9304;
+
+static PROCESS_START: Mutex<()> = Mutex::new(());
+
+/// Held while a fake program is written and while any process is started. A process
+/// started in one test copies, until its `exec`, every file another test has open for
+/// writing; running that file then fails with "Text file busy". Tests share one process,
+/// so they take turns.
+fn one_at_a_time() -> MutexGuard<'static, ()> {
+    PROCESS_START
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 /// The first `python3` on the test's PATH: the interpreter of the fake programs.
 fn python() -> PathBuf {
@@ -62,6 +75,7 @@ fn write_fake_program(path: &Path, report: &Path) {
         report = report.display(),
         directory = report.parent().expect("directory").display(),
     );
+    let _turn = one_at_a_time();
     fs::write(path, text).expect("fake program");
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).expect("mode 700");
 }
@@ -152,6 +166,7 @@ impl Setup {
     }
 
     fn launch(&self) -> Result<String, LaunchError> {
+        let _turn = one_at_a_time();
         let mut out = Vec::new();
         launch(
             &self.programs,
@@ -411,6 +426,7 @@ fn detached(
     env: &[(OsString, OsString)],
 ) -> std::io::Result<Child> {
     use std::os::unix::process::CommandExt;
+    let _turn = one_at_a_time();
     Command::new(program)
         .args(args)
         .env_clear()
@@ -780,6 +796,7 @@ fn a_bridge_file_that_cannot_be_trusted_is_refused_and_nothing_starts() {
             bridge_file: file,
             ..setup.plan()
         };
+        let _turn = one_at_a_time();
         let error = launch(
             &setup.programs,
             &setup.paths,
@@ -959,11 +976,13 @@ fn stop_without_checking_the_command_line(setup: &Setup, record: &Record) {
 
 fn check_a_reused_process_number_is_never_signalled(stopper: Stopper<'_>) -> Verdict {
     let setup = setup();
+    let turn = one_at_a_time();
     let mut other = Command::new(python())
         .args(["-c", "import time; time.sleep(60)"])
         .stdin(Stdio::null())
         .spawn()
         .map_err(|e| e.to_string())?;
+    drop(turn);
     let pid = other.id();
     // The listing says that process is not the bridge.
     setup.fake_process(pid, "python3", &["python3", "-c", "import time"]);
@@ -1065,12 +1084,14 @@ fn a_recorded_bridge_that_is_gone_is_reported_and_the_record_removed() {
 #[test]
 fn the_bridge_is_recognised_by_an_argument_of_its_real_command_line() {
     let setup = setup();
+    let turn = one_at_a_time();
     let mut child = Command::new(python())
         .args(["-c", "import sys, time; time.sleep(60)"])
         .arg(&setup.bridge_file)
         .stdin(Stdio::null())
         .spawn()
         .expect("child");
+    drop(turn);
     let pid = child.id();
     let real = Path::new("/proc");
     // Right after the program was executed its command line may not be there yet.

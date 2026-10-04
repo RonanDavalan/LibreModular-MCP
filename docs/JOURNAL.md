@@ -503,3 +503,17 @@ Not covered yet:
   answered on UNO about one second after its start here.
 - The CI workflow has never run on the forge. Private vulnerability reporting, which `SECURITY.md`
   names, must be enabled in the repository settings before publication; it cannot be checked from here.
+
+## 2026-10-04 — The two corrections tried in LibreOffice 25.2.3.2, and a race in the launcher tests
+
+- `cargo test --locked --test libreoffice_real -- --ignored --nocapture` passes on LibreOffice 25.2.3.2
+  (2 tests, 6.41 s, no process left): a script with no open document receives `doc = None` and creates
+  the Calc document, and a bridge started before LibreOffice finds the version once it listens.
+- A test of the launcher failed once in about six runs with "Text file busy" (os error 26), on `main`
+  as on the branch of the previous entry. Cause, measured: a test writes the fake program it will run
+  while another test of the same process starts a process; the child holds a copy of the write
+  descriptor until its `exec`, so running the file fails. `tests/launch.rs` now takes one lock while a
+  fake program is written and while any process is started. After the change, 40 runs of
+  `cargo test --locked --test launch` out of 40 pass. No source of the Hub changed.
+- Still not covered: a launcher start where LibreOffice is slow (14 s measured at the first start of an
+  empty profile), and a real desktop session.
