@@ -690,3 +690,11 @@ pub fn environment_values(names: &[&str]) -> Vec<(OsString, OsString)> {
         .filter_map(|name| std::env::var_os(name).map(|value| (OsString::from(name), value)))
         .collect()
 }
+
+/// Every variable of the environment of the running process. The launcher
+/// decides what each program it starts receives, so it works from this snapshot
+/// rather than from the environment itself.
+#[must_use]
+pub fn environment_snapshot() -> Vec<(OsString, OsString)> {
+    std::env::vars_os().collect()
+}

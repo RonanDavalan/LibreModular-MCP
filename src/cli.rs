@@ -400,14 +400,12 @@ pub fn main_entry() -> ExitCode {
     ))
 }
 
-/// The launcher supports no application yet.
-pub fn launch_run(err: &mut dyn Write) -> u8 {
-    let _ = writeln!(err, "libremodular-launch: no application is supported yet");
-    2
-}
-
 /// Entry point of the `libremodular-launch` binary.
 #[must_use]
 pub fn launch_entry() -> ExitCode {
-    ExitCode::from(launch_run(&mut std::io::stderr()))
+    ExitCode::from(crate::launch::run_in_process(
+        std::env::args_os(),
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+    ))
 }

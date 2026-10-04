@@ -12,6 +12,7 @@
 pub mod audit;
 pub mod cli;
 pub mod config;
+pub mod launch;
 pub mod modules;
 pub mod output;
 pub mod protocol;

@@ -37,6 +37,7 @@ const MAX_SYMLINK_HOPS: usize = 40;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 const PRIVATE_DIR_MODE: u32 = 0o700;
 const GROUP_AND_OTHER_BITS: u32 = 0o077;
+const GROUP_AND_OTHER_WRITE_BITS: u32 = 0o022;
 
 // --------------------------------------------------------------------------
 // Errors
@@ -76,6 +77,10 @@ pub enum SecurityError {
         path: PathBuf,
         mode: u32,
         expected: u32,
+    },
+    WritableByOthers {
+        path: PathBuf,
+        mode: u32,
     },
     TooLarge {
         path: PathBuf,
@@ -146,6 +151,12 @@ impl fmt::Display for SecurityError {
             } => write!(
                 f,
                 "{} has mode {mode:04o}; expected {expected:04o} (chmod {expected:o})",
+                path.display()
+            ),
+            SecurityError::WritableByOthers { path, mode } => write!(
+                f,
+                "{} has mode {mode:04o} and can be changed by the group or by others \
+                 (chmod go-w)",
                 path.display()
             ),
             SecurityError::TooLarge { path, limit } => {
@@ -391,6 +402,67 @@ pub fn read_control_file_as(
     expected_uid: u32,
 ) -> Result<Vec<u8>, SecurityError> {
     let file = open_control_file_as(path, ControlAccess::Read, expected_uid)?;
+    let mut data = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut data)
+        .map_err(|e| io_error("read", path, e))?;
+    if u64::try_from(data.len()).map_or(true, |len| len > max_bytes) {
+        return Err(SecurityError::TooLarge {
+            path: path.to_path_buf(),
+            limit: max_bytes,
+        });
+    }
+    Ok(data)
+}
+
+/// Check a file the Hub is about to hand to another program to run: an absolute
+/// path to a regular file, not a link, owned by the current user and not
+/// writable by the group or by others. Its content is not read.
+///
+/// Reading it stays allowed to everyone: such a file is code, not a secret.
+///
+/// # Errors
+/// A relative path, a link, a non-regular file, a foreign owner, or a mode that
+/// lets the group or others change the file.
+pub fn check_trusted_file(path: &Path) -> Result<(), SecurityError> {
+    check_trusted_file_as(path, current_uid())
+}
+
+/// Same as [`check_trusted_file`] with an explicit expected owner.
+///
+/// # Errors
+/// See [`check_trusted_file`].
+pub fn check_trusted_file_as(path: &Path, expected_uid: u32) -> Result<(), SecurityError> {
+    if !path.is_absolute() {
+        return Err(SecurityError::InvalidPath {
+            path: path.to_path_buf(),
+        });
+    }
+    let file = open_regular_nofollow(path, ControlAccess::Read)?;
+    let info = file.metadata().map_err(|e| io_error("inspect", path, e))?;
+    if info.uid() != expected_uid {
+        return Err(SecurityError::ForeignOwner {
+            path: path.to_path_buf(),
+        });
+    }
+    if info.mode() & GROUP_AND_OTHER_WRITE_BITS != 0 {
+        return Err(SecurityError::WritableByOthers {
+            path: path.to_path_buf(),
+            mode: info.mode() & 0o7777,
+        });
+    }
+    Ok(())
+}
+
+/// Read a file the system provides, such as one under `/proc`: a regular file
+/// that is not a link, read in one bounded read. Unlike a control file it is
+/// not ours to protect, so its owner and mode are not checked.
+///
+/// # Errors
+/// [`SecurityError::NotFound`] when it is gone (a process that ended), a link, a
+/// non-regular file, a read failure, or more than `max_bytes` of content.
+pub fn read_system_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, SecurityError> {
+    let file = open_regular_nofollow(path, ControlAccess::Read)?;
     let mut data = Vec::new();
     file.take(max_bytes.saturating_add(1))
         .read_to_end(&mut data)

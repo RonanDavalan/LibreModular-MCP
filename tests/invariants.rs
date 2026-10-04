@@ -340,7 +340,7 @@ fn hardening_and_private_modes_hold_in_a_fresh_process() {
 
 // --- security logic lives only in security.rs ------------------------------------
 
-const SECURITY_ONLY_DEFINITIONS: [&str; 12] = [
+const SECURITY_ONLY_DEFINITIONS: [&str; 14] = [
     "guard_script",
     "resolve_under",
     "check_target",
@@ -353,6 +353,8 @@ const SECURITY_ONLY_DEFINITIONS: [&str; 12] = [
     "open_control_file",
     "open_regular_nofollow",
     "ensure_private_dir",
+    "check_trusted_file",
+    "read_system_file",
 ];
 
 /// What a file other than the security module must not contain. Calling a
@@ -1110,10 +1112,10 @@ fn counter_proof_a_bridge_reaching_out_is_detected() {
     ));
 }
 
-// --- starting processes: only the Inkscape module ----------------------------------
+// --- starting processes: only the Inkscape module and the launcher -----------------
 
 /// The source files allowed to start a process.
-const PROCESS_STARTERS: [&str; 1] = ["modules/inkscape.rs"];
+const PROCESS_STARTERS: [&str; 2] = ["modules/inkscape.rs", "launch.rs"];
 
 /// Whether `word` appears in `line` as a whole identifier.
 fn has_word(line: &str, word: &str) -> bool {
@@ -1144,13 +1146,17 @@ fn process_starts(files: &[(String, String)]) -> Vec<String> {
 }
 
 #[test]
-fn only_the_inkscape_module_starts_processes() {
+fn only_the_inkscape_module_and_the_launcher_start_processes() {
     let files = source_files();
-    assert!(files.iter().any(|(name, _)| name == "modules/inkscape.rs"));
+    for starter in PROCESS_STARTERS {
+        assert!(files.iter().any(|(name, _)| name == starter), "{starter}");
+    }
     let problems = process_starts(&files);
     assert!(problems.is_empty(), "{problems:?}");
     let inkscape = source_of("modules/inkscape.rs");
     assert!(inkscape.contains("Command::new(&spec.program)"));
+    let launcher = source_of("launch.rs");
+    assert!(launcher.contains("Command::new(&spawn.program)"));
 }
 
 #[test]
@@ -1167,14 +1173,28 @@ fn counter_proof_a_process_started_elsewhere_is_detected() {
             "modules/mod.rs",
             "let child = std::process::Command::new(\"sh\");",
         ),
+        (
+            "modules/libreoffice.rs",
+            "let child = Command::new(\"soffice\").spawn()?;",
+        ),
         ("registry.rs", "let child = command.spawn()?;"),
         (
             "bin/libremodular-launch.rs",
             "use std::os::unix::process::CommandExt;",
         ),
+        ("security.rs", "let child = Command::new(\"id\");"),
     ] {
         must_fail(check(name, defective));
     }
+    // The two files that may start a process, and what only looks like one.
+    must_pass(check(
+        "launch.rs",
+        "let child = Command::new(&spawn.program).spawn()?;",
+    ));
+    must_pass(check(
+        "modules/inkscape.rs",
+        "let child = Command::new(&spec.program).spawn()?;",
+    ));
     must_pass(check(
         "cli.rs",
         "use std::process::ExitCode;\nSome(Command::Serve) | None => {}\nlet t = std::thread::spawn(f);",

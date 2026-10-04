@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 
 use common::{current_uid, mode_of, write_file};
-use libremodular_mcp::cli::{launch_run, run_init, run_with};
+use libremodular_mcp::cli::{run_init, run_with};
 use libremodular_mcp::config::{self, Paths, load};
 use libremodular_mcp::security::load_token_as;
 
@@ -227,15 +227,4 @@ fn an_unknown_argument_is_a_usage_error_on_the_error_stream() {
     assert_eq!(code, 2);
     assert!(out.is_empty() && !err.is_empty());
     assert!(!paths.config_dir.exists());
-}
-
-#[test]
-fn launch_reports_that_no_application_is_supported() {
-    let mut err = Vec::new();
-    assert_eq!(launch_run(&mut err), 2);
-    assert!(
-        String::from_utf8(err)
-            .expect("utf-8")
-            .contains("no application")
-    );
 }
