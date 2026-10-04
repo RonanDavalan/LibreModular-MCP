@@ -14,8 +14,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use common::{FILE_TOKEN, Verdict, current_uid, fresh, mode_of, must_fail, must_pass, write_file};
 use libremodular_mcp::security::{
     ControlAccess, SecurityError, TRUNCATION_MARKER, bounded, check_script_size, check_target,
-    create_token, ensure_private_dir, load_token_as, open_control_file, open_regular_nofollow,
-    read_control_file, resolve_under,
+    check_trusted_file, check_trusted_file_as, create_token, ensure_private_dir, load_token_as,
+    open_control_file, open_regular_nofollow, read_control_file, read_system_file, resolve_under,
 };
 
 type Loader<'l> = &'l dyn Fn(&Path, u32) -> Result<String, String>;
@@ -572,4 +572,173 @@ fn ensuring_a_private_file_creates_it_once_and_refuses_links_and_loose_modes() {
     let link = dir.join("link.svg");
     symlink(&document, &link).expect("link");
     assert!(ensure_private_file(&link, b"<svg/>").is_err());
+}
+
+// --- a file handed to another program to run ----------------------------------------
+
+type Trust<'t> = &'t dyn Fn(&Path, u32) -> Result<(), String>;
+
+fn real_trust(path: &Path, uid: u32) -> Result<(), String> {
+    check_trusted_file_as(path, uid).map_err(|error| error.to_string())
+}
+
+/// Defective on purpose: it only looks that the file exists.
+fn existence_only(path: &Path, _uid: u32) -> Result<(), String> {
+    fs::metadata(path)
+        .map(drop)
+        .map_err(|error| error.to_string())
+}
+
+fn check_a_trusted_file_is_accepted(trust: Trust<'_>, base: &Path) -> Verdict {
+    let base = fresh(base);
+    // Readable by everyone is fine: it is code, not a secret.
+    for mode in [0o600, 0o644, 0o755, 0o700, 0o444] {
+        let path = base.join(format!("bridge-{mode:o}.py"));
+        write_file(&path, mode, "pass\n");
+        ensure!(
+            trust(&path, current_uid()).is_ok(),
+            "mode {mode:o} was refused"
+        );
+    }
+    Ok(())
+}
+
+fn check_a_file_others_can_change_is_refused(trust: Trust<'_>, base: &Path) -> Verdict {
+    let base = fresh(base);
+    for mode in [0o620, 0o664, 0o602, 0o646, 0o666, 0o775, 0o757] {
+        let path = base.join(format!("bridge-{mode:o}.py"));
+        write_file(&path, mode, "pass\n");
+        ensure!(
+            trust(&path, current_uid()).is_err(),
+            "mode {mode:o} was accepted"
+        );
+    }
+    Ok(())
+}
+
+fn check_a_link_a_directory_a_relative_path_and_a_foreign_owner_are_refused(
+    trust: Trust<'_>,
+    base: &Path,
+) -> Verdict {
+    let base = fresh(base);
+    let real = base.join("real.py");
+    write_file(&real, 0o644, "pass\n");
+    let link = base.join("link.py");
+    symlink(&real, &link).map_err(|error| error.to_string())?;
+    ensure!(trust(&link, current_uid()).is_err(), "a link was followed");
+    ensure!(
+        trust(&base, current_uid()).is_err(),
+        "a directory was accepted"
+    );
+    ensure!(
+        trust(Path::new("bridge.py"), current_uid()).is_err(),
+        "a relative path was accepted"
+    );
+    ensure!(
+        trust(&real, current_uid() + 1).is_err(),
+        "another owner was accepted"
+    );
+    ensure!(
+        trust(&base.join("missing.py"), current_uid()).is_err(),
+        "a missing file was accepted"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_trusted_file_is_absolute_regular_not_a_link_ours_and_not_writable_by_others() {
+    let base = tempfile::tempdir().expect("temporary directory");
+    for check in [
+        check_a_trusted_file_is_accepted,
+        check_a_file_others_can_change_is_refused,
+        check_a_link_a_directory_a_relative_path_and_a_foreign_owner_are_refused,
+    ] {
+        must_pass(check(&real_trust, base.path()));
+    }
+}
+
+#[test]
+fn counter_proof_a_check_of_existence_only_is_detected() {
+    let base = tempfile::tempdir().expect("temporary directory");
+    must_fail(check_a_file_others_can_change_is_refused(
+        &existence_only,
+        base.path(),
+    ));
+    must_fail(
+        check_a_link_a_directory_a_relative_path_and_a_foreign_owner_are_refused(
+            &existence_only,
+            base.path(),
+        ),
+    );
+}
+
+#[test]
+fn the_error_for_a_writable_file_names_the_file_and_its_mode_only() {
+    let base = common::private_tempdir();
+    let path = base.path().join("bridge.py");
+    write_file(&path, 0o666, "secret-looking content\n");
+    let error = check_trusted_file(&path).expect_err("writable by others");
+    assert!(matches!(error, SecurityError::WritableByOthers { .. }));
+    let text = error.to_string();
+    assert!(
+        text.contains("0666") && text.contains("chmod go-w"),
+        "{text}"
+    );
+    assert!(!text.contains("secret-looking"), "{text}");
+}
+
+// --- a file the system provides ---------------------------------------------------------
+
+type Reader<'r> = &'r dyn Fn(&Path, u64) -> Result<Vec<u8>, String>;
+
+fn real_system_read(path: &Path, max: u64) -> Result<Vec<u8>, String> {
+    read_system_file(path, max).map_err(|error| error.to_string())
+}
+
+/// Defective on purpose: it follows links and has no bound.
+fn unbounded_read(path: &Path, _max: u64) -> Result<Vec<u8>, String> {
+    fs::read(path).map_err(|error| error.to_string())
+}
+
+fn check_a_system_file_is_read_within_its_bound(read: Reader<'_>, base: &Path) -> Verdict {
+    let base = fresh(base);
+    let path = base.join("cmdline");
+    write_file(&path, 0o444, "python3\0/home/alice/bridge.py\0");
+    ensure!(
+        read(&path, 4096).as_deref() == Ok(b"python3\0/home/alice/bridge.py\0".as_slice()),
+        "the bytes were not returned"
+    );
+    ensure!(
+        read(&path, 8).is_err(),
+        "a file over the bound was returned"
+    );
+    ensure!(
+        read(&base.join("gone"), 4096).is_err(),
+        "a missing file was read"
+    );
+    let link = base.join("link");
+    symlink(&path, &link).map_err(|error| error.to_string())?;
+    ensure!(read(&link, 4096).is_err(), "a link was followed");
+    Ok(())
+}
+
+#[test]
+fn a_system_file_is_read_in_one_bounded_read_and_links_are_not_followed() {
+    let base = tempfile::tempdir().expect("temporary directory");
+    must_pass(check_a_system_file_is_read_within_its_bound(
+        &real_system_read,
+        base.path(),
+    ));
+    must_fail(check_a_system_file_is_read_within_its_bound(
+        &unbounded_read,
+        base.path(),
+    ));
+}
+
+#[test]
+fn a_process_file_of_the_live_system_can_be_read() {
+    let own = std::fs::read_link("/proc/self").expect("self");
+    let cmdline = Path::new("/proc").join(own).join("cmdline");
+    let bytes = read_system_file(&cmdline, 1 << 20).expect("our own command line");
+    assert!(!bytes.is_empty());
 }

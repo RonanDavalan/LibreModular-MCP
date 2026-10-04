@@ -16,7 +16,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use common::fake_bridge::TINY_PNG;
@@ -27,7 +27,7 @@ use libremodular_mcp::modules::inkscape::{
     SCRIPT_BOOTSTRAP, STATE_BOOTSTRAP, WorkFiles, capture_command, process_environment, run,
     script_command, state_command,
 };
-use libremodular_mcp::modules::{ExecReply, Module, ModuleError};
+use libremodular_mcp::modules::{ExecReply, Health, Module, ModuleError, StateReply};
 use libremodular_mcp::registry::HubWorkFiles;
 use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
@@ -706,14 +706,14 @@ fn the_state_describes_the_document_and_the_capture_is_a_png() {
     let setup = setup();
     let module = module(&setup);
     let first = module
-        .state(&setup.captures.join("inkscape-0.png"))
+        .state(&setup.captures.join("inkscape-0.png"), &setup.work)
         .expect("state before any script");
     assert_eq!(first.state, json!({}));
     assert!(first.warnings.iter().any(|w| w.contains("no document yet")));
     let reply = execute(&module, &setup, LAYERED_DOCUMENT, 30);
     assert!(reply.ok, "{reply:?}");
     let capture = setup.captures.join("inkscape-1.png");
-    let state = module.state(&capture).expect("state");
+    let state = module.state(&capture, &setup.work).expect("state");
     assert_eq!(
         state.state,
         json!({
@@ -740,7 +740,7 @@ fn without_inkscape_there_is_no_capture_and_no_connection() {
     assert!(!module.health().connected);
     execute(&module, &setup, "pass\n", 30);
     let state = module
-        .state(&setup.captures.join("inkscape-1.png"))
+        .state(&setup.captures.join("inkscape-1.png"), &setup.work)
         .expect("state");
     assert_eq!(state.screenshot, None);
     assert!(state.warnings.iter().any(|w| w.starts_with("no capture")));
@@ -759,6 +759,174 @@ fn health_reports_the_version_inkscape_prints() {
     let mut missing = setup;
     missing.paths.python = PathBuf::from("/nonexistent/python3");
     assert!(!module(&missing).health().connected);
+}
+
+// --- the state does not depend on an earlier script ------------------------------------
+
+const KEPT_DOCUMENT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
+xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\" width=\"20\" height=\"10\">\
+<g inkscape:groupmode=\"layer\" id=\"kept\" inkscape:label=\"Kept\"/></svg>";
+
+const OTHER_DOCUMENT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
+xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\" width=\"30\" height=\"15\">\
+<g inkscape:groupmode=\"layer\" id=\"other\" inkscape:label=\"Other\"/></svg>";
+
+/// The module as it was before the state received the work directory: it only
+/// knew the directory of the last script it ran. Defective on purpose.
+struct RememberingModule {
+    inner: InkscapeModule,
+    remembered: Mutex<Option<PathBuf>>,
+}
+
+impl RememberingModule {
+    fn new(setup: &Setup) -> Self {
+        RememberingModule {
+            inner: module(setup),
+            remembered: Mutex::new(None),
+        }
+    }
+}
+
+impl Module for RememberingModule {
+    fn health(&self) -> Health {
+        self.inner.health()
+    }
+
+    fn execute(
+        &self,
+        script: &str,
+        timeout_s: u32,
+        work_dir: &Path,
+    ) -> Result<ExecReply, ModuleError> {
+        *self.remembered.lock().expect("remembered") = Some(work_dir.to_path_buf());
+        self.inner.execute(script, timeout_s, work_dir)
+    }
+
+    fn state(&self, capture_path: &Path, _: &Path) -> Result<StateReply, ModuleError> {
+        let known = self.remembered.lock().expect("remembered").clone();
+        match known {
+            Some(work_dir) => self.inner.state(capture_path, &work_dir),
+            None => Ok(StateReply {
+                state: json!({}),
+                screenshot: None,
+                warnings: vec!["no document yet".to_owned()],
+                app_version: None,
+                bridge_version: None,
+            }),
+        }
+    }
+
+    fn close(&self) {}
+}
+
+fn layer_ids(reply: &StateReply) -> Value {
+    reply.state["layers"]
+        .as_array()
+        .map(|layers| Value::Array(layers.iter().map(|layer| layer["id"].clone()).collect()))
+        .unwrap_or(Value::Null)
+}
+
+/// A module that never ran a script describes the document a Hub left in the
+/// work directory it is given, and nothing else.
+fn check_a_new_module_describes_the_document_it_is_given(
+    setup: &Setup,
+    make: &dyn Fn(&Setup) -> Box<dyn Module>,
+) -> Verdict {
+    common::write_file(&setup.work.join("current.svg"), 0o600, KEPT_DOCUMENT);
+    let module = make(setup);
+    let reply = module
+        .state(&setup.captures.join("inkscape-0.png"), &setup.work)
+        .map_err(|error| format!("state: {error}"))?;
+    ensure!(
+        layer_ids(&reply) == json!(["kept"]),
+        "the document in the work directory was not described: {reply:?}"
+    );
+    ensure!(reply.warnings.is_empty(), "{:?}", reply.warnings);
+    Ok(())
+}
+
+/// The directory of an earlier script is not the one asked about now.
+fn check_the_state_follows_the_directory_it_is_given(
+    setup: &Setup,
+    make: &dyn Fn(&Setup) -> Box<dyn Module>,
+) -> Verdict {
+    let module = make(setup);
+    module
+        .execute("pass\n", 30, &setup.work)
+        .map_err(|error| format!("execute: {error}"))?;
+    let other = common::fresh(setup.captures.parent().ok_or("no parent")?);
+    common::write_file(&other.join("current.svg"), 0o600, OTHER_DOCUMENT);
+    let reply = module
+        .state(&setup.captures.join("inkscape-1.png"), &other)
+        .map_err(|error| format!("state: {error}"))?;
+    ensure!(
+        layer_ids(&reply) == json!(["other"]),
+        "the state described another directory: {reply:?}"
+    );
+    Ok(())
+}
+
+fn real_module(setup: &Setup) -> Box<dyn Module> {
+    Box::new(module(setup))
+}
+
+fn remembering_module(setup: &Setup) -> Box<dyn Module> {
+    Box::new(RememberingModule::new(setup))
+}
+
+#[test]
+fn a_new_module_describes_the_document_a_previous_hub_left() {
+    let setup = setup();
+    must_pass(check_a_new_module_describes_the_document_it_is_given(
+        &setup,
+        &real_module,
+    ));
+}
+
+#[test]
+fn counter_proof_a_module_that_only_knows_the_directory_of_its_last_script_is_detected() {
+    let setup = setup();
+    must_fail(check_a_new_module_describes_the_document_it_is_given(
+        &setup,
+        &remembering_module,
+    ));
+}
+
+#[test]
+fn the_state_describes_the_directory_it_is_given_not_the_last_script_s() {
+    let setup = setup();
+    must_pass(check_the_state_follows_the_directory_it_is_given(
+        &setup,
+        &real_module,
+    ));
+}
+
+#[test]
+fn counter_proof_a_state_tied_to_the_last_script_directory_is_detected() {
+    let setup = setup();
+    must_fail(check_the_state_follows_the_directory_it_is_given(
+        &setup,
+        &remembering_module,
+    ));
+}
+
+#[test]
+fn without_a_document_the_state_is_empty_and_nothing_is_created() {
+    let setup = setup();
+    let reply = module(&setup)
+        .state(&setup.captures.join("inkscape-0.png"), &setup.work)
+        .expect("state");
+    assert_eq!(reply.state, json!({}));
+    assert_eq!(reply.screenshot, None);
+    assert!(
+        reply.warnings.iter().any(|w| w.contains("no document yet")),
+        "{:?}",
+        reply.warnings
+    );
+    assert!(
+        fs::symlink_metadata(setup.work.join("current.svg")).is_err(),
+        "looking at the state must not create the document"
+    );
 }
 
 // --- entities are never read -----------------------------------------------------------
@@ -812,7 +980,7 @@ fn state_through_the_module(setup: &Setup) -> String {
     let module = module(setup);
     execute(&module, setup, "pass\n", 30);
     let reply = module
-        .state(&setup.captures.join("inkscape-1.png"))
+        .state(&setup.captures.join("inkscape-1.png"), &setup.work)
         .expect("state");
     json!({"state": reply.state, "warnings": reply.warnings}).to_string()
 }

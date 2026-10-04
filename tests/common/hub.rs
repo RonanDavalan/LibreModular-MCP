@@ -71,7 +71,21 @@ pub fn config_for(app: &str, port: u16, extra: &str) -> Config {
 
 /// Build a Hub under `base`, with injected modules if any.
 pub fn build(base: &Path, config: Config, injected: Vec<(String, Arc<dyn Module>)>) -> TestHub {
-    let token = Token::new(FAKE_TOKEN).expect("token");
+    build_with_token(
+        base,
+        config,
+        injected,
+        Token::new(FAKE_TOKEN).expect("token"),
+    )
+}
+
+/// Like [`build`], for a Hub that must hold the token a real bridge reads from its file.
+pub fn build_with_token(
+    base: &Path,
+    config: Config,
+    injected: Vec<(String, Arc<dyn Module>)>,
+    token: Token,
+) -> TestHub {
     let audit_path = base.join("state").join("audit.jsonl");
     let volatile = base.join("run").join("libremodular-mcp");
     let now = Arc::new(Mutex::new(epoch()));

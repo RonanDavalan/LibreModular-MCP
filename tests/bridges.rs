@@ -1,5 +1,6 @@
-//! The Python bridges seen from the Hub: their own test suite, and the generated
-//! GIMP, Krita and Blender bridges driven end to end by the Hub's `tcp` module.
+//! The Python bridges seen from the Hub: their own test suite, the generated
+//! GIMP, Krita and Blender bridges driven end to end by the Hub's `tcp` module,
+//! and the LibreOffice bridge driven by the Hub's three LibreOffice targets.
 //!
 //! Why this module exists
 //! `cargo test` is the one command that proves the product works. It must run
@@ -17,9 +18,10 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 use common::{FILE_TOKEN, Verdict, must_fail, must_pass, write_file};
-use libremodular_mcp::config::Limits;
+use libremodular_mcp::config::{Config, Limits};
 use libremodular_mcp::modules::{Module, TcpModule};
 use libremodular_mcp::protocol::BridgeConnector;
+use libremodular_mcp::registry::Registry;
 use libremodular_mcp::security::Token;
 use serde_json::json;
 
@@ -66,7 +68,18 @@ struct BridgeProcess {
 
 impl BridgeProcess {
     fn start(bridge_file: &Path, token_file: &Path) -> Result<BridgeProcess, String> {
+        BridgeProcess::start_with(bridge_file, token_file, &[])
+    }
+
+    /// `flags` go to `python3` before the bridge file. The environment is exactly
+    /// the five variables set below: nothing else of the machine reaches the bridge.
+    fn start_with(
+        bridge_file: &Path,
+        token_file: &Path,
+        flags: &[&str],
+    ) -> Result<BridgeProcess, String> {
         let mut child = Command::new("python3")
+            .args(flags)
             .arg(bridge_file)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
@@ -179,7 +192,7 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path, app: &'static str) -> Ver
             "{traceback}"
         );
         let state = module
-            .state(&captures.join(format!("{app}-e2e.png")))
+            .state(&captures.join(format!("{app}-e2e.png")), &work_dir)
             .map_err(|error| format!("state: {error}"))?;
         ensure!(state.state.is_object(), "state: not an object: {state:?}");
         ensure!(
@@ -268,4 +281,129 @@ fn counter_proof_a_bridge_on_the_port_of_another_application_is_refused() {
         &generated("krita_bridge.py"),
         "blender",
     ));
+}
+
+// --- the LibreOffice bridge, without LibreOffice -------------------------------------
+
+const LIBREOFFICE_TARGETS: [&str; 3] = [
+    "libreoffice-writer",
+    "libreoffice-calc",
+    "libreoffice-impress",
+];
+
+/// `python3 -S` starts without the `site` module, so the packages the system
+/// installs for it, `uno` among them, cannot be found, whatever the machine has.
+/// The check first makes sure of that, then drives each of the three targets of
+/// the Hub against the bridge file, naming the step that failed.
+fn check_the_hub_reaches_the_libreoffice_bridge_without_libreoffice(bridge_file: &Path) -> Verdict {
+    let probe = Command::new("python3")
+        .args(["-S", "-c", "import uno"])
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|error| format!("python3 is required: {error}"))?;
+    ensure!(
+        !probe.success(),
+        "setup: `python3 -S` can import uno, the environment is not the one described"
+    );
+    let base = common::private_tempdir();
+    let token_file = base.path().join("token");
+    write_file(&token_file, 0o600, FILE_TOKEN);
+    let work_dir = common::fresh(base.path());
+    let captures = common::fresh(base.path());
+    let bridge = BridgeProcess::start_with(bridge_file, &token_file, &["-S"])?;
+    let token = Token::new(FILE_TOKEN).map_err(|error| error.to_string())?;
+    let configuration = Config::from_bytes(
+        format!(
+            "[apps.libreoffice-writer]\nenabled = true\nbridge_port = {port}\n\
+             [apps.libreoffice-calc]\nenabled = true\nbridge_port = {port}\n\
+             [apps.libreoffice-impress]\nenabled = true\nbridge_port = {port}\n",
+            port = bridge.port
+        )
+        .as_bytes(),
+    )
+    .map_err(|error| error.to_string())?;
+    let registry = Registry::from_config(&configuration, &token);
+    let outcome = (|| -> Verdict {
+        for target in LIBREOFFICE_TARGETS {
+            let module = registry
+                .get(target)
+                .ok_or_else(|| format!("{target}: not in the registry"))?;
+            let health = module.health();
+            ensure!(
+                health.connected,
+                "{target}: health: the bridge is not reachable"
+            );
+            ensure!(
+                health.app_version.as_deref() == Some("unknown")
+                    && health.bridge_version.as_deref() == Some("1"),
+                "{target}: health: {health:?}"
+            );
+            let state = module
+                .state(&captures.join(format!("{target}.png")), &work_dir)
+                .map_err(|error| format!("{target}: state: {error}"))?;
+            ensure!(
+                state.state == json!({}),
+                "{target}: state without LibreOffice: {state:?}"
+            );
+            ensure!(
+                state
+                    .warnings
+                    .iter()
+                    .any(|warning| warning.contains("cannot be imported")),
+                "{target}: state warnings: {:?}",
+                state.warnings
+            );
+            ensure!(
+                state.screenshot.is_none(),
+                "{target}: unexpected capture {state:?}"
+            );
+            let reply = module
+                .execute("result = 1", 10, &work_dir)
+                .map_err(|error| format!("{target}: execute: {error}"))?;
+            ensure!(
+                !reply.ok,
+                "{target}: a script ran without LibreOffice: {reply:?}"
+            );
+            ensure!(
+                reply.error["type"] == "LibreOfficeUnavailable",
+                "{target}: execute error: {reply:?}"
+            );
+        }
+        Ok(())
+    })();
+    registry.close_all();
+    let said = bridge.said();
+    ensure!(
+        !said.iter().any(|line| line.contains(FILE_TOKEN)),
+        "the bridge printed the token"
+    );
+    outcome
+}
+
+#[test]
+fn the_hub_drives_the_generated_libreoffice_bridge_for_its_three_targets_without_libreoffice() {
+    must_pass(
+        check_the_hub_reaches_the_libreoffice_bridge_without_libreoffice(&generated(
+            "uno_bridge.py",
+        )),
+    );
+}
+
+#[test]
+fn counter_proof_a_libreoffice_bridge_announcing_another_application_is_refused() {
+    let base = common::private_tempdir();
+    let text = fs::read_to_string(generated("uno_bridge.py")).expect("generated bridge");
+    let line = "    app = \"libreoffice\"\n";
+    assert_eq!(
+        text.matches(line).count(),
+        1,
+        "the defect must change one place"
+    );
+    let defective = base.path().join("uno_bridge_as_gimp.py");
+    fs::write(&defective, text.replacen(line, "    app = \"gimp\"\n", 1)).expect("write");
+    must_fail(check_the_hub_reaches_the_libreoffice_bridge_without_libreoffice(&defective));
 }

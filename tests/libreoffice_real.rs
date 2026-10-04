@@ -1,0 +1,441 @@
+//! The Hub against a real LibreOffice, through the generated bridge.
+//!
+//! Why this module exists
+//! The fakes show that the Hub and the bridge keep their word; only a real
+//! LibreOffice shows that the UNO calls of the adapter mean what they are
+//! assumed to mean. The test is ignored by default because it needs LibreOffice
+//! and its `python3-uno`; run it with `cargo test --test libreoffice_real --
+//! --ignored --nocapture`. It starts its own LibreOffice without interface on a
+//! throwaway profile and port, never touches an instance of the operator's, and
+//! stops everything it started.
+
+#[macro_use]
+mod common;
+
+use std::ffi::OsString;
+use std::fs;
+use std::io::{BufRead, BufReader};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::CommandExt;
+use std::path::Path;
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+
+use common::hub::{Session, build_with_token, config};
+use common::{FILE_TOKEN, Verdict, must_pass, write_file};
+use libremodular_mcp::launch::{Plan, Programs, bridge_spawn};
+use libremodular_mcp::security::Token;
+use rustix::process::{Pid, Signal, kill_process_group};
+use serde_json::{Value, json};
+
+const LISTENING: &str = "LMM bridge listening on 127.0.0.1:";
+
+fn free_port() -> u16 {
+    let listener =
+        TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).expect("a free port");
+    listener.local_addr().expect("address").port()
+}
+
+/// A process that leads its own group; the whole group is stopped when this is
+/// dropped, so that whatever LibreOffice started goes with it.
+struct Leader(Child);
+
+impl Drop for Leader {
+    fn drop(&mut self) {
+        let Some(group) = i32::try_from(self.0.id()).ok().and_then(Pid::from_raw) else {
+            return;
+        };
+        let _ = kill_process_group(group, Signal::TERM);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            if matches!(self.0.try_wait(), Ok(Some(_))) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let _ = kill_process_group(group, Signal::KILL);
+        let _ = self.0.wait();
+    }
+}
+
+/// The variables the system Python needs to import `uno`: what the launcher gives
+/// the bridge, for the same reason.
+fn uno_environment(path: &OsString, uno_port: u16) -> Vec<(String, OsString)> {
+    vec![
+        ("PATH".to_owned(), path.clone()),
+        (
+            "PYTHONPATH".to_owned(),
+            "/usr/lib/python3/dist-packages".into(),
+        ),
+        (
+            "LD_LIBRARY_PATH".to_owned(),
+            "/usr/lib/libreoffice/program".into(),
+        ),
+        ("UNO_PORT".to_owned(), uno_port.to_string().into()),
+    ]
+}
+
+const PRELUDE: &str = r#"
+import os, time, uno
+local = uno.getComponentContext()
+resolver = local.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", local)
+url = "uno:socket,host=127.0.0.1,port=%s;urp;StarOffice.ComponentContext" % os.environ["UNO_PORT"]
+deadline = time.monotonic() + 5
+while True:
+    try:
+        ctx = resolver.resolve(url)
+        break
+    except Exception:
+        if time.monotonic() > deadline:
+            raise
+        time.sleep(0.2)
+desktop = ctx.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+"#;
+
+/// A few lines of UNO run by the system Python, outside the bridge: it prepares
+/// and inspects LibreOffice the way a person would, never through the Hub.
+fn uno_snippet(path: &OsString, uno_port: u16, code: &str) -> Result<String, String> {
+    let output = Command::new("/usr/bin/python3")
+        .args(["-c", &format!("{PRELUDE}\n{code}")])
+        .env_clear()
+        .envs(uno_environment(path, uno_port))
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| format!("cannot run the system python3: {error}"))?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_owned())
+    }
+}
+
+fn start_libreoffice(base: &Path, path: &OsString, uno_port: u16) -> Result<Leader, String> {
+    let home = base.join("home");
+    fs::create_dir(&home).map_err(|error| error.to_string())?;
+    fs::set_permissions(&home, fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
+    let profile = base.join("profile");
+    let child = Command::new("/usr/bin/soffice")
+        .args([
+            "--headless",
+            "--invisible",
+            "--norestore",
+            "--nologo",
+            "--nodefault",
+        ])
+        .arg(format!(
+            "-env:UserInstallation=file://{}",
+            profile.display()
+        ))
+        .arg(format!(
+            "--accept=socket,host=127.0.0.1,port={uno_port};urp;"
+        ))
+        .env_clear()
+        .env("HOME", &home)
+        .env("PATH", path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .map_err(|error| format!("cannot start /usr/bin/soffice: {error}"))?;
+    Ok(Leader(child))
+}
+
+/// Wait until LibreOffice answers on UNO; it listens only once it has started.
+fn wait_for_libreoffice(path: &OsString, uno_port: u16) -> Result<String, String> {
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(120);
+    let mut last = String::new();
+    while Instant::now() < deadline {
+        match uno_snippet(path, uno_port, "print(len(list(range(1))))") {
+            Ok(_) => {
+                return Ok(format!(
+                    "LibreOffice answered on UNO after {:.1} s",
+                    started.elapsed().as_secs_f32()
+                ));
+            }
+            Err(error) => last = error,
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    Err(format!(
+        "LibreOffice never answered on UNO within 120 s; last error: {last}"
+    ))
+}
+
+fn start_bridge(plan: &Plan, path: &OsString) -> Result<(Leader, u16), String> {
+    // The bridge is started exactly as the launcher starts it.
+    let environment = vec![(OsString::from("PATH"), path.clone())];
+    let spawn = bridge_spawn(&Programs::default(), plan, &environment);
+    let mut child = Command::new(&spawn.program)
+        .args(&spawn.args)
+        .current_dir(&spawn.current_dir)
+        .env_clear()
+        .envs(spawn.env.iter().map(|(name, value)| (name, value)))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .map_err(|error| format!("cannot start the bridge: {error}"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or("the bridge has no error stream")?;
+    let leader = Leader(child);
+    let (sender, lines) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let Ok(line) = line else { break };
+            if sender.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let line = lines
+            .recv_timeout(remaining)
+            .map_err(|_| "the bridge never said where it listens".to_owned())?;
+        ensure!(!line.contains(FILE_TOKEN), "the bridge printed the token");
+        if let Some(port) = line.strip_prefix(LISTENING) {
+            let port = port
+                .trim()
+                .parse()
+                .map_err(|_| format!("bad line {line}"))?;
+            return Ok((leader, port));
+        }
+    }
+}
+
+fn show(label: &str, value: &Value) {
+    eprintln!(
+        "--- {label}\n{}",
+        serde_json::to_string_pretty(value).unwrap_or_default()
+    );
+}
+
+fn drive(base: &Path) -> Verdict {
+    let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
+    let (uno_port, bridge_port) = (free_port(), free_port());
+    let _libreoffice = start_libreoffice(base, &path, uno_port)?;
+    eprintln!("{}", wait_for_libreoffice(&path, uno_port)?);
+
+    let token_file = base.join("token");
+    write_file(&token_file, 0o600, FILE_TOKEN);
+    let bridge_file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("bridges")
+        .join("generated")
+        .join("uno_bridge.py");
+    let plan = Plan {
+        uno_port,
+        bridge_port,
+        bridge_file,
+        token_file,
+    };
+    let (_bridge, bridge_port) = start_bridge(&plan, &path)?;
+
+    let hub = build_with_token(
+        base,
+        config(&format!(
+            "[apps.libreoffice-writer]\nenabled = true\nuno_port = {uno_port}\nbridge_port = {bridge_port}\n\
+             [apps.libreoffice-calc]\nenabled = true\nuno_port = {uno_port}\nbridge_port = {bridge_port}\n\
+             [apps.libreoffice-impress]\nenabled = true\nuno_port = {uno_port}\nbridge_port = {bridge_port}\n"
+        )),
+        Vec::new(),
+        Token::new(FILE_TOKEN).map_err(|error| error.to_string())?,
+    );
+    let mut session = Session::start(hub.server.clone());
+
+    // 1. The three targets are reachable through one connection.
+    let listing = session.state("hub");
+    show("get_state hub", &listing);
+    let modules = listing["state"]["modules"].as_array().ok_or("no modules")?;
+    ensure!(modules.len() == 3, "{listing}");
+    for module in modules {
+        ensure!(module["connected"] == true, "not connected: {module}");
+        ensure!(module["mode"] == "uno", "{module}");
+        ensure!(module["bridge_version"] == "1", "{module}");
+    }
+    let version = modules[0]["app_version"].as_str().unwrap_or_default();
+    ensure!(
+        version.chars().next().is_some_and(|c| c.is_ascii_digit()),
+        "the version of LibreOffice was not read: {version:?}"
+    );
+
+    // 2. With no document open, no script runs, and the state says why.
+    let refused = session.execute("libreoffice-calc", "result = 1");
+    show("execute without a document", &refused);
+    ensure!(refused["status"] == "error", "{refused}");
+    ensure!(refused["error"]["type"] == "NoActiveDocument", "{refused}");
+    let empty = session.state("libreoffice-calc");
+    show("get_state without a document", &empty);
+    ensure!(empty["connected"] == true, "{empty}");
+    ensure!(empty["state"]["documents"] == json!([]), "{empty}");
+    ensure!(empty["state"]["active"] == Value::Null, "{empty}");
+    ensure!(
+        empty["warnings"]
+            .to_string()
+            .contains("no active calc document"),
+        "{empty}"
+    );
+    ensure!(empty["screenshot"] == Value::Null, "{empty}");
+
+    // 3. A person opens a spreadsheet; the model then works on it through the Hub.
+    uno_snippet(
+        &path,
+        uno_port,
+        "desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())\nprint('opened')",
+    )?;
+    let script = "\
+sheet = doc.Sheets.getByIndex(0)
+sheet.getCellByPosition(0, 0).setValue(42)
+sheet.getCellByPosition(1, 1).setString('hello')
+print('wrote A1 and B2')
+result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), 'b2': sheet.getCellByPosition(1, 1).getString()}
+";
+    let wrote = session.execute("libreoffice-calc", script);
+    show("execute on a spreadsheet", &wrote);
+    ensure!(wrote["status"] == "ok", "{wrote}");
+    ensure!(wrote["stdout"] == "wrote A1 and B2\n", "{wrote}");
+    ensure!(
+        wrote["result"] == json!({"sheet": "Sheet1", "a1": 42.0, "b2": "hello"}),
+        "{wrote}"
+    );
+
+    // 4. The state describes the document and a capture is made, unsaved.
+    let state = session.state("libreoffice-calc");
+    show("get_state of a spreadsheet", &state);
+    ensure!(state["connected"] == true, "{state}");
+    ensure!(
+        state["state"]["documents"] == json!([{"title": "Untitled 1", "family": "calc"}]),
+        "{state}"
+    );
+    ensure!(
+        state["state"]["active"]
+            == json!({"sheets": [{"name": "Sheet1", "last_column": 1, "last_row": 1}]}),
+        "{state}"
+    );
+    ensure!(state["warnings"] == json!([]), "{state}");
+    let capture = state["screenshot"].as_str().ok_or("no capture")?;
+    ensure!(Path::new(capture).starts_with(hub.captures()), "{capture}");
+    let bytes = fs::read(capture).map_err(|error| error.to_string())?;
+    ensure!(
+        bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "the capture is not a PNG"
+    );
+    ensure!(
+        common::mode_of(Path::new(capture)) == 0o600,
+        "the capture is not private"
+    );
+    let saved = uno_snippet(
+        &path,
+        uno_port,
+        "doc = desktop.getCurrentComponent()\nprint(doc.hasLocation(), doc.isModified())",
+    )?;
+    ensure!(
+        saved == "False True",
+        "the capture saved the document (hasLocation, isModified): {saved}"
+    );
+
+    // 5. A script for another family is refused, and nothing of it runs.
+    let wrong = session.execute(
+        "libreoffice-writer",
+        "open(LMM_WORK_DIR + '/ran', 'w').write('x')",
+    );
+    show("execute for the wrong family", &wrong);
+    ensure!(wrong["error"]["type"] == "WrongDocumentType", "{wrong}");
+    ensure!(
+        !hub.volatile
+            .join("work")
+            .join("libreoffice-writer")
+            .join("ran")
+            .exists(),
+        "a line of the script ran"
+    );
+    let writer_state = session.state("libreoffice-writer");
+    ensure!(
+        writer_state["state"]["active"] == Value::Null,
+        "{writer_state}"
+    );
+    ensure!(
+        writer_state["state"]["documents"] == json!([{"title": "Untitled 1", "family": "calc"}]),
+        "{writer_state}"
+    );
+
+    // 6. An error of the application comes back as it is.
+    let broken = session.execute(
+        "libreoffice-calc",
+        "x = 1\nresult = doc.Sheets.getByName('Nope')",
+    );
+    show("execute with an error", &broken);
+    ensure!(broken["status"] == "error", "{broken}");
+    ensure!(
+        broken["error"]["traceback"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("File \"<libremodular>\", line 2, in <module>"),
+        "{broken}"
+    );
+
+    // 7. A slide deck and a text document, one after the other, each on its own target.
+    for (target, factory, probe, expected, active) in [
+        (
+            "libreoffice-impress",
+            "private:factory/simpress",
+            "result = {'slides': doc.DrawPages.Count}",
+            json!({"slides": 1}),
+            json!({"slides": 1}),
+        ),
+        (
+            "libreoffice-writer",
+            "private:factory/swriter",
+            "text = doc.Text\n\
+             text.insertString(text.End, 'one', False)\n\
+             text.insertControlCharacter(text.End, 0, False)\n\
+             text.insertString(text.End, 'two', False)\n\
+             enumeration = text.createEnumeration()\n\
+             count = 0\n\
+             while enumeration.hasMoreElements():\n\
+             \x20   enumeration.nextElement()\n\
+             \x20   count += 1\n\
+             result = {'paragraphs': count}",
+            json!({"paragraphs": 2}),
+            json!({"paragraphs": 2, "pages": 1}),
+        ),
+    ] {
+        uno_snippet(
+            &path,
+            uno_port,
+            &format!("desktop.loadComponentFromURL('{factory}', '_blank', 0, ())\nprint('opened')"),
+        )?;
+        let answer = session.execute(target, probe);
+        show(&format!("execute on {target}"), &answer);
+        ensure!(answer["status"] == "ok", "{target}: {answer}");
+        ensure!(answer["result"] == expected, "{target}: {answer}");
+        let described = session.state(target);
+        show(&format!("get_state of {target}"), &described);
+        ensure!(described["warnings"] == json!([]), "{target}: {described}");
+        ensure!(
+            described["state"]["active"] == active,
+            "{target}: {described}"
+        );
+        ensure!(
+            described["screenshot"]
+                .as_str()
+                .is_some_and(|path| Path::new(path).exists()),
+            "{target}: no capture"
+        );
+    }
+    hub.server.shutdown();
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs LibreOffice and its python3-uno"]
+fn the_hub_drives_a_real_libreoffice_through_the_generated_bridge() {
+    let base = common::private_tempdir();
+    must_pass(drive(base.path()));
+}
