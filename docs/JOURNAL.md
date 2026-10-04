@@ -309,3 +309,100 @@ variables to be `1`, and fails without the fix.
 
 Still unconfirmed: starting the Blender and Krita bridges from the consoles of an interface
 the operator opened; `bpy.ops` from the bridge; several documents open in Krita.
+
+## 2026-10-04 — LibreOffice: three targets, one bridge, a launcher, and two corrections of the Hub
+
+Writer, Calc and Impress are now served by one stand-alone bridge that connects to LibreOffice's
+UNO port, behind three Hub targets that share one connection. `libremodular-launch libreoffice`
+starts LibreOffice and the bridge, or stops the bridge. Two defects found on the operator's
+machine were fixed first. The whole of it ran against a real LibreOffice 24.2.7.2 (not 25.2.3.2).
+
+Done, with the command that shows it:
+
+- `Module::state` receives the work directory of the application, prepared by the server like
+  the one `execute` gets. An Inkscape module that has run no script describes the `current.svg`
+  a previous Hub left; without one the state stays `{}` and the document is not created:
+  `cargo test --locked --test inkscape --test server`
+  (`a_new_module_describes_the_document_a_previous_hub_left` and its counter-proof, which models
+  the previous behaviour; `get_state_prepares_the_private_work_directory_and_hands_over_the_one_execute_gets`).
+- The second attempt of `TcpModule::execute`, after a connection found gone before anything was
+  written, waits the reconnect delay: `cargo test --locked --test protocol`
+  (`execute_waits_before_its_second_attempt_to_connect`, which fails with
+  "the bridge closed the connection during the handshake" once the wait is removed, and its counter-proof).
+- The bridge core hands the family of a request to an adapter that declares `families`, refuses
+  an unnamed or unserved family with `UnknownFamily` before any line of the adapter runs, and
+  leaves the other adapters untouched: `python3 -m unittest discover -s tests/bridges`
+  (`FamilyTests`; 145 tests in all, run with `-W error::ResourceWarning`).
+- The UNO adapter and its generated bridge, with `uno` and `com.sun.star.beans` imported when a
+  request needs them: the same tests pass with `python3 -S` (no `uno` anywhere) and with
+  `PYTHONPATH=/usr/lib/python3/dist-packages LD_LIBRARY_PATH=/usr/lib/libreoffice/program`
+  (the real `uno` importable), since they install a fake. `python3 -m unittest discover -s tests/bridges`
+  (`test_uno_adapter.py`).
+- The Hub module: one connection for the three targets, the family in every request, a shared
+  busy state, `get_state("hub")` listing the three in mode `uno`, a harmless `close()`:
+  `cargo test --locked --test libreoffice`. The generated bridge, started by a Python that cannot
+  import `uno`, answers for the three targets (`LibreOfficeUnavailable`, state `{}` with a warning,
+  version `unknown`): `cargo test --locked --test bridges`.
+- The launcher: argument lists without a shell, `127.0.0.1` only, the token in no argument and no
+  variable (only the path of its file), the bridge's environment exactly the listed one, detached
+  processes in groups of their own, a refusal beside a running `soffice.bin` (read from a fake
+  `/proc`), a private record, `--stop` that spares a process number another program has taken:
+  `cargo test --locked --test launch` (38 tests, 12 runs in a row without a failure). The helpers
+  it needed in `security.rs`: `cargo test --locked --test token_and_files`. Only the Inkscape module
+  and the launcher start processes: `cargo test --locked --test invariants`.
+- A real LibreOffice, without interface: `cargo test --locked --test libreoffice_real -- --ignored --nocapture`
+  (ignored by default, `needs LibreOffice and its python3-uno`). With a window, on a virtual X display,
+  the real `libremodular-launch`, then the real `libremodular-mcp` over MCP on stdio: the three targets
+  connected with version `24.2.7.2`, a script refused with `NoActiveDocument`, a Calc script run, the state
+  and a PNG capture returned, `WrongDocumentType` for Writer, `--stop` ending the bridge and leaving
+  LibreOffice alone.
+- Whole suite, formatting, lints, release build, bridges:
+  `cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked && cargo build --release --locked && python3 -m compileall -q bridges && python3 scripts/build_bridges.py --check`.
+
+Decisions:
+
+- Sharing the connection: `TcpModule` gains an optional `family` and a connection slot other modules
+  can hold (`SharedConnection`); its reconnection logic stays in one place and its behaviour without them
+  is unchanged. `LibreOfficeModule` is a thin wrapper over it. The registry makes one slot per bridge port.
+- The core gives an adapter no way to add a warning to a state answer, and changing that was outside this
+  work. `active: null` therefore reaches the Hub without a reason, and `LibreOfficeModule` adds the warning
+  itself, naming both causes (no current document, or one of another family).
+- The bridge file is checked by a new `security::check_trusted_file` (absolute, regular, not a link, ours,
+  not writable by the group or others; readable by everyone, it is code). Files under `/proc` are read by
+  `security::read_system_file`, one bounded read without following links. Both are listed as definitions
+  that may exist only in `security.rs`.
+- LibreOffice receives the environment of the launcher except the `LIBREMODULAR_` variables: a window needs
+  the display and the session bus, and no application needs this program's own variables. The environment is
+  passed in as a parameter (`config::environment_snapshot` in production), like the programs and `/proc`.
+- The record is `soffice <pid>` and `bridge <pid> <bridge file>`. The bridge is recognised when one of the
+  arguments of its command line is exactly the bridge file. Exit code `2` is a usage error or a refusal the
+  operator can fix, `1` a failure.
+- Two refusals beyond the ones asked for: equal `uno_port` and `bridge_port`, and a bridge of an earlier
+  launch that still runs (a second launch would leave it unrecorded and impossible to stop).
+- The test reference bridge gained a single-place mode, as a real bridge refuses a second connection at
+  once, and can announce `libreoffice`. Fake programs of the launcher tests end when their directory goes.
+- `NOT_IN_BUILD` is no longer reachable from a configuration, since every known application has a module;
+  it stays for an application that would not have one.
+- In the build environment (not in the repository) `libreoffice-writer`, `libreoffice-calc`,
+  `libreoffice-impress` and `xvfb` were installed with the package manager to run the real tests.
+
+Findings, not fixed:
+
+- With no document open, every script is refused with `NoActiveDocument`: the Hub cannot create the first
+  document, and `soffice --headless --calc` opened none. The real test opens it with a separate UNO snippet.
+- The core reads the application's version once, when the bridge starts. A bridge started before LibreOffice
+  listens (the launcher starts them one right after the other, and the bridge waits five seconds) reports
+  `unknown` for good, and every state then carries the warning that the API cannot be imported.
+  LibreOffice listened 1.3 s after its start in one run, and after 8 s but by 14 s on its first start.
+- The errors the adapter raises itself (`NoActiveDocument`, `WrongDocumentType`, `LibreOfficeUnavailable`)
+  come back with the frames of the bridge and the path of the bridge file in their trace.
+- The directory that holds the bridge file is not checked: only the file is.
+- The process the launcher records is LibreOffice's start process, not the `soffice.bin` the system lists.
+
+Not covered yet:
+
+- LibreOffice 25.2.3.2, the interface on a real desktop session, Python 3.13.5 of Debian 13, what the
+  PNG capture of a document with several sheets or pages shows, which document is current when the focus
+  is on another window.
+- The UNO port has no authentication: any process that can reach it drives LibreOffice without the token,
+  the guard or the journal. Whether LibreOffice filters by user is unconfirmed.

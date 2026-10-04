@@ -105,8 +105,10 @@ environment and limits, and returns, under `state`:
 | `element_count` | The number of elements, root included |
 | `layers` | Every `g` element whose `inkscape:groupmode` is `layer`, at any depth: `id`, `label` (`inkscape:label`) |
 
-Before any script has run, `state` is `{}` and a warning says that the document does not
-exist yet. A document that declares entities is refused: `state` is `{}` and a warning
+While `current.svg` does not exist, `state` is `{}` and a warning says that the document
+does not exist yet; looking at the state never creates it. A `current.svg` that exists is
+read whether or not a script has run since the Hub started, so a document left by an earlier
+run of the Hub is described. A document that declares entities is refused: `state` is `{}` and a warning
 says so. Nothing in the document is resolved or fetched, and a `DOCTYPE` without entity
 declarations is read without fetching its DTD. The Hub itself parses no XML.
 
