@@ -9,6 +9,7 @@
 
 #![allow(dead_code)]
 
+pub mod binary;
 pub mod fake_bridge;
 pub mod hub;
 

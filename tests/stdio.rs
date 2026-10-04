@@ -12,67 +12,13 @@ mod common;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
+use common::binary::{Layout, command, layout, prepare, rpc};
 use common::fake_bridge::FakeBridge;
 use common::{FAKE_TOKEN, FILE_TOKEN, Verdict, must_fail, must_pass, write_file};
 use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
-
-const BINARY: &str = env!("CARGO_BIN_EXE_libremodular-mcp");
-
-struct Layout {
-    config: PathBuf,
-    state: PathBuf,
-    runtime: PathBuf,
-    home: PathBuf,
-}
-
-fn layout(base: &Path) -> Layout {
-    let make = |name: &str| {
-        let path = base.join(name);
-        fs::create_dir_all(&path).expect("directory");
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).expect("mode");
-        path
-    };
-    Layout {
-        config: make("config"),
-        state: make("state"),
-        runtime: make("runtime"),
-        home: make("home"),
-    }
-}
-
-/// Write a private configuration directory with a token and `config_text`.
-fn prepare(layout: &Layout, token: &str, config_text: &str) {
-    let dir = layout.config.join("libremodular-mcp");
-    fs::create_dir_all(&dir).expect("config dir");
-    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).expect("mode");
-    write_file(&dir.join("token"), 0o600, token);
-    write_file(&dir.join("config.toml"), 0o600, config_text);
-}
-
-fn command(layout: &Layout, with_runtime: bool) -> Command {
-    let mut command = Command::new(BINARY);
-    command
-        .env_clear()
-        .env("HOME", &layout.home)
-        .env("LIBREMODULAR_CONFIG_DIR", &layout.config)
-        .env("LIBREMODULAR_STATE_DIR", &layout.state)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if with_runtime {
-        command.env("XDG_RUNTIME_DIR", &layout.runtime);
-    }
-    command
-}
-
-fn rpc(id: u64, method: &str, params: Value) -> String {
-    json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string()
-}
 
 #[test]
 fn a_full_session_on_stdio_writes_nothing_but_the_protocol() {
