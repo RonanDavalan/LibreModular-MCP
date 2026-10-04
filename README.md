@@ -1,5 +1,7 @@
 # LibreModular-MCP
 
+## Universal MCP server written in Rust, with a Hub that exposes only two tools
+
 An MCP server that lets a language model drive desktop applications by running scripts in them.
 
 ## Quick start

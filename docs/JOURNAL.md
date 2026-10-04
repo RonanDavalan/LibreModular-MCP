@@ -517,3 +517,9 @@ Not covered yet:
   `cargo test --locked --test launch` out of 40 pass. No source of the Hub changed.
 - Still not covered: a launcher start where LibreOffice is slow (14 s measured at the first start of an
   empty profile), and a real desktop session.
+
+## 2026-10-04 — The presentation line opens the README
+
+The README now opens, right under the title, with the line that says what the project is: "Universal MCP
+server written in Rust, with a Hub that exposes only two tools". The same line is to open the site and the
+manual page. `cargo test --locked --test invariants` (36 tests) and the bridge tests still pass.
