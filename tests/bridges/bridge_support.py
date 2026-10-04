@@ -97,8 +97,8 @@ def defective_adapter(name, old, new):
 
 
 def core_reading_the_version_once():
-    """The core as it was before it asked again: the version is read at the start
-    and never again, whatever it was."""
+    """A core that reads the version once, at the start, and never asks again,
+    whatever it was: the defect the re-read removes."""
     return defective_core(
         "        if self._app_version == UNKNOWN_VERSION:\n"
         "            self._app_version = _version_of(self._adapter, on_main=True)\n",

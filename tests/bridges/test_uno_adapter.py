@@ -566,7 +566,8 @@ def check_a_script_creates_the_first_document_and_the_next_request_sees_it(modul
 
 
 def _adapter_refusing_when_there_is_no_document():
-    """The adapter as it was: no current document stops the request."""
+    """An adapter that stops the request when LibreOffice has no current document:
+    the defect that kept the Hub from creating the first document."""
     return defective_adapter(
         "uno",
         "    if component is None:\n        return None\n",
