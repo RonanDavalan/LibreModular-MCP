@@ -36,6 +36,8 @@ pub enum HelloMode {
     WrongProtocol,
     /// Answer a valid hello that announces `krita` instead of `gimp`.
     OtherApp,
+    /// Check the token like `Normal`, and announce `libreoffice`.
+    Libreoffice,
 }
 
 /// What the bridge answers to one request.
@@ -102,6 +104,22 @@ impl FakeBridge {
         handler: Handler,
         release: Duration,
     ) -> FakeBridge {
+        FakeBridge::launch(token, hello, handler, release, false)
+    }
+
+    /// A bridge with a single place, as a real one has: a connection that arrives
+    /// while another is being served is closed at once, never queued.
+    pub fn start_single_place(token: &str, hello: HelloMode, handler: Handler) -> FakeBridge {
+        FakeBridge::launch(token, hello, handler, Duration::ZERO, true)
+    }
+
+    fn launch(
+        token: &str,
+        hello: HelloMode,
+        handler: Handler,
+        release: Duration,
+        single_place: bool,
+    ) -> FakeBridge {
         let listener =
             TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).expect("bind loopback");
         listener.set_nonblocking(true).expect("nonblocking");
@@ -114,10 +132,17 @@ impl FakeBridge {
             let stop = Arc::clone(&stop);
             std::thread::spawn(move || {
                 let mut last_closed: Option<Instant> = None;
+                let serving = Arc::new(AtomicBool::new(false));
+                let mut workers: Vec<JoinHandle<()>> = Vec::new();
                 while !stop.load(Ordering::SeqCst) {
                     match listener.accept() {
                         Ok((stream, peer)) => {
                             if !peer.ip().is_loopback() {
+                                continue;
+                            }
+                            if single_place && serving.load(Ordering::SeqCst) {
+                                stats.turned_away.fetch_add(1, Ordering::SeqCst);
+                                drop(stream);
                                 continue;
                             }
                             if last_closed.is_some_and(|closed| closed.elapsed() < release) {
@@ -126,6 +151,18 @@ impl FakeBridge {
                                 continue;
                             }
                             stats.connections.fetch_add(1, Ordering::SeqCst);
+                            if single_place {
+                                serving.store(true, Ordering::SeqCst);
+                                let (token, handler) = (token.clone(), Arc::clone(&handler));
+                                let (stats, stop) = (Arc::clone(&stats), Arc::clone(&stop));
+                                let serving = Arc::clone(&serving);
+                                workers.push(std::thread::spawn(move || {
+                                    serve(stream, &token, hello, &handler, &stats, &stop);
+                                    stats.closed.fetch_add(1, Ordering::SeqCst);
+                                    serving.store(false, Ordering::SeqCst);
+                                }));
+                                continue;
+                            }
                             // One connection at a time, like a real bridge.
                             serve(stream, &token, hello, &handler, &stats, &stop);
                             last_closed = Some(Instant::now());
@@ -136,6 +173,9 @@ impl FakeBridge {
                         }
                         Err(_) => break,
                     }
+                }
+                for worker in workers {
+                    let _ = worker.join();
                 }
             })
         };
@@ -271,13 +311,19 @@ fn serve(
         HelloMode::Normal | HelloMode::AcceptAnyToken => {
             send(&mut stream, &hello_answer(1, "gimp"))
         }
+        HelloMode::Libreoffice => send(&mut stream, &hello_answer(1, "libreoffice")),
         HelloMode::Refuse => send(&mut stream, &json!({"type": "hello", "ok": false})),
         HelloMode::Malformed => stream.write_all(b"this is not json\n").is_ok(),
         HelloMode::WrongProtocol => send(&mut stream, &hello_answer(2, "gimp")),
         HelloMode::OtherApp => send(&mut stream, &hello_answer(1, "krita")),
         HelloMode::Close => false,
     };
-    if !answered || !matches!(hello, HelloMode::Normal | HelloMode::AcceptAnyToken) {
+    if !answered
+        || !matches!(
+            hello,
+            HelloMode::Normal | HelloMode::AcceptAnyToken | HelloMode::Libreoffice
+        )
+    {
         // Leave the client time to read the answer before the connection closes.
         std::thread::sleep(Duration::from_millis(50));
         return;

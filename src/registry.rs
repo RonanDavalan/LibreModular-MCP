@@ -12,15 +12,38 @@ use std::path::Path;
 
 use crate::config::{self, AppSettings, Config, Limits, Mode};
 use crate::modules::inkscape::{INHERITED_VARIABLES, InkscapeModule, InkscapePaths, WorkFiles};
-use crate::modules::{Module, NOT_IN_BUILD, TcpModule, UnavailableModule};
+use crate::modules::libreoffice::{self, LibreOfficeModule};
+use crate::modules::{
+    Module, NOT_IN_BUILD, SharedConnection, TcpModule, UnavailableModule, new_connection_slot,
+};
 use crate::protocol::BridgeConnector;
 use crate::security::{self, Token};
+
+/// The connections that several targets of one bridge share, made once per
+/// registry: a bridge accepts a single connection, so the targets it serves must
+/// not each open their own.
+#[derive(Default)]
+struct SharedLinks {
+    by_port: Vec<(u16, SharedConnection)>,
+}
+
+impl SharedLinks {
+    /// The connection to the bridge on `port`, created by the first target that asks.
+    fn for_port(&mut self, port: u16) -> SharedConnection {
+        if let Some((_, slot)) = self.by_port.iter().find(|(known, _)| *known == port) {
+            return Arc::clone(slot);
+        }
+        let slot = new_connection_slot();
+        self.by_port.push((port, Arc::clone(&slot)));
+        slot
+    }
+}
 
 /// How a known application is reached and how its module is built.
 pub struct KnownApp {
     pub name: &'static str,
     pub mode: Mode,
-    build: fn(&'static str, &AppSettings, &Token, &Limits) -> Arc<dyn Module>,
+    build: fn(&'static str, &AppSettings, &Token, &Limits, &mut SharedLinks) -> Arc<dyn Module>,
 }
 
 /// `app` is the name of [`KNOWN_APPS`]: the only name its bridge may announce.
@@ -29,6 +52,7 @@ fn build_tcp(
     settings: &AppSettings,
     token: &Token,
     limits: &Limits,
+    _shared: &mut SharedLinks,
 ) -> Arc<dyn Module> {
     match settings.port {
         Some(port) => Arc::new(TcpModule::new(
@@ -64,6 +88,7 @@ fn build_inkscape(
     _settings: &AppSettings,
     _token: &Token,
     limits: &Limits,
+    _shared: &mut SharedLinks,
 ) -> Arc<dyn Module> {
     Arc::new(InkscapeModule::new(
         InkscapePaths::default(),
@@ -73,8 +98,34 @@ fn build_inkscape(
     ))
 }
 
+/// The three targets of LibreOffice reach one bridge, which the Hub names by
+/// `bridge_port`: it never speaks UNO itself, the bridge does.
+fn build_libreoffice(
+    app: &'static str,
+    settings: &AppSettings,
+    token: &Token,
+    limits: &Limits,
+    shared: &mut SharedLinks,
+) -> Arc<dyn Module> {
+    let Some(family) = libreoffice::family_of(app) else {
+        return Arc::new(UnavailableModule::new(NOT_IN_BUILD));
+    };
+    let Some(port) = settings.bridge_port else {
+        return Arc::new(UnavailableModule::new(format!(
+            "apps.{}.bridge_port is not set",
+            settings.name
+        )));
+    };
+    Arc::new(LibreOfficeModule::new(
+        BridgeConnector::new(libreoffice::BRIDGE_APP, port, token.clone(), *limits),
+        Duration::from_secs(u64::from(limits.default_timeout_s)),
+        family,
+        shared.for_port(port),
+    ))
+}
+
 /// The applications that have a module in this build.
-pub const KNOWN_APPS: [KnownApp; 4] = [
+pub const KNOWN_APPS: [KnownApp; 7] = [
     KnownApp {
         name: "gimp",
         mode: Mode::Tcp,
@@ -94,6 +145,21 @@ pub const KNOWN_APPS: [KnownApp; 4] = [
         name: "inkscape",
         mode: Mode::Cli,
         build: build_inkscape,
+    },
+    KnownApp {
+        name: "libreoffice-writer",
+        mode: Mode::Uno,
+        build: build_libreoffice,
+    },
+    KnownApp {
+        name: "libreoffice-calc",
+        mode: Mode::Uno,
+        build: build_libreoffice,
+    },
+    KnownApp {
+        name: "libreoffice-impress",
+        mode: Mode::Uno,
+        build: build_libreoffice,
     },
 ];
 
@@ -125,12 +191,14 @@ impl Registry {
         mut injected: Vec<(String, Arc<dyn Module>)>,
     ) -> Registry {
         let mut entries = Vec::new();
+        let mut shared = SharedLinks::default();
         for settings in config.apps().iter().filter(|app| app.enabled) {
             let given = injected
                 .iter()
                 .position(|(name, _)| name == settings.name)
                 .map(|at| injected.swap_remove(at).1);
-            let module = given.unwrap_or_else(|| build(settings, token, config.limits()));
+            let module =
+                given.unwrap_or_else(|| build(settings, token, config.limits(), &mut shared));
             entries.push(Entry {
                 name: settings.name,
                 mode: settings.mode,
@@ -170,11 +238,16 @@ impl Registry {
     }
 }
 
-fn build(settings: &AppSettings, token: &Token, limits: &Limits) -> Arc<dyn Module> {
+fn build(
+    settings: &AppSettings,
+    token: &Token,
+    limits: &Limits,
+    shared: &mut SharedLinks,
+) -> Arc<dyn Module> {
     let known = KNOWN_APPS.iter().find(|known| known.name == settings.name);
     let supported = known.is_some_and(|known| known.mode == settings.mode);
     match known {
-        Some(known) if supported => (known.build)(known.name, settings, token, limits),
+        Some(known) if supported => (known.build)(known.name, settings, token, limits, shared),
         Some(known) => Arc::new(UnavailableModule::new(format!(
             "mode {} is not supported for {}; use mode {}",
             settings.mode.as_str(),

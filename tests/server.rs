@@ -432,42 +432,52 @@ fn status_unavailable_when_no_bridge_listens() {
 }
 
 #[test]
-fn an_enabled_application_without_module_is_unavailable_and_listed_disconnected() {
+fn an_application_enabled_in_a_mode_it_does_not_support_is_unavailable_and_listed_disconnected() {
     let base = common::private_tempdir();
     let hub = build(
         base.path(),
         config(
-            "[apps.libreoffice-writer]\nenabled = true\n[apps.libreoffice-calc]\nenabled = true\n",
+            "[apps.libreoffice-writer]\nenabled = true\nmode = \"tcp\"\n\
+             [apps.libreoffice-calc]\nenabled = true\nmode = \"cli\"\n",
         ),
         Vec::new(),
     );
     let mut session = Session::start(hub.server.clone());
-    for target in ["libreoffice-writer", "libreoffice-calc"] {
+    for (target, mode) in [("libreoffice-writer", "tcp"), ("libreoffice-calc", "cli")] {
         let answer = session.execute(target, "x = 1");
         assert_eq!(answer["status"], "unavailable", "{answer}");
-        assert_eq!(answer["reason"], "module not available in this build");
+        assert_eq!(
+            answer["reason"],
+            format!("mode {mode} is not supported for {target}; use mode uno")
+        );
     }
     let listing = session.state("hub");
     let modules = listing["state"]["modules"].as_array().expect("modules");
     assert_eq!(modules.len(), 2);
     assert_eq!(modules[0]["name"], "libreoffice-writer");
-    assert_eq!(modules[0]["mode"], "uno");
+    assert_eq!(modules[0]["mode"], "tcp");
     assert_eq!(modules[0]["connected"], false);
-    assert_eq!(modules[1]["mode"], "uno");
+    assert_eq!(modules[1]["mode"], "cli");
 }
 
 #[test]
-fn the_registry_knows_gimp_krita_blender_and_inkscape_and_lists_inkscape_as_cli() {
-    let names: Vec<&str> = libremodular_mcp::registry::KNOWN_APPS
+fn the_registry_knows_every_application_and_its_mode() {
+    let known: Vec<(&str, &str)> = libremodular_mcp::registry::KNOWN_APPS
         .iter()
-        .map(|known| known.name)
+        .map(|known| (known.name, known.mode.as_str()))
         .collect();
-    assert_eq!(names, vec!["gimp", "krita", "blender", "inkscape"]);
-    let modes: Vec<&str> = libremodular_mcp::registry::KNOWN_APPS
-        .iter()
-        .map(|known| known.mode.as_str())
-        .collect();
-    assert_eq!(modes, vec!["tcp", "tcp", "tcp", "cli"]);
+    assert_eq!(
+        known,
+        vec![
+            ("gimp", "tcp"),
+            ("krita", "tcp"),
+            ("blender", "tcp"),
+            ("inkscape", "cli"),
+            ("libreoffice-writer", "uno"),
+            ("libreoffice-calc", "uno"),
+            ("libreoffice-impress", "uno"),
+        ]
+    );
     let base = common::private_tempdir();
     let hub = build(
         base.path(),

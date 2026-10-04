@@ -14,6 +14,7 @@ use serde_json::{Map, Value, json};
 use crate::protocol::{BridgeClient, BridgeConnector, BridgeError};
 
 pub mod inkscape;
+pub mod libreoffice;
 
 /// How long the Hub waits for the answer to a `ping`.
 pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -180,7 +181,19 @@ pub struct TcpModule {
     connector: BridgeConnector,
     state_timeout: Duration,
     reconnect_delay: Duration,
-    slot: Mutex<Option<Arc<BridgeClient>>>,
+    /// The family named in every request, for a bridge that serves several.
+    family: Option<&'static str>,
+    slot: SharedConnection,
+}
+
+/// The one connection to a bridge. A bridge accepts a single connection, so the
+/// modules of several targets that one bridge serves hold the same slot.
+pub type SharedConnection = Arc<Mutex<Option<Arc<BridgeClient>>>>;
+
+/// A slot with no connection yet.
+#[must_use]
+pub fn new_connection_slot() -> SharedConnection {
+    Arc::new(Mutex::new(None))
 }
 
 impl TcpModule {
@@ -192,8 +205,32 @@ impl TcpModule {
             connector,
             state_timeout,
             reconnect_delay: RECONNECT_DELAY,
-            slot: Mutex::new(None),
+            family: None,
+            slot: new_connection_slot(),
         }
+    }
+
+    /// The same module for one family of a bridge that serves several: every
+    /// `execute` and `state` request names it.
+    #[must_use]
+    pub fn with_family(mut self, family: &'static str) -> Self {
+        self.family = Some(family);
+        self
+    }
+
+    /// The same module over a connection other modules use too, so that targets
+    /// served by one bridge open a single connection and share its busy state.
+    #[must_use]
+    pub fn with_shared_connection(mut self, slot: SharedConnection) -> Self {
+        self.slot = slot;
+        self
+    }
+
+    fn request_payload(&self, mut payload: Value) -> Value {
+        if let (Some(family), Value::Object(entries)) = (self.family, &mut payload) {
+            entries.insert("family".to_owned(), Value::String(family.to_owned()));
+        }
+        payload
     }
 
     /// The same module with another wait before a second attempt to connect.
@@ -293,12 +330,12 @@ impl Module for TcpModule {
         timeout_s: u32,
         work_dir: &Path,
     ) -> Result<ExecReply, ModuleError> {
-        let payload = json!({
+        let payload = self.request_payload(json!({
             "type": "execute",
             "script": script,
             "timeout_s": timeout_s,
             "work_dir": work_dir.to_string_lossy(),
-        });
+        }));
         let timeout = Duration::from_secs(u64::from(timeout_s));
         let mut attempt = 0;
         let (answer, client) = loop {
@@ -349,10 +386,10 @@ impl Module for TcpModule {
     }
 
     fn state(&self, capture_path: &Path, _: &Path) -> Result<StateReply, ModuleError> {
-        let payload = json!({
+        let payload = self.request_payload(json!({
             "type": "state",
             "capture_path": capture_path.to_string_lossy(),
-        });
+        }));
         let (answer, client) = self
             .idempotent(&payload, self.state_timeout)
             .map_err(module_error)?;
