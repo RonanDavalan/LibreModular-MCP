@@ -13,7 +13,6 @@ import contextlib
 import os
 import re
 import sys
-import time
 import unittest
 
 import fake_uno
@@ -25,6 +24,7 @@ from bridge_support import (
     core_reading_the_version_once,
     defective_adapter,
     execute,
+    hello_when_free,
     load_adapter,
     load_core,
     returns_in_time,
@@ -281,9 +281,9 @@ def check_a_bridge_started_before_libreoffice_finds_the_version(core):
             if not any("cannot be imported" in text for text in warned["warnings"]):
                 problems.append("no warning while the version is unknown: %r" % (warned,))
             office.listening = True
-            time.sleep(0.3)
-            client = Client(bridge.port)
-            late = client.hello()
+            client, late = hello_when_free(bridge.port)
+            if client is None:
+                return problems + ["the bridge did not answer the second connection"]
             fine = ask(client, "state", "calc", capture_path=None)
             client.close()
             if late is None or late["app_version"] != "25.2.3.2":

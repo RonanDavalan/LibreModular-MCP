@@ -32,6 +32,7 @@ from bridge_support import (
     core_text,
     defective_core,
     execute,
+    hello_when_free,
     load_core,
     quiet_error_streams,
     running,
@@ -682,9 +683,11 @@ class StateTests(CheckCase):
 API_WARNING = "the gimp scripting API cannot be imported in this process"
 
 
-def _hello_version(client):
-    answer = client.hello()
-    client.close()
+def _hello_version(port):
+    """The version a new connection is told, or None when the bridge never answered."""
+    client, answer = hello_when_free(port)
+    if client is not None:
+        client.close()
     return answer["app_version"] if answer else None
 
 
@@ -695,11 +698,10 @@ def check_the_version_is_read_again_at_the_next_connection(core):
     problems = []
     adapter = LateVersionAdapter(unknown_reads=2)
     with running(core, adapter=adapter) as bridge:
-        announced = [_hello_version(Client(bridge.port)) for _ in range(2)]
+        announced = [_hello_version(bridge.port) for _ in range(2)]
         if announced != ["unknown", "25.2.3.2"]:
             problems.append("announced %r, expected unknown then 25.2.3.2" % (announced,))
-        time.sleep(0.3)
-        announced = _hello_version(Client(bridge.port))
+        announced = _hello_version(bridge.port)
         if announced != "25.2.3.2":
             problems.append("the version did not stay: %r" % (announced,))
     if adapter.reads != 3:
@@ -770,7 +772,7 @@ def check_the_version_is_read_where_the_application_runs_its_calls(core):
     try:
         adapter = LateVersionAdapter(unknown_reads=1, main_thread=main)
         with running(core, adapter=adapter) as bridge:
-            _hello_version(Client(bridge.port))
+            _hello_version(bridge.port)
         later = adapter.read_threads[1:]
         if not later:
             problems.append("the adapter was not asked after the start")
@@ -837,9 +839,9 @@ class VersionTests(CheckCase):
 
         adapter = Failing(unknown_reads=0)
         with running(CORE, adapter=adapter) as bridge:
-            self.assertEqual(_hello_version(Client(bridge.port)), "unknown")
-            ping = Client(bridge.port)
-            ping.hello()
+            self.assertEqual(_hello_version(bridge.port), "unknown")
+            ping, answer = hello_when_free(bridge.port)
+            self.assertIsNotNone(answer, "the bridge stopped answering")
             self.assertEqual(ping.request({"id": "p", "type": "ping"}), {"id": "p", "ok": True})
             ping.close()
 

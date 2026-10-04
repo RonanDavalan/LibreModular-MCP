@@ -16,6 +16,7 @@ import shutil
 import socket
 import sys
 import tempfile
+import time
 import types
 
 sys.dont_write_bytecode = True
@@ -370,6 +371,29 @@ class Client:
             self.socket.close()
         except OSError:
             pass
+
+
+def hello_when_free(port, timeout=5.0):
+    """Connect and say hello, again while the bridge turns the connection away.
+
+    A bridge has a single place and frees it a moment after the previous connection
+    closed; until then it closes a new connection at once. How long that takes
+    depends on the load of the machine, so a test that connects twice in a row asks
+    again instead of sleeping. Returns (client, answer); the answer is None when the
+    bridge did not answer within `timeout` seconds."""
+    deadline = time.monotonic() + timeout
+    while True:
+        client = Client(port)
+        try:
+            answer = client.hello()
+        except OSError:
+            answer = None
+        if answer is not None:
+            return client, answer
+        client.close()
+        if time.monotonic() >= deadline:
+            return None, None
+        time.sleep(0.05)
 
 
 def execute(script, work_dir="/home/alice/work", request_id="r1"):
