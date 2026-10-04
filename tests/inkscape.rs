@@ -355,7 +355,7 @@ fn a_second_script_while_one_runs_is_busy() {
 const PRINT_ENVIRONMENT: &str =
     "import json, os\nprint('LMM_RESULT: ' + json.dumps(dict(os.environ)))\n";
 
-const ALLOWED: [&str; 7] = [
+const ALLOWED: [&str; 9] = [
     "PATH",
     "HOME",
     "LANG",
@@ -363,6 +363,8 @@ const ALLOWED: [&str; 7] = [
     "PYTHONPATH",
     "LMM_DOCUMENT",
     "LMM_WORK_DIR",
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
 ];
 
 type Builder<'a> = &'a dyn Fn(&Setup, &[(OsString, OsString)], &Path) -> ProcessSpec;
@@ -396,6 +398,12 @@ fn check_only_the_allowed_environment(setup: &Setup, build: Builder<'_>) -> Verd
         environment.get("LMM_WORK_DIR").and_then(Value::as_str) == setup.work.to_str(),
         "LMM_WORK_DIR is wrong"
     );
+    for name in ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS"] {
+        ensure!(
+            environment.get(name).and_then(Value::as_str) == Some("1"),
+            "{name} is not 1: numpy would start a thread per core under the memory limit"
+        );
+    }
     ensure!(
         environment.get("HOME").and_then(Value::as_str) == Some("/home/alice"),
         "HOME was not passed"

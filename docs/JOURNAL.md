@@ -282,3 +282,30 @@ Not covered yet:
   `inkscape` command line are unconfirmed.
 - `execute` in the `tcp` module still reconnects at once after a connection lost before the
   request was sent; only `health` and `state` wait.
+
+## 2026-10-04 — Blender, Krita and Inkscape tried, and an Inkscape hang fixed
+
+The three modules ran against the real applications on a Debian 13 machine with 32 cores,
+driven by the Hub over MCP on stdio, in a throwaway home directory with its own token
+(Inkscape 1.4, Blender 4.3.2, Krita 5.2.9; the interface ones on a virtual X display):
+
+- Inkscape: the example of `docs/modules/inkscape.md` returned `{"layers": ["Layer 1", "Notes"]}`;
+  `get_state` listed the layers and a PNG capture; a second script found the document as the
+  first had left it; an error returned the right traceback line.
+- Blender: both paths ran, the direct call without the interface (1 ms) and the persistent
+  timer with it (about 70 ms); the state listed the default scene and the new object.
+- Krita: the queued signal to the interface thread ran (1 to 7 ms); the state listed the
+  document and its layers, and the capture was a 300 by 200 PNG in mode 600. The bridge was
+  started by a startup extension of the throwaway profile, not from Scripter.
+
+Fixed: `import inkex` imports numpy, and its BLAS library starts one thread per core. Under
+the module's 2 GiB address-space limit, thirty-two threads reserving their stacks never
+finished starting: the first script that imported `inkex` ended in `timeout` after 30 s
+(reproduced outside the Hub with `RLIMIT_AS` alone; `OPENBLAS_NUM_THREADS=1` removes it).
+The cloud environment has four cores and could not show it. The module now sets
+`OPENBLAS_NUM_THREADS=1` and `OMP_NUM_THREADS=1`. Test:
+`the_process_sees_only_the_allowed_variables_and_never_the_token` now also requires both
+variables to be `1`, and fails without the fix.
+
+Still unconfirmed: starting the Blender and Krita bridges from the consoles of an interface
+the operator opened; `bpy.ops` from the bridge; several documents open in Krita.

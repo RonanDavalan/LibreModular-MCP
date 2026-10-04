@@ -1,9 +1,14 @@
 # Inkscape module
 
-**Status: not tried in a real Inkscape.** The module was tested with the test machine's
-own Python as interpreter and a small fake `inkscape` program that prints a version and
-writes a PNG; neither Inkscape nor its `inkex` library was installed. Every statement
-below about Inkscape itself is unconfirmed until the module has run against it.
+**Status: tried in Inkscape 1.4 (Debian 13 package), driven by the Hub over MCP on stdio.**
+With `/usr/bin/python3` (3.13.5) and `/usr/share/inkscape/extensions` on `PYTHONPATH`, the
+example below ran and returned `{"layers": ["Layer 1", "Notes"]}` in 141 ms; `get_state`
+then listed both layers and a PNG capture (RGBA, mode 600); a script that raised returned
+its traceback with the right line; a second script found the document as the first had
+left it. One defect came out of that run and is fixed: `import inkex` imports numpy, and on
+a machine with many cores its BLAS library started one thread per core, which never
+finished starting under the 2 GiB address-space limit (the call ended in `timeout` after
+30 s). The module now sets `OPENBLAS_NUM_THREADS=1` and `OMP_NUM_THREADS=1`.
 
 ## What it does
 
@@ -53,6 +58,7 @@ this environment and nothing else from the Hub (in particular never the token):
 | `PYTHONPATH` | `/usr/share/inkscape/extensions` |
 | `LMM_DOCUMENT` | The path of `current.svg` |
 | `LMM_WORK_DIR` | The work directory |
+| `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS` | `1`: numpy, which `inkex` imports, would otherwise start one thread per core |
 
 Files the script creates follow the Hub's creation mask, `077`: they are private. A
 script that replaces `current.svg` with a new file therefore leaves a private file the
@@ -105,7 +111,8 @@ says so. Nothing in the document is resolved or fetched, and a `DOCTYPE` without
 declarations is read without fetching its DTD. The Hub itself parses no XML.
 
 Layer names are document content: they are returned as they are and are never
-interpreted, whatever they say.
+interpreted, whatever they say. A layer made with `inkex.Layer.new` has no `id` until the
+script sets one, and is listed with `id: null`.
 
 ## Capture
 
@@ -125,7 +132,8 @@ nothing, and an Inkscape window the operator opened is never touched.
 ## Example
 
 A script that adds a layer with a rectangle through `inkex`, saves the document and
-returns the layer labels. It has not been run: there is no output to show.
+returns the layer labels. Run as written on a fresh document, it returns
+`{"layers": ["Layer 1", "Notes"]}`.
 
 ```python
 import json

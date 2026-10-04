@@ -1,9 +1,18 @@
 # Blender module
 
-**Status: not tried in a real Blender.** The bridge was written from the public Blender
-Python API (`bpy`) and tested without Blender: against a fake `bpy` module, and without
-any `bpy`. Every statement below about how Blender behaves is unconfirmed until the bridge
-has run inside Blender.
+**Status: tried in Blender 4.3.2 (Debian 13 package), in both ways of starting it.** The
+bridge was written from the public Blender Python API (`bpy`). It ran in Blender 4.3.2
+started without its interface (`blender --background --python <boot file>`, the boot file
+running the bridge and then sleeping so that Blender stayed up) and with its interface on a
+virtual X display (`xvfb-run blender --python <bridge file>`), driven by the Hub over MCP on
+stdio. In both, `get_state("hub")` listed `blender` as connected with version `4.3.2`;
+`get_state("blender")` returned the default scene (`Cube`, `Light`, `Camera`, frames 1 to
+250, engine `BLENDER_EEVEE_NEXT`, `Cube` selected); the example below returned
+`{"object": "Generated triangle", "objects": 4}`, after which the object list had four
+entries; a script that raised returned its traceback with the right line. A call took 1 ms
+without the interface and about 70 ms with it (the timer looks every 50 ms). Not part of
+those runs: a bridge started from the *Scripting* workspace console of an interface the
+operator opened, and `bpy.ops` operators.
 
 ## What it does
 
@@ -77,10 +86,11 @@ The bridge never starts on its own: the operator starts it by hand, each time.
    not hold a token made by `libremodular-mcp init`. To stop it, run `stop()` in the
    console where the file was run, or quit Blender.
 
-Started without the interface (`blender --background --python ...`), Blender is expected
-to quit as soon as the file has run, which would end the bridge with it: whether it keeps
-running long enough for requests to arrive is not known. In that mode no timer runs, so
-the bridge would call `bpy` directly from its own thread.
+Started without the interface (`blender --background --python ...`), Blender quits as soon
+as the file has run, which ends the bridge with it. To keep it up, run the bridge file from
+a boot file that then keeps the main thread busy (for example `time.sleep(100)`): the bridge
+serves meanwhile. In that mode no timer runs, so the bridge calls `bpy` directly from its
+own thread.
 
 To check the connection from the model's side, call `get_state` with the target `hub`:
 Blender is listed with `connected: true` and the version Blender reported.
@@ -105,8 +115,8 @@ Each script runs in a fresh namespace that holds:
   (`bpy.app.timers.register`), which looks for queued scripts every 50 milliseconds and
   runs them; the connection thread waits for the outcome. Outside Blender's interface (the
   stand-alone `bpy` package, background mode, or a bridge started from another thread), no
-  timer would ever run, so scripts are called directly. None of this has been tried in
-  Blender.
+  timer would ever run, so scripts are called directly. Both paths ran in Blender 4.3.2
+  (see the status above).
 - A script that never returns blocks Blender's main thread; the Hub answers `timeout`, then
   `busy` until the script ends, and never sends a second script meanwhile.
 - Operators (`bpy.ops`) depend on the context they run in; from a timer there is no active
@@ -145,8 +155,8 @@ the 3D view without the interface. A script can still render on purpose, into
 
 ## Example
 
-A script that adds a triangle to the active scene with the data API. It has not been run:
-there is no output to show.
+A script that adds a triangle to the active scene with the data API. Run as written in
+the default scene, it returns `{"object": "Generated triangle", "objects": 4}`.
 
 ```python
 mesh = bpy.data.meshes.new("Generated mesh")

@@ -35,6 +35,9 @@ pub const DOCUMENT_NAME: &str = "current.svg";
 pub const SCRIPT_NAME: &str = "script.py";
 /// The only variables a started process inherits from the Hub.
 pub const INHERITED_VARIABLES: [&str; 4] = ["PATH", "HOME", "LANG", "LC_ALL"];
+
+/// Set to `1` in every process: keeps numpy's BLAS from starting a thread per core.
+pub const THREAD_VARIABLES: [&str; 2] = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS"];
 /// The address space of a script process, by default.
 pub const DEFAULT_MEMORY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// Open files a script process may hold.
@@ -277,6 +280,12 @@ pub fn process_environment(
         .cloned()
         .collect();
     env.push(("PYTHONPATH".into(), extensions.as_os_str().to_owned()));
+    // `inkex` imports numpy, whose BLAS library starts one thread per core. Under the
+    // address-space limit, thirty-two threads each reserving their stack never finish
+    // starting and the import hangs until the timeout.
+    for name in THREAD_VARIABLES {
+        env.push((name.into(), "1".into()));
+    }
     if let Some((document, work_dir)) = document {
         env.push(("LMM_DOCUMENT".into(), document.as_os_str().to_owned()));
         env.push(("LMM_WORK_DIR".into(), work_dir.as_os_str().to_owned()));

@@ -1,9 +1,18 @@
 # Krita module
 
-**Status: not tried in a real Krita.** The bridge was written from the public Krita 5
-Python API (the `krita` module and its `Krita` class) and tested without Krita: against a
-fake `krita` module and a fake `QtCore`, and without either. Every statement below about
-how Krita behaves is unconfirmed until the bridge has run inside Krita.
+**Status: tried in Krita 5.2.9 (Debian 13 package) on a virtual X display, not yet from
+Scripter.** The bridge was written from the public Krita 5 Python API (the `krita` module
+and its `Krita` class). It ran in Krita 5.2.9 started under `xvfb-run`, with a throwaway
+profile in which a one-line startup extension ran the generated file in the thread of the
+interface (as Scripter does), driven by the Hub over MCP on stdio. `get_state("hub")`
+listed `krita` as connected with version `5.2.9`; with no document, `get_state("krita")`
+returned `document: null`; a script created a 300 by 200 document and opened it in the
+window; the state then listed the document (`RGBA`, `U8`, profile `sRGB-elle-V2-srgbtrc.icc`),
+its `Background` layer and a PNG capture of 300 by 200 pixels (RGBA, mode 600); the example
+below added a layer and the next state listed both; a script that raised returned its
+traceback with the right line. A call took between 1 and 7 ms once started. Not part of
+that run: starting the bridge from Scripter itself (the menu path, the environment
+variables that reach it, its lifetime when Scripter closes).
 
 ## What it does
 
@@ -105,7 +114,8 @@ Each script runs in a fresh namespace that holds:
   queued signal, and the connection thread waits for the outcome. A `QTimer` started from
   the connection thread is not used: that thread has no Qt event loop, so the timer would
   never fire. Outside Krita (no `krita` module, or PyQt installed without a running Qt
-  application), scripts are called directly. None of this has been tried in Krita.
+  application), scripts are called directly. The queued-signal path ran in Krita 5.2.9
+  (see the status above).
 - A script that never returns blocks Krita's interface; the Hub answers `timeout`, then
   `busy` until the script ends, and never sends a second script meanwhile.
 
@@ -140,8 +150,8 @@ exported, nor changed. Without an active document there is no capture
 
 ## Example
 
-A script that adds an empty paint layer to the active document. It has not been run:
-there is no output to show.
+A script that adds an empty paint layer to the active document. Run as written on a new
+document that had only its `Background` layer, it returns `{"layers": ["Background", "Notes"]}`.
 
 ```python
 document = Krita.instance().activeDocument()
