@@ -1,10 +1,10 @@
-//! The `libremodular-mcp` binary, run as an MCP client would run it.
+//! Le binaire `libremodular-mcp`, exécuté comme un client MCP l'exécuterait.
 //!
-//! Why this module exists
-//! The standard output belongs to the protocol: one stray line breaks the
-//! client. And the server must refuse to start, without showing the token, when
-//! a security condition cannot be verified. Both are only observable on the
-//! real binary, started with private temporary directories.
+//! Pourquoi ce module existe
+//! La sortie standard appartient au protocole : une seule ligne parasite casse le client. Et le
+//! serveur doit refuser de démarrer, sans montrer le jeton, quand une condition de sécurité ne peut
+//! pas être vérifiée. Les deux ne s'observent que sur le vrai binaire, démarré avec des répertoires
+//! temporaires privés.
 
 #[macro_use]
 mod common;
@@ -120,15 +120,15 @@ fn a_full_session_on_stdio_writes_nothing_but_the_protocol() {
     assert_eq!(bridge.scripts(), vec!["print('hi')".to_owned()]);
 }
 
-// --- refusing to start -------------------------------------------------------------
+// --- refuser de démarrer ------------------------------------------------------------
 
-/// The Hub must exit with code 1, print nothing on stdout, explain on stderr and
-/// never show the token.
+/// Le Hub doit sortir avec le code 1, ne rien afficher sur stdout, expliquer sur stderr et ne
+/// jamais montrer le jeton.
 fn check_refuses_to_start(layout: &Layout, with_runtime: bool) -> Verdict {
     let mut child = command(layout, with_runtime)
         .spawn()
         .map_err(|e| e.to_string())?;
-    // A client that starts a session: a Hub that refuses must not answer it.
+    // Un client qui ouvre une session : un Hub qui refuse ne doit pas lui répondre.
     if let Some(mut stdin) = child.stdin.take() {
         let hello = rpc(
             1,
@@ -203,11 +203,11 @@ fn a_malformed_token_file_is_refused_without_quoting_it() {
     must_pass(check_refuses_to_start(&layout, true));
 }
 
-// --- stopping on a signal ------------------------------------------------------------
+// --- s'arrêter sur un signal --------------------------------------------------------
 
-/// Start the Hub, wait until it answers, plant a capture old enough to be
-/// purged, send `signal`, and require that the process ends in time without the
-/// capture and without showing the token.
+/// Démarrer le Hub, attendre qu'il réponde, placer une capture assez ancienne pour être purgée,
+/// envoyer `signal`, et exiger que le processus se termine à temps sans la capture et sans montrer
+/// le jeton.
 fn check_signal_purges_captures(signal: Signal) -> Verdict {
     let base = common::private_tempdir();
     let layout = layout(base.path());
@@ -226,7 +226,7 @@ fn check_signal_purges_captures(signal: Signal) -> Verdict {
     let mut line = String::new();
     stdout.read_line(&mut line).map_err(|e| e.to_string())?;
     ensure!(line.contains("\"result\""), "the Hub did not start: {line}");
-    // Planted once the Hub runs, so that only the shutdown can remove it.
+    // Placée une fois le Hub lancé, pour que seul l'arrêt puisse la retirer.
     let captures = layout.runtime.join("libremodular-mcp").join("captures");
     let capture = captures.join("gimp-old.png");
     write_file(&capture, 0o600, "not really a png");
@@ -275,7 +275,7 @@ fn sigint_purges_the_captures_before_the_hub_exits() {
 
 #[test]
 fn counter_proof_a_stop_without_the_purge_is_detected() {
-    // SIGKILL cannot be handled: the process ends the way an unhandled signal
-    // would end it, and the check must notice the capture left behind.
+    // SIGKILL ne peut pas être traité : le processus se termine comme se terminerait un signal non
+    // traité, et le contrôle doit remarquer la capture laissée.
     must_fail(check_signal_purges_captures(Signal::KILL));
 }

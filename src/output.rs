@@ -1,9 +1,9 @@
-//! Single exit point for everything the Hub returns, writes or logs.
+//! Point de sortie unique de tout ce que le Hub rend, écrit ou journalise.
 //!
-//! Why this module exists
-//! Protecting one output path at a time leaves the others open. Every payload goes
-//! through `finalize`, which protects the class of data: the bridge token never
-//! leaves, sizes are bounded, and only JSON-safe values come out.
+//! Pourquoi ce module existe
+//! Protéger un chemin de sortie à la fois laisse les autres ouverts. Chaque charge utile
+//! passe par `finalize`, qui protège la classe de données : le jeton ne sort jamais,
+//! les tailles sont bornées, et seules des valeurs sûres en JSON sortent.
 
 use std::fmt;
 
@@ -12,17 +12,17 @@ use serde_json::{Map, Value};
 use crate::config::Limits;
 use crate::security::{SecurityError, Token, bounded};
 
-/// What replaces every occurrence of the token.
+/// Ce qui remplace chaque occurrence du jeton.
 pub const REDACTION: &str = "[redacted]";
 const MAX_DEPTH: usize = 64;
 const TOO_DEEP: &str = "[nested too deep]";
 
-/// A payload that cannot be turned into a safe answer.
+/// Une charge utile qui ne peut pas devenir une réponse sûre.
 #[derive(Debug)]
 pub enum OutputError {
-    /// The payload of a tool answer is always a JSON object.
+    /// La charge utile d'une réponse d'outil est toujours un objet JSON.
     NotAnObject,
-    /// A size bound could not be applied.
+    /// Une borne de taille n'a pas pu être appliquée.
     Bound(SecurityError),
     Serialize(serde_json::Error),
 }
@@ -47,7 +47,7 @@ impl std::error::Error for OutputError {
     }
 }
 
-/// Replace every occurrence of `needle` in `text`, ignoring ASCII case.
+/// Remplace chaque occurrence de `needle` dans `text`, sans tenir compte de la casse ASCII.
 fn redact(text: &str, needle: &str) -> String {
     if needle.is_empty() {
         return text.to_owned();
@@ -73,8 +73,8 @@ struct Scrubber<'t> {
 
 impl Scrubber<'_> {
     fn text(&mut self, value: &str) -> Result<String, OutputError> {
-        // The token is removed before truncation: cutting first could leave a
-        // prefix of the token at the end of the kept text.
+        // Le jeton est retiré avant la troncature : couper d'abord pourrait laisser un
+        // préfixe du jeton à la fin du texte conservé.
         let cleaned = redact(value, self.token);
         let (cut, was_cut) = bounded(&cleaned, self.limit).map_err(OutputError::Bound)?;
         self.truncated = self.truncated || was_cut;
@@ -106,14 +106,15 @@ impl Scrubber<'_> {
     }
 }
 
-/// Return a JSON-safe copy of `payload`: token removed, strings bounded.
+/// Rend une copie de `payload` sûre en JSON : jeton retiré, chaînes bornées.
 ///
-/// Each string is bounded to `max_output_bytes`. When anything was cut, the
-/// `truncated` key is set to true. Structures nested deeper than a fixed depth are
-/// replaced by a marker, so a hostile payload cannot exhaust the stack.
+/// Chaque chaîne est bornée à `max_output_bytes`. Quand quelque chose a été coupé, la
+/// clé `truncated` vaut vrai. Les structures imbriquées plus profondément qu'une
+/// profondeur fixe sont remplacées par un marqueur, pour qu'une charge hostile ne
+/// puisse pas épuiser la pile.
 ///
-/// # Errors
-/// The payload is not an object, or a bound cannot be applied.
+/// # Erreurs
+/// La charge utile n'est pas un objet, ou une borne ne peut pas être appliquée.
 pub fn finalize(payload: &Value, token: &Token, limits: &Limits) -> Result<Value, OutputError> {
     if !payload.is_object() {
         return Err(OutputError::NotAnObject);
@@ -132,10 +133,10 @@ pub fn finalize(payload: &Value, token: &Token, limits: &Limits) -> Result<Value
     Ok(result)
 }
 
-/// Serialise a finalized payload as compact JSON.
+/// Sérialise une charge utile finalisée en JSON compact.
 ///
-/// # Errors
-/// [`OutputError::Serialize`] if the value cannot be written.
+/// # Erreurs
+/// [`OutputError::Serialize`] si la valeur ne peut pas être écrite.
 pub fn to_text(payload: &Value) -> Result<String, OutputError> {
     serde_json::to_string(payload).map_err(OutputError::Serialize)
 }

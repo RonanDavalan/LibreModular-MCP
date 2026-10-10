@@ -1,7 +1,7 @@
-//! Tests of the init command.
+//! Tests de la commande init.
 //!
-//! Why this module exists
-//! The operator's first command creates the token and must do it safely.
+//! Pourquoi ce module existe
+//! La première commande de l'opérateur crée le jeton et doit le faire en sécurité.
 
 #[macro_use]
 mod common;

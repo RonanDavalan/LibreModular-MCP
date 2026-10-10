@@ -1,11 +1,11 @@
-//! Shared helpers: obviously fake tokens, temporary directories, and the
-//! counter-proof machinery.
+//! Assistants partagés : jetons manifestement faux, répertoires temporaires, et la mécanique de
+//! contre-preuve.
 //!
-//! Why this module exists
-//! Tests must never touch the real configuration or a real token, and every
-//! security check needs a way to prove it can fail: a check is a function that
-//! returns a verdict, it must pass on the real implementation and fail on a
-//! deliberately defective one.
+//! Pourquoi ce module existe
+//! Les tests ne doivent jamais toucher la vraie configuration ni un vrai jeton, et chaque contrôle de
+//! sécurité a besoin d'un moyen de prouver qu'il peut échouer : un contrôle est une fonction qui rend
+//! un verdict, elle doit réussir sur l'implémentation réelle et échouer sur une implémentation
+//! défectueuse exprès.
 
 #![allow(dead_code)]
 
@@ -18,11 +18,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 pub const FAKE_TOKEN: &str = "test-token-0000";
-/// A well-formed (64 hexadecimal characters) and obviously fake token.
+/// Un jeton bien formé (64 caractères hexadécimaux) et manifestement faux.
 pub const FILE_TOKEN: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 pub const WORK_DIR: &str = "/run/user/1000/libremodular-mcp/work/gimp";
 
-/// The result of a check: `Err` carries what was wrong.
+/// Le résultat d'un contrôle : `Err` porte ce qui n'allait pas.
 pub type Verdict = Result<(), String>;
 
 #[macro_export]
@@ -34,14 +34,14 @@ macro_rules! ensure {
     };
 }
 
-/// The check must accept the real implementation.
+/// Le contrôle doit accepter l'implémentation réelle.
 pub fn must_pass(verdict: Verdict) {
     if let Err(message) = verdict {
         panic!("{message}");
     }
 }
 
-/// Counter-proof: a check that never fails on a defective implementation proves nothing.
+/// Contre-preuve : un contrôle qui n'échoue jamais sur une implémentation défectueuse ne prouve rien.
 pub fn must_fail(verdict: Verdict) {
     assert!(
         verdict.is_err(),
@@ -49,7 +49,7 @@ pub fn must_fail(verdict: Verdict) {
     );
 }
 
-/// A new empty directory, so one check can run against several implementations.
+/// Un nouveau répertoire vide, pour qu'un contrôle puisse s'exécuter contre plusieurs implémentations.
 pub fn fresh(base: &Path) -> PathBuf {
     let path = base.join(format!("case-{}", unique()));
     fs::create_dir(&path).expect("create a fresh directory");
@@ -57,8 +57,8 @@ pub fn fresh(base: &Path) -> PathBuf {
     path
 }
 
-/// A temporary directory that is private whatever the umask of the test process
-/// is: the Hub refuses to put its files anywhere else.
+/// Un répertoire temporaire privé quel que soit le umask du processus de test : le Hub refuse de
+/// poser ses fichiers ailleurs.
 pub fn private_tempdir() -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("temporary directory");
     fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700)).expect("make it private");

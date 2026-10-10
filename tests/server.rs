@@ -1,8 +1,8 @@
-//! The two tools, end to end through MCP, against the reference bridge.
+//! Les deux outils, de bout en bout par MCP, face au pont de référence.
 //!
-//! Why this module exists
-//! Each status the model can receive must be reached for real, and each check of
-//! the server must be seen to stop a script before it reaches an application.
+//! Pourquoi ce module existe
+//! Chaque statut que le modèle peut recevoir doit être atteint pour de vrai, et chaque contrôle du
+//! serveur doit être vu arrêtant un script avant qu'il atteigne une application.
 
 #[macro_use]
 mod common;
@@ -36,7 +36,7 @@ fn free_port() -> u16 {
     listener.local_addr().expect("address").port()
 }
 
-// --- exactly two tools ---------------------------------------------------------
+// --- exactement deux outils ---------------------------------------------------------
 
 fn check_exactly_two_tools(names: &[String]) -> Verdict {
     let mut sorted = names.to_vec();
@@ -109,7 +109,7 @@ fn a_parameter_outside_the_contract_is_rejected() {
     assert!(bridge.scripts().is_empty());
 }
 
-// --- every status --------------------------------------------------------------
+// --- chaque statut ------------------------------------------------------------------
 
 #[test]
 fn status_ok_carries_the_bridge_answer_with_the_fixed_keys() {
@@ -363,8 +363,7 @@ fn guard_warnings_reach_the_model_on_stderr() {
     );
 }
 
-/// The script must be refused, and never reach the bridge, once `break_journal`
-/// has run on the Hub.
+/// Le script doit être refusé, et n'atteindre jamais le pont, une fois `break_journal` exécuté sur le Hub.
 fn check_journal_failure_refuses_before_sending(
     base: &Path,
     break_journal: fn(&TestHub),
@@ -413,7 +412,7 @@ fn status_refused_when_the_journal_cannot_be_written_and_nothing_is_sent() {
 
 #[test]
 fn counter_proof_the_journal_check_notices_a_script_that_was_sent() {
-    // With a working journal the script is sent: the check must say so.
+    // Avec un journal qui fonctionne, le script est envoyé : le contrôle doit le dire.
     let base = common::private_tempdir();
     must_fail(check_journal_failure_refuses_before_sending(
         &common::fresh(base.path()),
@@ -530,7 +529,7 @@ fn a_connection_lost_after_the_script_was_sent_is_never_replayed() {
     assert_eq!(bridge.scripts().len(), 1);
 }
 
-// --- output bounds and the token ------------------------------------------------
+// --- bornes de sortie et jeton ------------------------------------------------------
 
 #[test]
 fn an_output_over_the_limit_is_truncated_and_marked() {
@@ -587,7 +586,7 @@ fn the_token_never_leaves_through_a_script_its_output_or_the_journal() {
     }
 }
 
-// --- get_state ----------------------------------------------------------------
+// --- get_state ----------------------------------------------------------------------
 
 #[test]
 fn hub_state_only_probes_health_and_lists_the_configuration() {
@@ -752,9 +751,9 @@ fn every_get_state_asks_the_application_again() {
     assert_eq!(bridge.kinds(), vec!["state", "state"]);
 }
 
-// --- the work directory handed to the state --------------------------------------
+// --- le répertoire de travail remis à l'état ----------------------------------------
 
-/// A module that records the work directory of each call and answers nothing else.
+/// Un module qui enregistre le répertoire de travail de chaque appel et ne répond rien d'autre.
 #[derive(Default)]
 struct RecordingModule {
     executed_in: Mutex<Vec<PathBuf>>,
@@ -814,7 +813,7 @@ fn get_state_prepares_the_private_work_directory_and_hands_over_the_one_execute_
     let (hub, recorder) = hub_with_recorder(base.path());
     let mut session = Session::start(hub.server.clone());
     let work = hub.volatile.join("work").join("gimp");
-    // The state comes first: the directory must exist, private, before any script.
+    // L'état vient d'abord : le répertoire doit exister, privé, avant tout script.
     assert_eq!(session.state("gimp")["connected"], true);
     assert_eq!(common::mode_of(&work), 0o700);
     assert_eq!(common::mode_of(&hub.volatile.join("work")), 0o700);
@@ -826,12 +825,12 @@ fn get_state_prepares_the_private_work_directory_and_hands_over_the_one_execute_
     assert_eq!(*recorder.executed_in.lock().expect("executed"), vec![work]);
 }
 
-/// With the work directory of the application made unsafe by `damage`, the state
-/// must be refused and the module must not be asked anything.
+/// Avec le répertoire de travail de l'application rendu peu sûr par `damage`, l'état doit être refusé
+/// et le module ne doit être interrogé sur rien.
 fn check_the_state_refuses_an_unsafe_work_directory(base: &Path, damage: fn(&Path)) -> Verdict {
     let (hub, recorder) = hub_with_recorder(base);
     let work = hub.volatile.join("work").join("gimp");
-    // Every directory above is private, so only `damage` decides the outcome.
+    // Chaque répertoire au-dessus est privé, de sorte que seul `damage` décide du résultat.
     fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
@@ -873,7 +872,7 @@ fn get_state_refuses_a_work_directory_open_to_others() {
 
 #[test]
 fn counter_proof_a_state_that_ignores_the_work_directory_check_is_detected() {
-    // A private directory is accepted, so the module is asked: the check must say so.
+    // Un répertoire privé est accepté, donc le module est interrogé : le contrôle doit le dire.
     let base = common::private_tempdir();
     must_fail(check_the_state_refuses_an_unsafe_work_directory(
         &common::fresh(base.path()),
@@ -881,7 +880,7 @@ fn counter_proof_a_state_that_ignores_the_work_directory_check_is_detected() {
     ));
 }
 
-// --- purge ----------------------------------------------------------------------
+// --- purge --------------------------------------------------------------------------
 
 #[test]
 fn captures_are_purged_by_age_and_by_count_on_each_call() {
@@ -908,7 +907,7 @@ fn captures_are_purged_by_age_and_by_count_on_each_call() {
     assert_eq!(left.len(), 50, "at most fifty captures");
     assert_eq!(left.first().map(String::as_str), Some("gimp-000.png"));
     assert_eq!(left.last().map(String::as_str), Some("gimp-049.png"));
-    // Half an hour later, the captures older than an hour go.
+    // Une demi-heure plus tard, les captures de plus d'une heure partent.
     hub.advance(Duration::from_secs(3600 - 245));
     session.state("hub");
     let count = fs::read_dir(&captures).expect("list").count();

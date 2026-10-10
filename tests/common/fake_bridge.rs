@@ -1,10 +1,10 @@
-//! A reference bridge that speaks the protocol, without any application.
+//! Un pont de référence qui parle le protocole, sans aucune application.
 //!
-//! Why this module exists
-//! The Hub must be tested end to end while no application is installed, and its
-//! failure paths need a bridge that misbehaves on demand. This implementation is
-//! written from the protocol description, independently of the Hub's client, so
-//! that a mistake in the client cannot hide in a shared helper.
+//! Pourquoi ce module existe
+//! Le Hub doit être testé de bout en bout sans qu'aucune application soit installée, et ses
+//! chemins d'échec ont besoin d'un pont qui se conduit mal à la demande. Cette implémentation est
+//! écrite d'après la description du protocole, indépendamment du client du Hub, pour qu'une
+//! erreur du client ne puisse pas se cacher dans un assistant partagé.
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
@@ -15,57 +15,57 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-/// The fake bridge never buffers more than this in one line.
+/// Le faux pont ne met jamais en tampon plus que cela dans une ligne.
 const LINE_CAP: usize = 64 * 1024 * 1024;
 const POLL: Duration = Duration::from_millis(5);
 
-/// What the bridge does with the `hello` it receives.
+/// Ce que le pont fait du `hello` qu'il reçoit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelloMode {
-    /// Check the token in constant time and answer a valid hello.
+    /// Contrôle le jeton en temps constant et répond à un hello valide.
     Normal,
-    /// Defective on purpose: accept any token.
+    /// Défectueux exprès : accepte n'importe quel jeton.
     AcceptAnyToken,
-    /// Answer `ok: false`.
+    /// Répond `ok: false`.
     Refuse,
-    /// Answer a line that is not JSON.
+    /// Répond une ligne qui n'est pas du JSON.
     Malformed,
-    /// Close the connection without answering.
+    /// Ferme la connexion sans répondre.
     Close,
-    /// Answer a hello for another protocol version.
+    /// Répond un hello pour une autre version du protocole.
     WrongProtocol,
-    /// Answer a valid hello that announces `krita` instead of `gimp`.
+    /// Répond un hello valide qui annonce `krita` au lieu de `gimp`.
     OtherApp,
-    /// Check the token like `Normal`, and announce `libreoffice`.
+    /// Contrôle le jeton comme `Normal`, et annonce `libreoffice`.
     Libreoffice,
 }
 
-/// What the bridge answers to one request.
+/// Ce que le pont répond à une requête.
 pub enum Reply {
-    /// This object, with the request's `id` added.
+    /// Cet objet, avec l'`id` de la requête ajouté.
     Json(Value),
-    /// These bytes, exactly; no newline is added.
+    /// Ces octets, exactement ; aucun saut de ligne n'est ajouté.
     Raw(Vec<u8>),
-    /// Nothing at all.
+    /// Rien du tout.
     Silent,
-    /// The object, after a delay.
+    /// L'objet, après un délai.
     Late(Duration, Value),
-    /// Close the connection after reading the request.
+    /// Ferme la connexion après avoir lu la requête.
     Close,
-    /// Say nothing for this long, then close the connection.
+    /// Ne dit rien pendant ce temps, puis ferme la connexion.
     CloseAfter(Duration),
 }
 
-/// Decides the reply to each request (the parsed line, `id` included).
+/// Décide de la réponse à chaque requête (la ligne analysée, `id` compris).
 pub type Handler = Arc<dyn Fn(&Value) -> Reply + Send + Sync>;
 
-/// What the bridge observed.
+/// Ce que le pont a observé.
 #[derive(Default)]
 pub struct Stats {
     pub connections: AtomicUsize,
-    /// Connections whose service is over, counted once the bridge is free again.
+    /// Les connexions dont le service est terminé, comptées quand le pont est de nouveau libre.
     pub closed: AtomicUsize,
-    /// Connections closed at once because the previous one closed too recently.
+    /// Les connexions fermées aussitôt parce que la précédente s'était fermée trop récemment.
     pub turned_away: AtomicUsize,
     pub authenticated: AtomicUsize,
     pub requests: AtomicUsize,
@@ -80,7 +80,7 @@ pub struct FakeBridge {
     thread: Option<JoinHandle<()>>,
 }
 
-/// Compare without stopping at the first difference, as a real bridge must.
+/// Compare sans s'arrêter à la première différence, comme un vrai pont doit le faire.
 fn same_secret(given: &[u8], expected: &[u8]) -> bool {
     let mut difference = given.len() ^ expected.len();
     for (index, byte) in expected.iter().enumerate() {
@@ -90,14 +90,14 @@ fn same_secret(given: &[u8], expected: &[u8]) -> bool {
 }
 
 impl FakeBridge {
-    /// Start listening on an ephemeral loopback port.
+    /// Commence à écouter sur un port de bouclage éphémère.
     pub fn start(token: &str, hello: HelloMode, handler: Handler) -> FakeBridge {
         FakeBridge::start_slow_to_release(token, hello, handler, Duration::ZERO)
     }
 
-    /// Like [`FakeBridge::start`], but a connection that arrives less than
-    /// `release` after the previous served connection closed is closed at once,
-    /// as a real bridge does while it has not yet freed its single place.
+    /// Comme [`FakeBridge::start`], mais une connexion qui arrive moins de `release` après la
+    /// fermeture de la connexion servie précédente est fermée aussitôt, comme le fait un vrai pont
+    /// tant qu'il n'a pas encore libéré sa place unique.
     pub fn start_slow_to_release(
         token: &str,
         hello: HelloMode,
@@ -107,8 +107,8 @@ impl FakeBridge {
         FakeBridge::launch(token, hello, handler, release, false)
     }
 
-    /// A bridge with a single place, as a real one has: a connection that arrives
-    /// while another is being served is closed at once, never queued.
+    /// Un pont à une seule place, comme un vrai : une connexion qui arrive pendant qu'une autre est
+    /// servie est fermée aussitôt, jamais mise en file.
     pub fn start_single_place(token: &str, hello: HelloMode, handler: Handler) -> FakeBridge {
         FakeBridge::launch(token, hello, handler, Duration::ZERO, true)
     }
@@ -163,7 +163,7 @@ impl FakeBridge {
                                 }));
                                 continue;
                             }
-                            // One connection at a time, like a real bridge.
+                            // Une connexion à la fois, comme un vrai pont.
                             serve(stream, &token, hello, &handler, &stats, &stop);
                             last_closed = Some(Instant::now());
                             stats.closed.fetch_add(1, Ordering::SeqCst);
@@ -187,7 +187,7 @@ impl FakeBridge {
         }
     }
 
-    /// A bridge that answers every `execute` with `ok` and the script on stdout.
+    /// Un pont qui répond à chaque `execute` par `ok` et le script sur stdout.
     pub fn echo(token: &str) -> FakeBridge {
         FakeBridge::start(
             token,
@@ -239,12 +239,12 @@ impl Drop for FakeBridge {
     }
 }
 
-/// Wrap a closure as a handler.
+/// Enveloppe une fermeture en gestionnaire.
 pub fn handler(f: impl Fn(&Value) -> Reply + Send + Sync + 'static) -> Handler {
     Arc::new(f)
 }
 
-/// Read one line; `None` on close, on stop, or on a line over the cap.
+/// Lit une ligne ; `None` à la fermeture, à l'arrêt, ou sur une ligne au-delà du plafond.
 fn read_line(stream: &mut TcpStream, pending: &mut Vec<u8>, stop: &AtomicBool) -> Option<Vec<u8>> {
     loop {
         if let Some(end) = pending.iter().position(|b| *b == b'\n') {
@@ -298,7 +298,7 @@ fn serve(
         return;
     };
     let Ok(Value::Object(greeting)) = serde_json::from_slice::<Value>(&first) else {
-        return; // not a hello: close without a word
+        return; // pas un hello : fermer sans un mot
     };
     let given = greeting.get("token").and_then(Value::as_str).unwrap_or("");
     let valid = greeting.get("type").and_then(Value::as_str) == Some("hello")
@@ -324,7 +324,7 @@ fn serve(
             HelloMode::Normal | HelloMode::AcceptAnyToken | HelloMode::Libreoffice
         )
     {
-        // Leave the client time to read the answer before the connection closes.
+        // Laisse au client le temps de lire la réponse avant que la connexion se ferme.
         std::thread::sleep(Duration::from_millis(50));
         return;
     }
@@ -386,7 +386,7 @@ fn serve(
     }
 }
 
-/// The smallest valid PNG: one transparent pixel.
+/// Le plus petit PNG valide : un pixel transparent.
 pub const TINY_PNG: [u8; 67] = [
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
     0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
@@ -395,7 +395,7 @@ pub const TINY_PNG: [u8; 67] = [
     0x42, 0x60, 0x82,
 ];
 
-/// Open a raw connection and send one line, as an arbitrary local client would.
+/// Ouvre une connexion brute et envoie une ligne, comme le ferait un client local quelconque.
 pub fn raw_exchange(port: u16, line: &[u8]) -> Vec<u8> {
     let mut stream =
         TcpStream::connect(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).expect("connect");

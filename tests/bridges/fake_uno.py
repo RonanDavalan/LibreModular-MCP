@@ -1,10 +1,9 @@
-"""A fake LibreOffice and a fake `uno` package for the tests of the UNO adapter.
+"""Un faux LibreOffice et un faux paquet `uno` pour les tests de l'adaptateur UNO.
 
-Why this module exists
-LibreOffice may or may not be installed where the tests run, and `import uno` may
-or may not work there. The tests must give the same verdict either way, so they
-install this fake in `sys.modules` for the length of a check, or make `import uno`
-fail on purpose, and never look at the machine.
+Pourquoi ce module existe
+LibreOffice peut être installé ou non là où les tests s'exécutent, et `import uno` peut y marcher ou
+non. Les tests doivent donner le même verdict dans les deux cas : ils installent donc ce faux dans
+`sys.modules` le temps d'un contrôle, ou font échouer `import uno` exprès, et ne regardent jamais la machine.
 """
 
 import contextlib
@@ -24,11 +23,11 @@ TABLE = "com.sun.star.text.TextTable"
 
 
 class NoConnectException(Exception):
-    """What UNO raises while nothing listens on the port."""
+    """Ce qu'UNO lève tant que rien n'écoute sur le port."""
 
 
 class Forbidden(AssertionError):
-    """A call the bridge must never make."""
+    """Un appel que le pont ne doit jamais faire."""
 
 
 class PropertyValue:
@@ -38,7 +37,7 @@ class PropertyValue:
 
 
 class Element:
-    """One thing a Writer text lists: a paragraph or a table."""
+    """Une chose qu'un texte Writer liste : un paragraphe ou un tableau."""
 
     def __init__(self, service):
         self.service = service
@@ -59,8 +58,8 @@ class Enumeration:
 
 
 class Document:
-    """A document of one family. `forbidden_calls` lists the calls that must never
-    be made; each of them also raises, so that a bridge making one fails loudly."""
+    """Un document d'une famille. `forbidden_calls` liste les appels qui ne doivent jamais être faits ;
+    chacun d'eux lève aussi, pour qu'un pont qui en fait un échoue bruyamment."""
 
     def __init__(self, family, title="Untitled 1", **details):
         self.family = family
@@ -144,8 +143,8 @@ class Desktop:
         return self.current
 
     def loadComponentFromURL(self, url, target, flags, arguments):
-        """What a script calls to create a document: a new one of the family the
-        factory names, which becomes the current document, as in LibreOffice."""
+        """Ce qu'un script appelle pour créer un document : un nouveau de la famille que la fabrique nomme,
+        qui devient le document courant, comme dans LibreOffice."""
         self.loaded.append((url, target, flags, tuple(arguments)))
         family = FACTORIES[url]
         document = Document(family, "Untitled %d" % (len(self.documents) + 1))
@@ -162,7 +161,7 @@ class Desktop:
 
 
 class Other:
-    """A component that is a document of none of the three families."""
+    """Un composant qui est un document d'aucune des trois familles."""
 
     Title = "Drawing"
 
@@ -175,7 +174,7 @@ class Other:
 
 
 class Office:
-    """The LibreOffice process: it listens or not, and has a desktop and a version."""
+    """Le processus LibreOffice : il écoute ou non, et a un bureau et une version."""
 
     def __init__(self, version="25.2.3", listening=True, desktop=None):
         self.version = version
@@ -184,11 +183,11 @@ class Office:
         self.resolutions = []
         self.configuration_requests = []
         self.attempts = 0
-        # With a number, LibreOffice starts listening at that attempt.
+        # Avec un nombre, LibreOffice commence à écouter à cette tentative.
         self.listens_from_attempt = None
-        # A bridge that never gives up would keep a thread spinning for the rest of
-        # the run: past this many attempts the fake ends the thread (SystemExit is
-        # not an Exception, so no retry loop swallows it).
+        # Un pont qui n'abandonne jamais ferait tourner un fil pour le reste de l'exécution : au-delà de ce
+        # nombre de tentatives le faux termine le fil (SystemExit n'est pas une Exception, aucune boucle de
+        # nouvel essai ne l'avale).
         self.abort_after_attempts = 2000
 
 
@@ -245,8 +244,8 @@ NAMES = ("uno", "com", "com.sun", "com.sun.star", "com.sun.star.beans")
 
 @contextlib.contextmanager
 def installed(office=None, absent=False):
-    """Install the fake `uno` package for `office`, or make `import uno` fail when
-    `absent`, whatever the machine has. The real modules come back afterwards."""
+    """Installe le faux paquet `uno` pour `office`, ou fait échouer `import uno` quand `absent`, quelle
+    que soit la machine. Les vrais modules reviennent ensuite."""
     saved = {name: sys.modules[name] for name in NAMES if name in sys.modules}
     for name in NAMES:
         sys.modules.pop(name, None)

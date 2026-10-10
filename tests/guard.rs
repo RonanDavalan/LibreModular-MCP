@@ -1,7 +1,7 @@
-//! Script guard tests.
+//! Tests du garde-fou de script.
 //!
-//! Why this module exists
-//! The guard must refuse the dangerous constructs and stay silent on normal scripts.
+//! Pourquoi ce module existe
+//! Le garde-fou doit refuser les constructions dangereuses et rester silencieux sur les scripts ordinaires.
 
 #[macro_use]
 mod common;
@@ -337,8 +337,8 @@ fn one_hundred_thousand_nested_parentheses_neither_crash_the_process_nor_pass() 
             "{name}"
         );
     }
-    // An f-string can hide nesting from a naive scanner; whatever the answer is,
-    // the process must still be alive to give it.
+    // Une f-string peut cacher l'imbrication à un analyseur naïf ; quelle que soit la réponse, le
+    // processus doit encore être vivant pour la donner.
     let _ = analyse(&fstrings);
 }
 
@@ -390,8 +390,8 @@ fn a_script_too_large_for_a_safe_analysis_is_refused_not_attempted() {
 
 #[test]
 fn name_resolution_that_explodes_is_refused_within_a_bounded_time() {
-    // Twelve levels of a name assigned twenty times each: every resolution would
-    // try twenty to the power of twelve combinations without a work budget.
+    // Douze niveaux d'un nom affecté vingt fois chacun : chaque résolution essaierait vingt puissance
+    // douze combinaisons sans budget de travail.
     let mut script = String::new();
     for level in 0..12 {
         for _ in 0..20 {
@@ -666,8 +666,8 @@ fn a_leading_tilde_expands_to_the_home_directory_and_keeps_the_rest_of_the_text(
         found_construct("open('~/a/b.txt', 'w')\n").as_deref(),
         Some("open() to /home/alice/a/b.txt")
     );
-    // `~user` needs the user database, which the guard does not read: it stays unexpanded
-    // and unverifiable, so it is reported as a warning.
+    // `~user` exige la base des utilisateurs, que le garde-fou ne lit pas : il reste non développé et
+    // non vérifiable, donc signalé par un avertissement.
     let report = analyse("open('~bob/x', 'w')\n");
     assert!(report.findings.is_empty() && !report.warnings.is_empty());
 }
@@ -685,7 +685,7 @@ fn without_a_known_home_directory_a_tilde_path_is_a_warning_not_a_finding() {
 
 #[test]
 fn a_script_larger_than_the_default_size_still_gets_a_stack_that_fits_its_depth() {
-    // One level of nesting per byte is the worst a script can do; the stack follows the size.
+    // Un niveau d'imbrication par octet est le pire qu'un script puisse faire ; la pile suit la taille.
     let script = format!("x = {}1\n", "-".repeat(1_000_000));
     let report = analyse(&script);
     assert!(report.findings.is_empty(), "{:?}", report.findings.first());

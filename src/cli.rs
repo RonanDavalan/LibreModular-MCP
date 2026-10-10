@@ -1,11 +1,12 @@
-//! Command line entry points: `libremodular-mcp` and `libremodular-launch`.
+//! Points d'entrée en ligne de commande : `libremodular-mcp` et `libremodular-launch`.
 //!
-//! Why this module exists
-//! The operator needs one explicit, safe way to create the configuration and the
-//! bridge token with the right permissions, a server that refuses to start when
-//! a security condition cannot be verified, and a launcher whose argument list is
-//! fixed by code and never built from text the model wrote. This is also the only
-//! module that writes to the standard output, apart from the MCP protocol itself.
+//! Pourquoi ce module existe
+//! L'opérateur a besoin d'un moyen explicite et sûr de créer la configuration et le jeton
+//! du pont avec les bonnes permissions, d'un serveur qui refuse de démarrer quand une
+//! condition de sécurité ne peut pas être vérifiée, et d'un lanceur dont la liste
+//! d'arguments est fixée par le code et jamais construite à partir d'un texte écrit par
+//! le modèle. C'est aussi le seul module qui écrit sur la sortie standard, hors le
+//! protocole MCP lui-même.
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -45,17 +46,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Serve MCP on the standard input and output (also the default)
+    /// Sert MCP sur l'entrée et la sortie standard (c'est aussi la valeur par défaut)
     Serve,
-    /// Create the configuration directory, an example configuration and the token
+    /// Crée le répertoire de configuration, une configuration d'exemple et le jeton
     Init {
-        /// Replace the existing token
+        /// Remplace le jeton existant
         #[arg(long)]
         rotate: bool,
     },
 }
 
-/// Commented example configuration; every application starts disabled.
+/// Configuration d'exemple commentée ; chaque application démarre désactivée.
 #[must_use]
 pub fn example_config_text() -> String {
     let limits = Limits::default();
@@ -96,7 +97,7 @@ pub fn example_config_text() -> String {
     lines.join("\n")
 }
 
-/// What can go wrong in `init`.
+/// Ce qui peut mal tourner dans `init`.
 #[derive(Debug)]
 enum InitError {
     Config(ConfigError),
@@ -189,8 +190,8 @@ fn init_steps(paths: &Paths, rotate: bool, out: &mut dyn Write) -> Result<(), In
     Ok(())
 }
 
-/// Create directories, the example configuration and the token. Never prints the
-/// token. Returns the process exit code.
+/// Crée les répertoires, la configuration d'exemple et le jeton. N'affiche jamais le
+/// jeton. Rend le code de sortie du processus.
 pub fn run_init(paths: &Paths, rotate: bool, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     match init_steps(paths, rotate, out) {
         Ok(()) => 0,
@@ -201,10 +202,10 @@ pub fn run_init(paths: &Paths, rotate: bool, out: &mut dyn Write, err: &mut dyn 
     }
 }
 
-/// Run the `libremodular-mcp` command line and return its exit code.
+/// Exécute la ligne de commande de `libremodular-mcp` et rend son code de sortie.
 ///
-/// `locate` provides the base directories; the binary passes the real ones, and
-/// tests pass temporary ones so that they never touch the user's configuration.
+/// `locate` fournit les répertoires de base ; le binaire passe les vrais, et les tests
+/// des répertoires temporaires pour ne jamais toucher à la configuration de l'utilisateur.
 pub fn run_with(
     args: impl IntoIterator<Item = OsString>,
     out: &mut dyn Write,
@@ -241,13 +242,13 @@ pub fn run_with(
     }
 }
 
-/// Help text of the command, as `--help` prints it.
+/// Texte d'aide de la commande, tel que `--help` l'affiche.
 #[must_use]
 pub fn help_text() -> String {
     Cli::command().render_help().to_string()
 }
 
-/// What prevents the server from starting.
+/// Ce qui empêche le serveur de démarrer.
 #[derive(Debug)]
 pub enum ServeError {
     Config(ConfigError),
@@ -289,11 +290,11 @@ impl From<AuditUnavailable> for ServeError {
     }
 }
 
-/// Build the server in the order that keeps every check ahead of what it guards:
-/// configuration, hardening, token, journal, volatile directory, registry.
+/// Construit le serveur dans l'ordre qui place chaque contrôle avant ce qu'il protège :
+/// configuration, durcissement, jeton, journal, répertoire volatil, registre.
 ///
-/// # Errors
-/// Any security condition that cannot be verified.
+/// # Erreurs
+/// Toute condition de sécurité qui ne peut pas être vérifiée.
 pub fn prepare_server(paths: &Paths) -> Result<HubServer, ServeError> {
     let config = config::load(&paths.config_file())?;
     harden_process()?;
@@ -319,17 +320,17 @@ pub fn prepare_server(paths: &Paths) -> Result<HubServer, ServeError> {
     Ok(server)
 }
 
-/// How the MCP session came to an end.
+/// Comment la session MCP s'est terminée.
 enum Ending {
-    /// The client closed the session, or it failed.
+    /// Le client a fermé la session, ou elle a échoué.
     Session(Result<(), ServeError>),
-    /// The process was asked to stop; the name of the signal.
+    /// Le processus a reçu l'ordre de s'arrêter ; le nom du signal.
     Signal(&'static str),
 }
 
-/// Serve MCP on the standard input and output until the client closes it or the
-/// process receives SIGTERM or SIGINT. Either way the captures are purged before
-/// the process ends.
+/// Sert MCP sur l'entrée et la sortie standard jusqu'à ce que le client la ferme ou que le
+/// processus reçoive SIGTERM ou SIGINT. Dans les deux cas les captures sont purgées avant
+/// la fin du processus.
 fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -337,8 +338,8 @@ fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
         .map_err(ServeError::Runtime)?;
     let session = server.clone();
     let ending = runtime.block_on(async move {
-        // Listening before the session starts: a stop request at any moment of
-        // the session takes the same way out.
+        // On écoute avant le début de la session : une demande d'arrêt à n'importe quel moment
+        // de la session emprunte la même sortie.
         let mut terminate = signal(SignalKind::terminate()).map_err(ServeError::Runtime)?;
         let mut interrupt = signal(SignalKind::interrupt()).map_err(ServeError::Runtime)?;
         let mut session = pin!(async move {
@@ -366,7 +367,7 @@ fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
         )
     });
     server.shutdown();
-    // A request still waiting on a bridge must not keep the process alive.
+    // Une requête qui attend encore un pont ne doit pas garder le processus en vie.
     runtime.shutdown_timeout(Duration::from_secs(1));
     match ending? {
         Ending::Session(outcome) => outcome,
@@ -377,8 +378,8 @@ fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
     }
 }
 
-/// Start the server and return the exit code. A refusal to start is reported on
-/// the error stream, never with the token.
+/// Démarre le serveur et rend le code de sortie. Un refus de démarrer est signalé sur le
+/// flux d'erreur, jamais avec le jeton.
 pub fn run_serve(paths: &Paths, err: &mut dyn Write) -> u8 {
     match prepare_server(paths).and_then(serve_stdio) {
         Ok(()) => 0,
@@ -389,7 +390,7 @@ pub fn run_serve(paths: &Paths, err: &mut dyn Write) -> u8 {
     }
 }
 
-/// Entry point of the `libremodular-mcp` binary.
+/// Point d'entrée du binaire `libremodular-mcp`.
 #[must_use]
 pub fn main_entry() -> ExitCode {
     ExitCode::from(run_with(
@@ -400,7 +401,7 @@ pub fn main_entry() -> ExitCode {
     ))
 }
 
-/// Entry point of the `libremodular-launch` binary.
+/// Point d'entrée du binaire `libremodular-launch`.
 #[must_use]
 pub fn launch_entry() -> ExitCode {
     ExitCode::from(crate::launch::run_in_process(

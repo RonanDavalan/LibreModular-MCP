@@ -1,11 +1,11 @@
-//! The `uno` module of LibreOffice: three targets, one bridge, one connection.
+//! Le module `uno` de LibreOffice : trois cibles, un pont, une connexion.
 //!
-//! Why this module exists
-//! Writer, Calc and Impress are three targets of one LibreOffice, and its bridge
-//! accepts a single connection. The Hub never speaks UNO: it talks to the bridge
-//! like to any other, naming the family in each request, and the three targets
-//! must share that connection and its busy state so that a script running on one
-//! is never followed by another on a different document.
+//! Pourquoi ce module existe
+//! Writer, Calc et Impress sont trois cibles d'un même LibreOffice, et son pont n'accepte qu'une
+//! connexion. Le Hub ne parle jamais UNO : il parle au pont comme à n'importe quel autre, en
+//! nommant la famille dans chaque requête, et les trois cibles doivent partager cette connexion et
+//! son état d'occupation pour qu'un script qui tourne sur l'une ne soit jamais suivi d'un autre sur
+//! un document différent.
 
 use std::path::Path;
 use std::time::Duration;
@@ -17,13 +17,13 @@ use crate::modules::{
 };
 use crate::protocol::BridgeConnector;
 
-/// The name the bridge of LibreOffice announces in its `hello`, whatever the target.
+/// Le nom que le pont de LibreOffice annonce dans son `hello`, quelle que soit la cible.
 pub const BRIDGE_APP: &str = "libreoffice";
 
-/// The prefix of the three targets' names.
+/// Le préfixe des noms des trois cibles.
 const TARGET_PREFIX: &str = "libreoffice-";
 
-/// The family a bridge request names for `target`: `writer`, `calc` or `impress`.
+/// La famille qu'une requête au pont nomme pour `target` : `writer`, `calc` ou `impress`.
 #[must_use]
 pub fn family_of(target: &str) -> Option<&'static str> {
     match target.strip_prefix(TARGET_PREFIX)? {
@@ -34,16 +34,15 @@ pub fn family_of(target: &str) -> Option<&'static str> {
     }
 }
 
-/// One target of LibreOffice. It delegates to the generic `tcp` module, which
-/// owns the lazy connection and the second attempt, and adds what only this
-/// application knows how to say about its state.
+/// Une cible de LibreOffice. Elle délègue au module générique `tcp`, qui possède la connexion
+/// paresseuse et la seconde tentative, et ajoute ce que seule cette application sait dire de son état.
 pub struct LibreOfficeModule {
     inner: TcpModule,
     family: &'static str,
 }
 
 impl LibreOfficeModule {
-    /// `shared` is the connection of the bridge, the same for the three targets.
+    /// `shared` est la connexion du pont, la même pour les trois cibles.
     #[must_use]
     pub fn new(
         connector: BridgeConnector,
@@ -59,7 +58,7 @@ impl LibreOfficeModule {
         }
     }
 
-    /// The same module with another wait before a second attempt to connect.
+    /// Le même module avec une autre attente avant une seconde tentative de connexion.
     #[must_use]
     pub fn with_reconnect_delay(mut self, delay: Duration) -> Self {
         self.inner = self.inner.with_reconnect_delay(delay);
@@ -83,9 +82,9 @@ impl Module for LibreOfficeModule {
 
     fn state(&self, capture_path: &Path, work_dir: &Path) -> Result<StateReply, ModuleError> {
         let mut reply = self.inner.state(capture_path, work_dir)?;
-        // The bridge reports `active: null` when LibreOffice has no current
-        // document or one of another family, and cannot say which: say it here,
-        // so that the absence is never read as an empty document.
+        // Le pont rapporte `active: null` quand LibreOffice n'a aucun document courant ou un document
+        // d'une autre famille, et ne peut pas dire lequel : on le dit ici, pour que l'absence ne soit jamais
+        // lue comme un document vide.
         if reply.state.get("active") == Some(&Value::Null) {
             reply.warnings.push(format!(
                 "no active {family} document: LibreOffice has no current document, \

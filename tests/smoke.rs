@@ -1,11 +1,11 @@
-//! The cold recipe on the real binary: `init`, then a session of four calls.
+//! La recette à froid sur le vrai binaire : `init`, puis une session de quatre appels.
 //!
-//! Why this module exists
-//! Each part of the Hub is tested on its own; only the compiled binary shows that
-//! what `init` writes is what `serve` reads, that one session leaves exactly one
-//! journal line per call and no script text, and that the token never leaves its
-//! file. The process gets an emptied environment made of `HOME` and the three
-//! `LIBREMODULAR_*` directories, all private and temporary, never the user's own.
+//! Pourquoi ce module existe
+//! Chaque partie du Hub est testée seule ; seul le binaire compilé montre que ce qu'écrit `init` est ce
+//! que lit `serve`, qu'une session laisse exactement une ligne de journal par appel et aucun texte de
+//! script, et que le jeton ne quitte jamais son fichier. Le processus reçoit un environnement vidé
+//! fait de `HOME` et des trois répertoires `LIBREMODULAR_*`, tous privés et temporaires, jamais ceux
+//! de l'utilisateur.
 
 #[macro_use]
 mod common;
@@ -23,7 +23,7 @@ const SUCCESS: &str = "print('smoke-script-ok')\nresult = 1\n";
 const FAILURE: &str = "print(smoke_undefined_name)\n";
 const DELETION: &str = "import os\nos.remove('/home/alice/work/old.txt')\n";
 const OTHER_APPLICATION: &str = "print('smoke-script-unknown-target')\n";
-/// Pieces of the scripts that must never reach the journal.
+/// Morceaux des scripts qui ne doivent jamais atteindre le journal.
 const SCRIPT_PIECES: [&str; 4] = [
     "smoke-script-ok",
     "smoke_undefined_name",
@@ -31,8 +31,8 @@ const SCRIPT_PIECES: [&str; 4] = [
     "smoke-script-unknown-target",
 ];
 
-/// The bridge: it runs the first two scripts as an application would, and is never
-/// reached by the two others.
+/// Le pont : il exécute les deux premiers scripts comme le ferait une application, et n'est jamais
+/// atteint par les deux autres.
 fn application() -> Handler {
     handler(|request| {
         let script = request.get("script").and_then(Value::as_str).unwrap_or("");
@@ -55,7 +55,7 @@ fn application() -> Handler {
     })
 }
 
-/// Run `init` with the real binary; returns what it wrote on its two streams.
+/// Exécute `init` avec le vrai binaire ; rend ce qu'il a écrit sur ses deux flux.
 fn run_init(layout: &common::binary::Layout) -> Result<(String, String), String> {
     let output = Command::new(BINARY)
         .arg("init")
@@ -78,7 +78,7 @@ fn run_init(layout: &common::binary::Layout) -> Result<(String, String), String>
     Ok((stdout, stderr))
 }
 
-/// Every file under `base`, with its path.
+/// Chaque fichier sous `base`, avec son chemin.
 fn files_under(base: &Path) -> Vec<PathBuf> {
     fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
         for entry in fs::read_dir(dir).expect("directory") {
@@ -95,13 +95,13 @@ fn files_under(base: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// A defect put in the setup on purpose, to show that the checks of the recipe can
-/// fail: the Hub is not defective, the setup makes it do what the checks forbid.
+/// Un défaut mis exprès dans la mise en place, pour montrer que les contrôles de la recette peuvent
+/// échouer : le Hub n'est pas défectueux, la mise en place lui fait faire ce que les contrôles interdisent.
 #[derive(Clone, Copy, Default)]
 struct Defect {
-    /// The operator asked the journal to keep the text of the scripts.
+    /// L'opérateur a demandé au journal de garder le texte des scripts.
     journal_keeps_script_text: bool,
-    /// Something copied the token into a file of the state directory.
+    /// Quelque chose a copié le jeton dans un fichier du répertoire d'état.
     token_copied_into_state: bool,
 }
 
@@ -110,7 +110,7 @@ fn drive(base: &Path, defect: Defect) -> Verdict {
     let config_dir = layout.config.join("libremodular-mcp");
     let token_file = config_dir.join("token");
 
-    // Step init: the real binary creates the configuration and the token.
+    // Étape init : le vrai binaire crée la configuration et le jeton.
     let (init_out, init_err) = run_init(&layout)?;
     let token = fs::read_to_string(&token_file)
         .map_err(|error| format!("step init: no token file: {error}"))?;
@@ -123,7 +123,7 @@ fn drive(base: &Path, defect: Defect) -> Verdict {
         "step init: the token file is not mode 600"
     );
 
-    // Step configure: enable `gimp` on the port of the fake bridge.
+    // Étape configure : activer `gimp` sur le port du faux pont.
     let bridge = FakeBridge::start(token.trim(), HelloMode::Normal, application());
     let config_file = config_dir.join("config.toml");
     let example = fs::read_to_string(&config_file)
@@ -150,7 +150,7 @@ fn drive(base: &Path, defect: Defect) -> Verdict {
         write_file(&layout.state.join("copy.txt"), 0o600, &token);
     }
 
-    // Step serve: one session, four calls.
+    // Étape serve : une session, quatre appels.
     let mut serve = command(&layout, false);
     serve
         .arg("serve")
@@ -215,7 +215,7 @@ fn drive(base: &Path, defect: Defect) -> Verdict {
         bridge.scripts().len()
     );
 
-    // Step journal: four lines, in order, and no script text.
+    // Étape journal : quatre lignes, dans l'ordre, et aucun texte de script.
     let journal_file = layout.state.join("libremodular-mcp").join("audit.jsonl");
     let journal = fs::read_to_string(&journal_file)
         .map_err(|error| format!("step journal: cannot read it: {error}"))?;
@@ -258,7 +258,7 @@ fn drive(base: &Path, defect: Defect) -> Verdict {
         "step journal: the journal is not mode 600"
     );
 
-    // Step token: the token is in its own file and nowhere else, nor in any output.
+    // Étape jeton : le jeton est dans son propre fichier et nulle part ailleurs, ni dans aucune sortie.
     let stderr = String::from_utf8_lossy(&output.stderr);
     ensure!(
         !stderr.contains(token.trim()),

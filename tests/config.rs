@@ -1,7 +1,7 @@
-//! Configuration and path resolution tests.
+//! Tests de la configuration et de la résolution des chemins.
 //!
-//! Why this module exists
-//! A bad file must stop the Hub rather than weaken a protection.
+//! Pourquoi ce module existe
+//! Un mauvais fichier doit arrêter le Hub plutôt qu'affaiblir une protection.
 
 #[macro_use]
 mod common;
@@ -162,7 +162,7 @@ fn the_example_configuration_is_valid_and_enables_nothing() {
     assert_eq!(config.apps().len(), 7);
 }
 
-// --- the configuration file is a control file ---------------------------------
+// --- le fichier de configuration est un fichier de contrôle -------------------------
 
 type ConfigLoader<'l> = &'l dyn Fn(&Path) -> Result<Config, String>;
 
@@ -248,7 +248,7 @@ fn a_configuration_file_that_is_a_dangling_link_is_not_treated_as_absent() {
     assert!(load(&link).is_err());
 }
 
-// --- locations ------------------------------------------------------------------
+// --- emplacements -------------------------------------------------------------------
 
 fn lookup(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<OsString> {
     let map: BTreeMap<String, OsString> = pairs

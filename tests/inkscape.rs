@@ -1,11 +1,11 @@
-//! The Inkscape module, with the test's Python as interpreter and a fake `inkscape`.
+//! Le module Inkscape, avec le Python du test comme interpréteur et un faux `inkscape`.
 //!
-//! Why this module exists
-//! Each script runs in a process the Hub starts itself. These tests show that the
-//! process gets only the allowed environment and no shell, dies with its whole
-//! group when its time is up, cannot exhaust memory or the Hub's buffers, never
-//! reads an entity of the document, and refuses a working document that is a
-//! link; each check fails on an implementation built to break it.
+//! Pourquoi ce module existe
+//! Chaque script s'exécute dans un processus que le Hub démarre lui-même. Ces tests montrent que
+//! le processus ne reçoit que l'environnement permis et aucun interpréteur de commandes, meurt
+//! avec tout son groupe quand son temps est écoulé, ne peut épuiser ni la mémoire ni les tampons
+//! du Hub, ne lit jamais une entité du document et refuse un document de travail qui est un
+//! lien ; chaque contrôle échoue sur une implémentation construite pour le casser.
 
 #[macro_use]
 mod common;
@@ -34,7 +34,7 @@ use serde_json::{Value, json};
 
 const MEMORY: u64 = 2 * 1024 * 1024 * 1024;
 
-/// The first `python3` on the test's PATH.
+/// Le premier `python3` du PATH du test.
 fn python() -> PathBuf {
     let path = std::env::var_os("PATH").expect("PATH");
     std::env::split_paths(&path)
@@ -43,8 +43,8 @@ fn python() -> PathBuf {
         .expect("python3 is required to test the Inkscape module")
 }
 
-/// A private directory with a work directory, an extensions directory, a
-/// directory for captures and a fake `inkscape` in mode 700.
+/// Un répertoire privé avec un répertoire de travail, un répertoire d'extensions, un répertoire
+/// pour les captures et un faux `inkscape` en mode 700.
 struct Setup {
     _base: tempfile::TempDir,
     work: PathBuf,
@@ -97,7 +97,7 @@ fn setup() -> Setup {
     }
 }
 
-/// The variables of a Hub, including some that must never reach a script.
+/// Les variables d'un Hub, dont certaines ne doivent jamais atteindre un script.
 fn hub_environment() -> Vec<(OsString, OsString)> {
     vec![
         ("PATH".into(), std::env::var_os("PATH").unwrap_or_default()),
@@ -127,7 +127,7 @@ fn execute(module: &InkscapeModule, setup: &Setup, script: &str, timeout_s: u32)
         .unwrap_or_else(|error| panic!("execute: {error}"))
 }
 
-// --- results and errors ----------------------------------------------------------
+// --- résultats et erreurs ---------------------------------------------------------------
 
 #[test]
 fn a_script_prints_and_returns_its_result_line() {
@@ -208,9 +208,9 @@ fn a_process_killed_without_an_error_line_is_a_process_error() {
     assert_eq!(reply.error["traceback"], "");
 }
 
-// --- the whole group dies when time runs out ----------------------------------------
+// --- tout le groupe meurt quand le temps est écoulé ------------------------------------
 
-/// Whether a process exists and is not a zombie.
+/// Dit si un processus existe et n'est pas un zombie.
 fn alive(pid: i32) -> bool {
     fs::read_to_string(format!("/proc/{pid}/stat"))
         .ok()
@@ -229,8 +229,8 @@ time.sleep(60)\n";
 
 type Runner<'a> = &'a dyn Fn(&ProcessSpec, Duration) -> Result<Finished, RunError>;
 
-/// A script that starts a child and sleeps must end in a timeout that leaves no
-/// process of its group alive.
+/// Un script qui démarre un enfant et dort doit finir par un délai dépassé qui ne laisse aucun
+/// processus de son groupe vivant.
 fn check_the_whole_group_dies(setup: &Setup, runner: Runner<'_>) -> Verdict {
     let script_file = setup.work.join("long.py");
     fs::write(&script_file, PARENT_AND_CHILD).map_err(|e| e.to_string())?;
@@ -272,7 +272,7 @@ fn check_the_whole_group_dies(setup: &Setup, runner: Runner<'_>) -> Verdict {
     Ok(())
 }
 
-/// Defective on purpose: on timeout, only the first process is killed.
+/// Défectueux exprès : au délai, seul le premier processus est tué.
 fn run_killing_only_the_leader(
     spec: &ProcessSpec,
     timeout: Duration,
@@ -350,7 +350,7 @@ fn a_second_script_while_one_runs_is_busy() {
     assert!(first.join().expect("thread").is_ok());
 }
 
-// --- the environment and the command ---------------------------------------------
+// --- l'environnement et la commande -----------------------------------------------------
 
 const PRINT_ENVIRONMENT: &str =
     "import json, os\nprint('LMM_RESULT: ' + json.dumps(dict(os.environ)))\n";
@@ -369,8 +369,8 @@ const ALLOWED: [&str; 9] = [
 
 type Builder<'a> = &'a dyn Fn(&Setup, &[(OsString, OsString)], &Path) -> ProcessSpec;
 
-/// The process must see the allowed variables only, with the values the module
-/// sets, and never the token.
+/// Le processus ne doit voir que les variables permises, avec les valeurs que le module pose, et
+/// jamais le jeton.
 fn check_only_the_allowed_environment(setup: &Setup, build: Builder<'_>) -> Verdict {
     let script_file = setup.work.join("environment.py");
     fs::write(&script_file, PRINT_ENVIRONMENT).map_err(|e| e.to_string())?;
@@ -421,7 +421,7 @@ fn real_builder(setup: &Setup, inherited: &[(OsString, OsString)], script: &Path
     script_command(&setup.paths, env, &setup.work, script, 30, MEMORY)
 }
 
-/// Defective on purpose: keeps the whole environment of the Hub.
+/// Défectueux exprès : garde tout l'environnement du Hub.
 fn builder_keeping_the_hub_environment(
     setup: &Setup,
     inherited: &[(OsString, OsString)],
@@ -462,8 +462,8 @@ fn counter_proof_a_builder_keeping_the_hub_environment_is_detected() {
 
 const SHELLS: [&str; 5] = ["sh", "bash", "dash", "zsh", "busybox"];
 
-/// The command is the interpreter itself with a fixed argument list; the
-/// script text is never an argument.
+/// La commande est l'interpréteur lui-même avec une liste d'arguments fixe ; le texte du script
+/// n'est jamais un argument.
 fn check_no_shell(setup: &Setup, spec: &ProcessSpec, script_file: &Path, script: &str) -> Verdict {
     let program = spec
         .program
@@ -536,10 +536,10 @@ fn counter_proof_a_command_through_sh_c_is_detected() {
     must_fail(check_no_shell(&setup, &defective, &script_file, script));
 }
 
-// --- memory and output bounds --------------------------------------------------------
+// --- bornes de mémoire et de sortie --------------------------------------------------------
 
-/// A script asking for 4 GiB must fail quickly, as a Python error or a process
-/// error, and never block.
+/// Un script qui demande 4 Gio doit échouer vite, en erreur Python ou en erreur de processus, et
+/// ne jamais bloquer.
 fn check_memory_is_bounded(setup: &Setup, module: &InkscapeModule) -> Verdict {
     let started = Instant::now();
     let reply = module
@@ -576,8 +576,8 @@ fn counter_proof_without_a_tight_memory_limit_the_allocation_succeeds() {
     must_fail(check_memory_is_bounded(&setup, &generous));
 }
 
-/// Three MiB on each stream must come back bounded to `max_output_bytes`,
-/// without the process blocking on a full pipe.
+/// Trois Mio sur chaque flux doivent revenir bornés à `max_output_bytes`, sans que le processus
+/// bloque sur un tube plein.
 fn check_output_is_bounded(setup: &Setup, limits: Limits) -> Verdict {
     let module = InkscapeModule::new(
         setup.paths.clone(),
@@ -628,7 +628,7 @@ fn counter_proof_a_larger_bound_lets_the_output_through() {
     must_fail(check_output_is_bounded(&setup, loose));
 }
 
-// --- the working document -------------------------------------------------------------
+// --- le document de travail -------------------------------------------------------------
 
 fn check_a_linked_document_is_refused(setup: &Setup, files: Arc<dyn WorkFiles>) -> Verdict {
     let outside = setup.captures.join("outside.svg");
@@ -658,7 +658,7 @@ fn check_a_linked_document_is_refused(setup: &Setup, files: Arc<dyn WorkFiles>) 
     }
 }
 
-/// Defective on purpose: checks existence through the link and accepts it.
+/// Défectueux exprès : vérifie l'existence à travers le lien et l'accepte.
 struct FollowingFiles;
 
 impl WorkFiles for FollowingFiles {
@@ -692,7 +692,7 @@ fn counter_proof_files_that_follow_links_are_detected() {
     ));
 }
 
-// --- state and capture ------------------------------------------------------------------
+// --- état et capture ---------------------------------------------------------------------
 
 const LAYERED_DOCUMENT: &str = "import os\n\
 open(os.environ['LMM_DOCUMENT'], 'w').write('''<svg xmlns=\"http://www.w3.org/2000/svg\" \
@@ -761,7 +761,7 @@ fn health_reports_the_version_inkscape_prints() {
     assert!(!module(&missing).health().connected);
 }
 
-// --- the state does not depend on an earlier script ------------------------------------
+// --- l'état ne dépend pas d'un script antérieur ----------------------------------------
 
 const KEPT_DOCUMENT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
 xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\" width=\"20\" height=\"10\">\
@@ -771,8 +771,8 @@ const OTHER_DOCUMENT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" \
 xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\" width=\"30\" height=\"15\">\
 <g inkscape:groupmode=\"layer\" id=\"other\" inkscape:label=\"Other\"/></svg>";
 
-/// The module as it was before the state received the work directory: it only
-/// knew the directory of the last script it ran. Defective on purpose.
+/// Le module tel qu'il était avant que l'état reçoive le répertoire de travail : il ne
+/// connaissait que le répertoire du dernier script qu'il avait exécuté. Défectueux exprès.
 struct RememberingModule {
     inner: InkscapeModule,
     remembered: Mutex<Option<PathBuf>>,
@@ -826,8 +826,8 @@ fn layer_ids(reply: &StateReply) -> Value {
         .unwrap_or(Value::Null)
 }
 
-/// A module that never ran a script describes the document a Hub left in the
-/// work directory it is given, and nothing else.
+/// Un module qui n'a jamais exécuté de script décrit le document qu'un Hub a laissé dans le
+/// répertoire de travail qu'on lui donne, et rien d'autre.
 fn check_a_new_module_describes_the_document_it_is_given(
     setup: &Setup,
     make: &dyn Fn(&Setup) -> Box<dyn Module>,
@@ -845,7 +845,7 @@ fn check_a_new_module_describes_the_document_it_is_given(
     Ok(())
 }
 
-/// The directory of an earlier script is not the one asked about now.
+/// Le répertoire d'un script antérieur n'est pas celui dont il est question maintenant.
 fn check_the_state_follows_the_directory_it_is_given(
     setup: &Setup,
     make: &dyn Fn(&Setup) -> Box<dyn Module>,
@@ -929,7 +929,7 @@ fn without_a_document_the_state_is_empty_and_nothing_is_created() {
     );
 }
 
-// --- entities are never read -----------------------------------------------------------
+// --- les entités ne sont jamais lues -------------------------------------------------------
 
 const WITNESS: &str = "WITNESS-CONTENT-7f3a";
 const INNER: &str = "INNER-ENTITY-9c1e";
@@ -952,14 +952,14 @@ fn entity_documents(witness_file: &Path) -> [String; 2] {
     ]
 }
 
-/// Each document declaring entities is refused: no state is read from it, and
-/// neither the witness file nor an entity's text appears in what comes back.
+/// Chaque document qui déclare des entités est refusé : aucun état n'en est lu, et ni le fichier
+/// témoin ni le texte d'une entité n'apparaît dans ce qui revient.
 fn check_entities_are_never_read(setup: &Setup, read: &dyn Fn(&Setup) -> String) -> Verdict {
     let witness = setup.captures.join("witness.txt");
     fs::write(&witness, WITNESS).map_err(|e| e.to_string())?;
     let mut problems = Vec::new();
     for (index, document) in entity_documents(&witness).into_iter().enumerate() {
-        // Private, as the Hub's own umask would make it.
+        // Privé, comme le umask du Hub le ferait.
         common::write_file(&setup.work.join("current.svg"), 0o600, &document);
         let answer = read(setup);
         if answer.contains(WITNESS) {
@@ -985,7 +985,7 @@ fn state_through_the_module(setup: &Setup) -> String {
     json!({"state": reply.state, "warnings": reply.warnings}).to_string()
 }
 
-/// Defective on purpose: the state bootstrap without its scan for entities.
+/// Défectueux exprès : l'amorce d'état sans son balayage des entités.
 fn state_without_the_entity_scan(setup: &Setup) -> String {
     let document = setup.work.join("current.svg");
     let mut spec = state_command(
@@ -1028,7 +1028,7 @@ fn counter_proof_a_reader_without_the_entity_scan_expands_them() {
     ));
 }
 
-// --- through the Hub ---------------------------------------------------------------------
+// --- par le Hub -----------------------------------------------------------------------------
 
 #[test]
 fn the_hub_runs_inkscape_scripts_in_its_work_directory_and_accepts_the_capture() {

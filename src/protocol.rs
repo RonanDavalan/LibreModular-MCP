@@ -1,10 +1,10 @@
-//! Client side of the line-delimited JSON protocol spoken with the bridges.
+//! Côté client du protocole JSON par lignes parlé avec les ponts.
 //!
-//! Why this module exists
-//! A bridge runs code with the user's rights, so the Hub must only ever reach it
-//! on the loopback address, prove it holds the token, and never let a slow or
-//! hostile bridge fill its memory or receive a second script while the first one
-//! is still running. This is the only module of the Hub that touches the network.
+//! Pourquoi ce module existe
+//! Un pont exécute du code avec les droits de l'utilisateur : le Hub ne doit donc l'atteindre
+//! que sur l'adresse de bouclage, prouver qu'il détient le jeton, et ne jamais laisser un pont
+//! lent ou hostile lui remplir la mémoire ni recevoir un second script tant que le premier
+//! tourne. C'est le seul module du Hub qui touche le réseau.
 
 use std::fmt;
 use std::io::{self, Read, Write};
@@ -18,35 +18,35 @@ use serde_json::{Map, Value, json};
 use crate::config::Limits;
 use crate::security::Token;
 
-/// The only address the Hub ever connects to.
+/// La seule adresse à laquelle le Hub se connecte jamais.
 pub const BRIDGE_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
-/// The protocol version the Hub speaks and requires from the bridge.
+/// La version du protocole que le Hub parle et exige du pont.
 pub const PROTOCOL_VERSION: u64 = 1;
-/// How long the Hub waits for the bridge to accept the connection.
+/// Combien de temps le Hub attend que le pont accepte la connexion.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
-/// How long the Hub waits for the answer to its `hello`.
+/// Combien de temps le Hub attend la réponse à son `hello`.
 pub const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
 const READ_CHUNK: usize = 64 * 1024;
 
-/// Why a request to a bridge did not produce an answer.
+/// Pourquoi une requête à un pont n'a pas produit de réponse.
 ///
-/// No variant carries the token or a line received from the bridge.
+/// Aucune variante ne porte le jeton ni une ligne reçue du pont.
 #[derive(Debug)]
 pub enum BridgeError {
-    /// No bridge accepted the connection.
+    /// Aucun pont n'a accepté la connexion.
     Connect(io::Error),
-    /// The bridge did not complete the handshake; the text says what was wrong.
+    /// Le pont n'a pas terminé la poignée de main ; le texte dit ce qui n'allait pas.
     Handshake(&'static str),
-    /// A request is already in progress, or a late answer is still awaited.
+    /// Une requête est déjà en cours, ou une réponse tardive est encore attendue.
     Busy,
-    /// The answer did not arrive in time; the client stays busy until it does.
+    /// La réponse n'est pas arrivée à temps ; le client reste occupé jusqu'à ce qu'elle arrive.
     Timeout,
-    /// The connection is gone. `sent` tells whether the request had been written.
+    /// La connexion a disparu. `sent` dit si la requête avait été écrite.
     Disconnected { sent: bool },
-    /// A line longer than the limit, in either direction.
+    /// Une ligne plus longue que la limite, dans un sens ou dans l'autre.
     LineTooLong { limit: usize },
-    /// The bridge answered something the protocol does not allow.
+    /// Le pont a répondu quelque chose que le protocole ne permet pas.
     Protocol(&'static str),
 }
 
@@ -80,7 +80,7 @@ impl std::error::Error for BridgeError {
     }
 }
 
-/// What the bridge said about itself in its `hello`.
+/// Ce que le pont a dit de lui-même dans son `hello`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hello {
     pub app: String,
@@ -88,7 +88,7 @@ pub struct Hello {
     pub bridge_version: String,
 }
 
-/// Everything needed to open a connection to one bridge.
+/// Tout ce qu'il faut pour ouvrir une connexion vers un pont.
 #[derive(Clone)]
 pub struct BridgeConnector {
     app: &'static str,
@@ -98,8 +98,8 @@ pub struct BridgeConnector {
 }
 
 impl BridgeConnector {
-    /// `app` is the application configured on `port`: a bridge announcing any
-    /// other one is refused, so that a script never reaches the wrong program.
+    /// `app` est l'application configurée sur `port` : un pont qui en annonce une autre est refusé,
+    /// pour qu'un script n'atteigne jamais le mauvais programme.
     #[must_use]
     pub fn new(app: &'static str, port: u16, token: Token, limits: Limits) -> Self {
         BridgeConnector {
@@ -120,10 +120,10 @@ impl BridgeConnector {
         self.port
     }
 
-    /// Open a new connection and complete the handshake.
+    /// Ouvre une nouvelle connexion et termine la poignée de main.
     ///
-    /// # Errors
-    /// See [`BridgeClient::connect`].
+    /// # Erreurs
+    /// Voir [`BridgeClient::connect`].
     pub fn connect(&self) -> Result<BridgeClient, BridgeError> {
         BridgeClient::connect(self.port, self.app, &self.token, &self.limits)
     }
@@ -142,7 +142,7 @@ struct Connection {
     stream: TcpStream,
     buffer: Vec<u8>,
     max_line_bytes: usize,
-    /// The id of a request that timed out and whose answer has not arrived.
+    /// L'identifiant d'une requête qui a expiré et dont la réponse n'est pas arrivée.
     late: Option<String>,
 }
 
@@ -152,7 +152,7 @@ enum Poll {
 }
 
 impl Connection {
-    /// Take one complete line out of the buffer, if there is one.
+    /// Sort une ligne complète du tampon, s'il y en a une.
     fn take_line(&mut self) -> Result<Option<Vec<u8>>, BridgeError> {
         if let Some(end) = self.buffer.iter().position(|byte| *byte == b'\n') {
             let rest = self.buffer.split_off(end + 1);
@@ -173,8 +173,8 @@ impl Connection {
         Ok(None)
     }
 
-    /// Read more bytes; never more than one line's worth beyond the limit, so a
-    /// line without an end cannot fill the memory.
+    /// Lit plus d'octets ; jamais plus d'une ligne au-delà de la limite, pour qu'une ligne sans fin
+    /// ne puisse pas remplir la mémoire.
     fn fill(&mut self) -> io::Result<usize> {
         let room = self
             .max_line_bytes
@@ -188,7 +188,7 @@ impl Connection {
         Ok(count)
     }
 
-    /// Wait for one line until `deadline`.
+    /// Attend une ligne jusqu'à `deadline`.
     fn read_line(&mut self, deadline: Instant, sent: bool) -> Result<Vec<u8>, BridgeError> {
         loop {
             if let Some(line) = self.take_line()? {
@@ -198,7 +198,7 @@ impl Connection {
             if remaining.is_zero() {
                 return Err(BridgeError::Timeout);
             }
-            // A zero read timeout is rejected by the system: wait at least a millisecond.
+            // Un délai de lecture nul est rejeté par le système : attendre au moins une milliseconde.
             self.stream
                 .set_read_timeout(Some(remaining.max(Duration::from_millis(1))))
                 .map_err(|_| BridgeError::Disconnected { sent })?;
@@ -217,7 +217,7 @@ impl Connection {
         }
     }
 
-    /// Look for a line without waiting.
+    /// Cherche une ligne sans attendre.
     fn poll_line(&mut self) -> Result<Poll, BridgeError> {
         let closed = BridgeError::Disconnected { sent: false };
         if let Some(line) = self.take_line()? {
@@ -255,8 +255,8 @@ impl Connection {
         } else {
             remaining
         };
-        // Whatever goes wrong while writing, part of the request may have left:
-        // it is reported as sent so that it is never written a second time.
+        // Quoi qu'il se passe à l'écriture, une partie de la requête a pu partir : elle est signalée
+        // comme envoyée pour qu'elle ne soit jamais écrite une seconde fois.
         let gone = || BridgeError::Disconnected { sent: true };
         self.stream
             .set_write_timeout(Some(wait))
@@ -307,7 +307,7 @@ fn check_hello(object: &Map<String, Value>, expected_app: &str) -> Result<Hello,
             ));
         }
     };
-    // The announced name is not repeated: it is text from the other end.
+    // Le nom annoncé n'est pas répété : c'est un texte venu de l'autre bout.
     if hello.app != expected_app {
         return Err(BridgeError::Handshake(
             "the bridge announced another application than the one configured on this port",
@@ -316,14 +316,13 @@ fn check_hello(object: &Map<String, Value>, expected_app: &str) -> Result<Hello,
     Ok(hello)
 }
 
-/// One authenticated connection to a bridge.
+/// Une connexion authentifiée vers un pont.
 ///
-/// At most one request is in flight: a second one, or any request while the
-/// answer to a timed-out one is still awaited, gets [`BridgeError::Busy`] at once
-/// and nothing is written to the bridge.
+/// Au plus une requête est en vol : une seconde, ou toute requête tant que la réponse à une
+/// requête expirée est attendue, reçoit aussitôt [`BridgeError::Busy`] et rien n'est écrit au pont.
 pub struct BridgeClient {
     connection: Mutex<Connection>,
-    /// A second handle on the socket, so that `close` never waits for a request.
+    /// Un second descripteur sur la socket, pour que `close` n'attende jamais une requête.
     control: TcpStream,
     hello: Hello,
     next_id: AtomicU64,
@@ -331,14 +330,12 @@ pub struct BridgeClient {
 }
 
 impl BridgeClient {
-    /// Connect to the bridge listening on `port` of the loopback address, send the
-    /// `hello` with the token and check the answer, which must announce
-    /// `expected_app`.
+    /// Se connecte au pont qui écoute sur `port` de l'adresse de bouclage, envoie le `hello` avec le
+    /// jeton et vérifie la réponse, qui doit annoncer `expected_app`.
     ///
-    /// # Errors
-    /// [`BridgeError::Connect`] when nothing listens, [`BridgeError::Handshake`]
-    /// for any answer other than a valid `hello` of `expected_app` (including a
-    /// closed connection).
+    /// # Erreurs
+    /// [`BridgeError::Connect`] quand rien n'écoute, [`BridgeError::Handshake`] pour toute réponse
+    /// autre qu'un `hello` valide de `expected_app` (une connexion fermée comprise).
     pub fn connect(
         port: u16,
         expected_app: &str,
@@ -386,26 +383,26 @@ impl BridgeClient {
         })
     }
 
-    /// What the bridge announced in its `hello`.
+    /// Ce que le pont a annoncé dans son `hello`.
     #[must_use]
     pub fn hello(&self) -> &Hello {
         &self.hello
     }
 
-    /// False once the connection failed or was closed; a new client is needed.
+    /// Faux une fois que la connexion a échoué ou a été fermée ; un nouveau client est nécessaire.
     #[must_use]
     pub fn is_usable(&self) -> bool {
         !self.broken.load(Ordering::SeqCst)
     }
 
-    /// Send one request and wait at most `timeout` for the answer with the same id.
+    /// Envoie une requête et attend au plus `timeout` la réponse portant le même identifiant.
     ///
-    /// `payload` is a JSON object without `id`; the client adds it.
+    /// `payload` est un objet JSON sans `id` ; le client l'ajoute.
     ///
-    /// # Errors
-    /// [`BridgeError::Busy`] without sending anything when a request is in
-    /// progress or a late answer is still awaited; [`BridgeError::Timeout`] after
-    /// which the client stays busy; any other variant leaves the client unusable.
+    /// # Erreurs
+    /// [`BridgeError::Busy`] sans rien envoyer quand une requête est en cours ou qu'une réponse
+    /// tardive est encore attendue ; [`BridgeError::Timeout`], après quoi le client reste occupé ;
+    /// toute autre variante rend le client inutilisable.
     pub fn request(&self, payload: Value, timeout: Duration) -> Result<Value, BridgeError> {
         let mut connection = match self.connection.try_lock() {
             Ok(guard) => guard,
@@ -442,7 +439,7 @@ impl BridgeClient {
                     if late.get("id").and_then(Value::as_str) != Some(awaited.as_str()) {
                         return Err(BridgeError::Protocol("an answer carries an unexpected id"));
                     }
-                    // The late answer belongs to a call that already returned.
+                    // La réponse tardive appartient à un appel qui a déjà rendu.
                     connection.late = None;
                 }
             }
@@ -471,7 +468,7 @@ impl BridgeClient {
         Ok(Value::Object(object))
     }
 
-    /// Close the connection. Nothing is sent to the bridge or the application.
+    /// Ferme la connexion. Rien n'est envoyé au pont ni à l'application.
     pub fn close(&self) {
         self.broken.store(true, Ordering::SeqCst);
         let _ = self.control.shutdown(Shutdown::Both);

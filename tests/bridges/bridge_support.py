@@ -1,10 +1,10 @@
-"""Helpers shared by the bridge tests: the core under test, its defective copies,
-a fake adapter, a hand-written client and private token files.
+"""Assistants partagés par les tests des ponts : le cœur testé, ses copies défectueuses, un faux
+adaptateur, un client écrit à la main et des fichiers de jeton privés.
 
-Why this module exists
-Every check runs against the real text of bridges/_core.py and against a copy of
-that text broken on purpose, through a client that shares no code with the Hub or
-the bridge. Keeping these pieces together keeps the checks short and comparable.
+Pourquoi ce module existe
+Chaque contrôle s'exécute sur le vrai texte de bridges/_core.py et sur une copie de ce texte cassée
+exprès, par un client qui ne partage aucun code avec le Hub ni avec le pont. Garder ces pièces
+ensemble garde les contrôles courts et comparables.
 """
 
 import contextlib
@@ -28,12 +28,12 @@ GENERATED = ROOT / "bridges" / "generated"
 BUILD_SCRIPT = ROOT / "scripts" / "build_bridges.py"
 
 LOOPBACK = "127.0.0.1"
-# Obviously fake, with the shape of a real token: 64 hexadecimal characters.
+# Manifestement faux, avec la forme d'un vrai jeton : 64 caractères hexadécimaux.
 FAKE_TOKEN = "0" * 64
 WRONG_TOKEN = "f" * 64
 EXPECTED_MAX_LINE_BYTES = 8 * 1024 * 1024
 
-# The smallest valid PNG: one transparent pixel.
+# Le plus petit PNG valide : un pixel transparent.
 TINY_PNG = bytes.fromhex(
     "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
     "1f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082"
@@ -41,7 +41,7 @@ TINY_PNG = bytes.fromhex(
 
 
 def load_text(text, name, filename):
-    """Run `text` as a fresh module named `name`, never registered in sys.modules."""
+    """Exécute `text` comme un module neuf nommé `name`, jamais enregistré dans sys.modules."""
     module = types.ModuleType(name)
     module.__file__ = filename
     exec(compile(text, filename, "exec"), module.__dict__)
@@ -57,14 +57,14 @@ def load_core():
 
 
 def defective_text(text, old, new):
-    """`text` with exactly one place changed; a defect that changes nothing proves nothing."""
+    """`text` avec exactement un endroit changé ; un défaut qui ne change rien ne prouve rien."""
     if text.count(old) != 1:
         raise AssertionError("the defect must match exactly one place: %r" % old)
     return text.replace(old, new)
 
 
 def defective_core(old, new, *more):
-    """The core with one or more places changed; `more` holds further (old, new) pairs."""
+    """Le cœur avec un ou plusieurs endroits changés ; `more` contient d'autres paires (ancien, nouveau)."""
     text = defective_text(core_text(), old, new)
     for other_old, other_new in more:
         text = defective_text(text, other_old, other_new)
@@ -73,7 +73,7 @@ def defective_core(old, new, *more):
 
 @contextlib.contextmanager
 def quiet_error_streams():
-    """Capture what is written on the error streams during the block."""
+    """Capture ce qui est écrit sur les flux d'erreur pendant le bloc."""
     stream = io.StringIO()
     saved = sys.__stderr__, sys.stderr
     sys.__stderr__ = sys.stderr = stream
@@ -89,7 +89,7 @@ def load_adapter(name):
 
 
 def defective_adapter(name, old, new):
-    """The adapter `name` with one place changed on purpose."""
+    """L'adaptateur `name` avec un endroit changé exprès."""
     text = (ADAPTERS / (name + ".py")).read_text(encoding="utf-8")
     return load_text(
         defective_text(text, old, new), "lmm_defective_" + name, "<defective %s adapter>" % name
@@ -97,8 +97,8 @@ def defective_adapter(name, old, new):
 
 
 def core_reading_the_version_once():
-    """A core that reads the version once, at the start, and never asks again,
-    whatever it was: the defect the re-read removes."""
+    """Un cœur qui lit la version une fois, au démarrage, et ne la redemande jamais, quelle qu'elle ait
+    été : le défaut que la relecture supprime."""
     return defective_core(
         "        if self._app_version == UNKNOWN_VERSION:\n"
         "            self._app_version = _version_of(self._adapter, on_main=True)\n",
@@ -107,8 +107,8 @@ def core_reading_the_version_once():
 
 
 def returns_in_time(function, seconds=3.0):
-    """Call `function` in a fresh daemon thread; (True, value) when it returned
-    within `seconds`, (False, None) when it is still waiting."""
+    """Appelle `function` dans un fil démon neuf ; (True, value) quand elle a rendu dans les `seconds`,
+    (False, None) quand elle attend encore."""
     import threading
 
     outcome = {}
@@ -126,7 +126,7 @@ def returns_in_time(function, seconds=3.0):
 
 
 class PrivateDir:
-    """A temporary directory in mode 700, removed by `cleanup`."""
+    """Un répertoire temporaire en mode 700, supprimé par `cleanup`."""
 
     def __init__(self):
         self.path = pathlib.Path(tempfile.mkdtemp(prefix="lmm-bridge-test-"))
@@ -143,7 +143,7 @@ class PrivateDir:
 
 
 class FakeAdapter:
-    """An adapter without application: it records how the core calls it."""
+    """Un adaptateur sans application : il enregistre comment le cœur l'appelle."""
 
     app = "gimp"
 
@@ -178,9 +178,9 @@ class FakeAdapter:
 
 
 class LateVersionAdapter(FakeAdapter):
-    """An adapter whose application is not ready at first: `app_version` reports
-    "unknown" for the first `unknown_reads` reads and `ready` afterwards. It records
-    every read and the thread each one ran in."""
+    """Un adaptateur dont l'application n'est pas prête d'abord : `app_version` rapporte « unknown »
+    pour les `unknown_reads` premières lectures puis `ready`. Il enregistre chaque lecture et le fil
+    dans lequel chacune s'est exécutée."""
 
     def __init__(self, unknown_reads, ready="25.2.3.2", main_thread=None):
         super().__init__(version="unknown")
@@ -198,8 +198,8 @@ class LateVersionAdapter(FakeAdapter):
         return "unknown" if self.reads <= self.unknown_reads else self.ready
 
     def run_on_main(self, function):
-        """Without `main_thread`, the call is direct. With one (a `MainThread`), the
-        call runs there and this thread waits, as an application's main loop does."""
+        """Sans `main_thread`, l'appel est direct. Avec un (un `MainThread`), l'appel s'y exécute et ce fil
+        attend, comme le fait la boucle principale d'une application."""
         self.main_calls += 1
         if self._main_thread is None:
             return function()
@@ -207,8 +207,7 @@ class LateVersionAdapter(FakeAdapter):
 
 
 class MainThread:
-    """A thread of its own that runs the functions handed to `call`, standing for
-    the main thread of an application."""
+    """Un fil à lui qui exécute les fonctions remises à `call`, tenant lieu du fil principal d'une application."""
 
     def __init__(self):
         import queue
@@ -226,7 +225,7 @@ class MainThread:
             function, outcome, done = item
             try:
                 outcome["value"] = function()
-            except BaseException as error:  # handed back to the caller
+            except BaseException as error:  # rendue à l'appelant
                 outcome["error"] = error
             done.set()
 
@@ -247,8 +246,8 @@ class MainThread:
 
 
 class FamilyAdapter:
-    """An adapter that serves several families with one bridge, as the LibreOffice
-    one does. It records every call the core makes to it after the start."""
+    """Un adaptateur qui sert plusieurs familles avec un seul pont, comme celui de LibreOffice. Il
+    enregistre chaque appel que le cœur lui fait après le démarrage."""
 
     app = "libreoffice"
     families = ("writer", "calc", "impress")
@@ -285,14 +284,14 @@ class Running:
         self._stderr = stderr
 
     def said(self):
-        """Everything the bridge wrote on the error streams so far."""
+        """Tout ce que le pont a écrit sur les flux d'erreur jusqu'ici."""
         return self._stderr.getvalue()
 
 
 @contextlib.contextmanager
 def running(core, adapter=None, token_path=None, hello_timeout=None):
-    """Start the bridge of `core` on a free port, with the error streams
-    captured for the whole block, and always stop it."""
+    """Démarre le pont de `core` sur un port libre, avec les flux d'erreur capturés pendant tout le
+    bloc, et l'arrête toujours."""
     directory = None
     if token_path is None:
         directory = PrivateDir()
@@ -311,7 +310,7 @@ def running(core, adapter=None, token_path=None, hello_timeout=None):
 
 
 class Client:
-    """A client written from the protocol description, on a plain socket."""
+    """Un client écrit d'après la description du protocole, sur une socket ordinaire."""
 
     def __init__(self, port, timeout=5.0):
         self.socket = socket.create_connection((LOOPBACK, port), timeout=timeout)
@@ -325,7 +324,7 @@ class Client:
         self.send(json.dumps(value).encode("utf-8") + b"\n")
 
     def read_line(self):
-        """The next line, or None once the bridge closed the connection."""
+        """La ligne suivante, ou None une fois que le pont a fermé la connexion."""
         while b"\n" not in self.buffer:
             try:
                 chunk = self.socket.recv(65536)
@@ -351,8 +350,8 @@ class Client:
         return self.read_json()
 
     def outcome(self, wait=5.0):
-        """("closed", bytes) when the bridge closed the connection within `wait`
-        seconds, ("open", bytes) when it is still open; bytes are what arrived."""
+        """("closed", octets) quand le pont a fermé la connexion dans les `wait` secondes, ("open", octets)
+        quand elle est encore ouverte ; les octets sont ce qui est arrivé."""
         self.socket.settimeout(wait)
         data = b""
         while True:
@@ -374,13 +373,12 @@ class Client:
 
 
 def hello_when_free(port, timeout=5.0):
-    """Connect and say hello, again while the bridge turns the connection away.
+    """Se connecte et dit hello, de nouveau tant que le pont refuse la connexion.
 
-    A bridge has a single place and frees it a moment after the previous connection
-    closed; until then it closes a new connection at once. How long that takes
-    depends on the load of the machine, so a test that connects twice in a row asks
-    again instead of sleeping. Returns (client, answer); the answer is None when the
-    bridge did not answer within `timeout` seconds."""
+    Un pont n'a qu'une place et la libère un instant après la fermeture de la connexion précédente ;
+    jusque-là il ferme aussitôt une nouvelle connexion. Le temps que cela prend dépend de la charge
+    de la machine : un test qui se connecte deux fois de suite redemande donc au lieu de dormir. Rend
+    (client, réponse) ; la réponse vaut None quand le pont n'a pas répondu dans les `timeout` secondes."""
     deadline = time.monotonic() + timeout
     while True:
         client = Client(port)

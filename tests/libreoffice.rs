@@ -1,11 +1,10 @@
-//! The LibreOffice module of the Hub: three targets that share one bridge.
+//! Le module LibreOffice du Hub : trois cibles qui partagent un pont.
 //!
-//! Why this module exists
-//! Writer, Calc and Impress reach the same bridge, which accepts one connection
-//! and runs one script at a time. These tests show that the three targets open a
-//! single connection, name their family in every request, share the busy state,
-//! and report the absence of an active document, each check failing on a set of
-//! modules built to break it.
+//! Pourquoi ce module existe
+//! Writer, Calc et Impress atteignent le même pont, qui accepte une connexion et exécute un script à
+//! la fois. Ces tests montrent que les trois cibles ouvrent une seule connexion, nomment leur famille
+//! dans chaque requête, partagent l'état d'occupation, et signalent l'absence de document actif,
+//! chaque contrôle échouant sur un jeu de modules construit pour le casser.
 
 #[macro_use]
 mod common;
@@ -71,10 +70,10 @@ fn config_for_port(port: u16) -> libremodular_mcp::config::Config {
     ))
 }
 
-/// How the three modules are made: the registry, or something built to be wrong.
+/// Comment les trois modules sont faits : le registre, ou quelque chose construit pour être faux.
 type Make = fn(u16) -> Vec<Arc<dyn Module>>;
 
-/// The production way: a registry built from the configuration.
+/// La voie de production : un registre construit depuis la configuration.
 fn from_the_registry(port: u16) -> Vec<Arc<dyn Module>> {
     let registry = Registry::from_config(&config_for_port(port), &token());
     TARGETS
@@ -83,7 +82,7 @@ fn from_the_registry(port: u16) -> Vec<Arc<dyn Module>> {
         .collect()
 }
 
-/// Defective on purpose: each target opens a connection of its own.
+/// Défectueux exprès : chaque cible ouvre une connexion à elle.
 fn one_connection_per_target(port: u16) -> Vec<Arc<dyn Module>> {
     TARGETS
         .iter()
@@ -98,7 +97,7 @@ fn one_connection_per_target(port: u16) -> Vec<Arc<dyn Module>> {
         .collect()
 }
 
-/// Defective on purpose: one shared connection, but the family is never named.
+/// Défectueux exprès : une connexion partagée, mais la famille n'est jamais nommée.
 fn without_the_family(port: u16) -> Vec<Arc<dyn Module>> {
     let shared = new_connection_slot();
     TARGETS
@@ -112,8 +111,7 @@ fn without_the_family(port: u16) -> Vec<Arc<dyn Module>> {
         .collect()
 }
 
-/// Defective on purpose: the shared connection and the family, but no word about
-/// an absent active document.
+/// Défectueux exprès : la connexion partagée et la famille, mais pas un mot sur un document actif absent.
 fn without_the_warning(port: u16) -> Vec<Arc<dyn Module>> {
     let shared = new_connection_slot();
     TARGETS
@@ -128,7 +126,7 @@ fn without_the_warning(port: u16) -> Vec<Arc<dyn Module>> {
         .collect()
 }
 
-// --- the names ------------------------------------------------------------------
+// --- les noms -----------------------------------------------------------------------
 
 #[test]
 fn each_target_names_its_family_and_nothing_else_does() {
@@ -147,10 +145,10 @@ fn each_target_names_its_family_and_nothing_else_does() {
     assert_eq!(BRIDGE_APP, "libreoffice");
 }
 
-// --- one connection ---------------------------------------------------------------
+// --- une connexion ------------------------------------------------------------------
 
-/// A bridge with a single place, like the real one: the three targets must all be
-/// served, and by a single connection.
+/// Un pont à une seule place, comme le vrai : les trois cibles doivent toutes être servies, et par
+/// une seule connexion.
 fn check_the_targets_open_one_connection(make: Make) -> Verdict {
     let bridge =
         FakeBridge::start_single_place(FAKE_TOKEN, HelloMode::Libreoffice, answers_everything());
@@ -186,7 +184,7 @@ fn counter_proof_a_connection_per_target_is_turned_away() {
     ));
 }
 
-// --- the family -----------------------------------------------------------------
+// --- la famille ---------------------------------------------------------------------
 
 type Seen = Arc<Mutex<Vec<(String, Value)>>>;
 
@@ -209,7 +207,7 @@ fn recording_bridge(seen: &Seen) -> FakeBridge {
     )
 }
 
-/// Every execute and state request names the family of its target.
+/// Chaque requête execute et state nomme la famille de sa cible.
 fn check_every_request_names_its_family(make: Make) -> Verdict {
     let seen: Seen = Arc::default();
     let bridge = recording_bridge(&seen);
@@ -260,9 +258,9 @@ fn a_tcp_target_never_sends_a_family() {
     assert_eq!(got, vec![("execute".to_owned(), Value::Null)]);
 }
 
-// --- the busy state ----------------------------------------------------------------
+// --- l'état d'occupation ------------------------------------------------------------
 
-/// A script running on Calc makes Writer answer busy, and nothing is sent for it.
+/// Un script qui tourne sur Calc fait répondre « occupé » à Writer, et rien ne lui est envoyé.
 fn check_a_running_script_makes_the_other_targets_busy(make: Make) -> Verdict {
     let bridge = FakeBridge::start_single_place(
         FAKE_TOKEN,
@@ -271,7 +269,7 @@ fn check_a_running_script_makes_the_other_targets_busy(make: Make) -> Verdict {
     );
     let modules = make(bridge.port());
     let (writer, calc) = (Arc::clone(&modules[0]), Arc::clone(&modules[1]));
-    // The bridge is reached once before, so that connecting is not what is timed.
+    // Le pont est joint une fois avant, pour que ce ne soit pas la connexion qui soit chronométrée.
     ensure!(writer.health().connected, "the bridge is not reachable");
     let running = std::thread::spawn(move || calc.execute("slow()", 5, Path::new(WORK)));
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -327,7 +325,7 @@ fn counter_proof_targets_with_connections_of_their_own_do_not_share_the_busy_sta
     ));
 }
 
-// --- the state --------------------------------------------------------------------
+// --- l'état -------------------------------------------------------------------------
 
 fn state_bridge(active: Value) -> FakeBridge {
     FakeBridge::start_single_place(
@@ -344,7 +342,7 @@ fn state_bridge(active: Value) -> FakeBridge {
     )
 }
 
-/// An absent active document is said in a warning; a present one is not.
+/// Un document actif absent est dit dans un avertissement ; un document présent ne l'est pas.
 fn check_an_absent_active_document_is_reported(make: Make) -> Verdict {
     let absent = state_bridge(Value::Null);
     let reply = make(absent.port())[1]
@@ -390,8 +388,7 @@ fn counter_proof_a_missing_warning_is_detected() {
 
 #[test]
 fn a_state_without_an_active_part_gets_no_such_warning() {
-    // An empty state is what the bridge sends without LibreOffice: it is not an
-    // absent document.
+    // Un état vide est ce que le pont envoie sans LibreOffice : ce n'est pas un document absent.
     let bridge = FakeBridge::start_single_place(
         FAKE_TOKEN,
         HelloMode::Libreoffice,
@@ -406,7 +403,7 @@ fn a_state_without_an_active_part_gets_no_such_warning() {
     assert_eq!(reply.warnings.len(), 1, "{:?}", reply.warnings);
 }
 
-// --- the Hub -----------------------------------------------------------------------
+// --- le Hub -------------------------------------------------------------------------
 
 #[test]
 fn the_hub_lists_the_three_targets_in_uno_mode_with_the_same_health() {
@@ -501,7 +498,7 @@ fn targets_configured_on_two_ports_use_two_connections() {
     assert_eq!(second.scripts().len(), 1);
 }
 
-// --- closing ------------------------------------------------------------------------
+// --- la fermeture -------------------------------------------------------------------
 
 #[test]
 fn closing_the_three_modules_is_harmless_and_sends_nothing() {
@@ -520,12 +517,12 @@ fn closing_the_three_modules_is_harmless_and_sends_nothing() {
         requests,
         "closing sends nothing to the bridge"
     );
-    // The connection is opened again on the next use, by whichever target asks.
+    // La connexion est rouverte au prochain usage, par la cible qui le demande.
     assert!(modules[2].health().connected);
     assert_eq!(bridge.connections(), 2);
 }
 
-// --- a mode the module does not serve -----------------------------------------------
+// --- un mode que le module ne sert pas ----------------------------------------------
 
 #[test]
 fn a_libreoffice_target_in_another_mode_is_unavailable_with_the_reason() {

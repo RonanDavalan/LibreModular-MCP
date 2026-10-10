@@ -1,12 +1,11 @@
-//! Guard results pinned against an independent implementation.
+//! Résultats du garde-fou figés contre une implémentation indépendante.
 //!
-//! Why this module exists
-//! A change that alters what the guard sees in a script must show up as a failure,
-//! not as a silent shift. Each pinned entry holds the findings and warnings that an
-//! independent implementation of the same checks reports for the script, and the
-//! guard is held to the same result. Entries flagged `same_as_reference: false`
-//! record the one deliberate difference: a `rmdir` or `unlink` call is only
-//! refused on an object recognised as a path.
+//! Pourquoi ce module existe
+//! Un changement qui modifie ce que le garde-fou voit dans un script doit apparaître comme un échec,
+//! pas comme un glissement silencieux. Chaque entrée figée contient les constats et les avertissements
+//! qu'une implémentation indépendante des mêmes contrôles rapporte pour le script, et le garde-fou est
+//! tenu au même résultat. Les entrées marquées `same_as_reference: false` consignent l'unique
+//! différence voulue : un appel `rmdir` ou `unlink` n'est refusé que sur un objet reconnu comme un chemin.
 
 use std::fs;
 use std::path::PathBuf;

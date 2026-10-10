@@ -1,9 +1,10 @@
-//! Configuration loading and path resolution for the Hub.
+//! Chargement de la configuration et résolution des chemins du Hub.
 //!
-//! Why this module exists
-//! Every limit and switch that changes how strict the Hub is has to come from one
-//! place, validated once, so that a typo in a file can never silently weaken a
-//! protection. Nothing else in the crate reads configuration or the environment.
+//! Pourquoi ce module existe
+//! Chaque limite et chaque interrupteur qui change la sévérité du Hub doit venir d'un seul
+//! endroit, validé une fois, pour qu'une faute de frappe dans un fichier ne puisse jamais
+//! affaiblir une protection en silence. Rien d'autre dans la crate ne lit la configuration
+//! ni l'environnement.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -14,9 +15,9 @@ use serde::Deserialize;
 
 use crate::security::{self, SecurityError};
 
-/// Name of the directory this program uses under each base directory.
+/// Nom du répertoire que ce programme utilise sous chaque répertoire de base.
 pub const PACKAGE_DIR_NAME: &str = "libremodular-mcp";
-/// A configuration file larger than this is refused.
+/// Un fichier de configuration plus grand que cela est refusé.
 pub const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
 
 const PORT_MIN: i64 = 1024;
@@ -24,7 +25,7 @@ const PORT_MAX: i64 = 65535;
 const MIN_BYTE_LIMIT: i64 = 1024;
 const MIN_SECONDS: i64 = 1;
 
-/// How the Hub reaches an application.
+/// Comment le Hub joint une application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Tcp,
@@ -33,7 +34,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    /// The value written in the configuration file.
+    /// La valeur écrite dans le fichier de configuration.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -53,7 +54,7 @@ impl Mode {
     }
 }
 
-/// The built-in settings of one known application.
+/// Les réglages intégrés d'une application connue.
 #[derive(Debug, Clone, Copy)]
 pub struct AppDefaults {
     pub name: &'static str,
@@ -79,8 +80,8 @@ const fn app(
     }
 }
 
-/// Every application the Hub knows, with its default branching. None is enabled
-/// until the operator says so.
+/// Toutes les applications que le Hub connaît, avec leur branchement par défaut. Aucune
+/// n'est activée tant que l'opérateur ne le dit pas.
 pub const APP_DEFAULTS: [AppDefaults; 7] = [
     app("gimp", Mode::Tcp, Some(9301), None, None),
     app("krita", Mode::Tcp, Some(9302), None, None),
@@ -112,11 +113,12 @@ fn known_applications() -> String {
 }
 
 // --------------------------------------------------------------------------
-// Errors
+// Erreurs
 // --------------------------------------------------------------------------
 
-/// What kind of mistake the file contains. Never the offending text itself: a
-/// configuration may hold paths or values the operator does not want echoed.
+/// Quelle sorte de faute le fichier contient. Jamais le texte fautif lui-même : une
+/// configuration peut contenir des chemins ou des valeurs que l'opérateur ne veut pas
+/// voir répétés.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rejection {
     UnknownKey,
@@ -125,20 +127,20 @@ pub enum Rejection {
     Malformed,
 }
 
-/// The configuration, or the environment it depends on, is invalid.
+/// La configuration, ou l'environnement dont elle dépend, est invalide.
 #[derive(Debug)]
 pub enum ConfigError {
-    /// The base directories cannot be determined; the text names the variable.
+    /// Les répertoires de base ne peuvent pas être déterminés ; le texte nomme la variable.
     Environment(String),
-    /// The file cannot be trusted or read.
+    /// Le fichier ne peut pas être cru ni lu.
     Unsafe(SecurityError),
     NotUtf8,
-    /// The file is not what the schema allows, at this position when known.
+    /// Le fichier n'est pas ce que le schéma permet, à cette position quand elle est connue.
     Rejected {
         kind: Rejection,
         position: Option<(usize, usize)>,
     },
-    /// A value breaks a bound; names the key and the bound, never the value.
+    /// Une valeur dépasse une borne ; nomme la clé et la borne, jamais la valeur.
     Invalid(String),
 }
 
@@ -183,10 +185,10 @@ fn invalid(message: impl Into<String>) -> ConfigError {
 }
 
 // --------------------------------------------------------------------------
-// Settings
+// Réglages
 // --------------------------------------------------------------------------
 
-/// The size and time bounds that keep one request from exhausting the Hub.
+/// Les bornes de taille et de temps qui empêchent une requête d'épuiser le Hub.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
     pub max_script_bytes: usize,
@@ -208,7 +210,7 @@ impl Default for Limits {
     }
 }
 
-/// The switches that make the Hub less strict. All off by default.
+/// Les interrupteurs qui rendent le Hub moins strict. Tous désactivés par défaut.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SecuritySettings {
     pub allow_dangerous_scripts: bool,
@@ -216,7 +218,7 @@ pub struct SecuritySettings {
     pub extra_write_roots: Vec<String>,
 }
 
-/// The settings of one application.
+/// Les réglages d'une application.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppSettings {
     pub name: &'static str,
@@ -227,7 +229,7 @@ pub struct AppSettings {
     pub bridge_port: Option<u16>,
 }
 
-/// A validated configuration. It cannot be modified once built.
+/// Une configuration validée. Elle ne peut plus être modifiée une fois construite.
 ///
 /// ```compile_fail
 /// let config = libremodular_mcp::config::Config::strict_defaults();
@@ -246,7 +248,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// The configuration of an absent file: the strictest values, nothing enabled.
+    /// La configuration d'un fichier absent : les valeurs les plus strictes, rien d'activé.
     #[must_use]
     pub fn strict_defaults() -> Config {
         let apps = APP_DEFAULTS
@@ -287,7 +289,7 @@ impl Config {
         self.apps.iter().find(|app| app.name == name)
     }
 
-    /// The names of the enabled applications, in the order of the registry.
+    /// Les noms des applications activées, dans l'ordre du registre.
     #[must_use]
     pub fn active_names(&self) -> Vec<&'static str> {
         self.apps
@@ -297,10 +299,10 @@ impl Config {
             .collect()
     }
 
-    /// Validate the content of a configuration file already read by the security module.
+    /// Valide le contenu d'un fichier de configuration déjà lu par le module de sécurité.
     ///
-    /// # Errors
-    /// Every violation is an error that names the key or the position, never a value.
+    /// # Erreurs
+    /// Chaque violation est une erreur qui nomme la clé ou la position, jamais une valeur.
     pub fn from_bytes(bytes: &[u8]) -> Result<Config, ConfigError> {
         let text = std::str::from_utf8(bytes).map_err(|_| ConfigError::NotUtf8)?;
         let raw: RawConfig = toml::from_str(text).map_err(|error| reject(text, &error))?;
@@ -308,11 +310,11 @@ impl Config {
     }
 }
 
-/// Load the configuration file. An absent file yields the strict defaults; a file
-/// that cannot be trusted or read is an error, never a fallback.
+/// Charge le fichier de configuration. Un fichier absent donne les valeurs strictes par défaut ;
+/// un fichier qui ne peut être ni cru ni lu est une erreur, jamais un repli.
 ///
-/// # Errors
-/// A configuration that is unsafe (links, permissions, size), unreadable or invalid.
+/// # Erreurs
+/// Une configuration peu sûre (liens, permissions, taille), illisible ou invalide.
 pub fn load(path: &Path) -> Result<Config, ConfigError> {
     match security::read_control_file(path, MAX_CONFIG_BYTES) {
         Ok(bytes) => Config::from_bytes(&bytes),
@@ -322,7 +324,7 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
 }
 
 // --------------------------------------------------------------------------
-// Parsing
+// Analyse
 // --------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -372,8 +374,8 @@ fn position(text: &str, offset: usize) -> (usize, usize) {
     (line, column)
 }
 
-/// Turn the parser's error into one that carries a position and a kind, and
-/// nothing from the file: its own message quotes the text around the mistake.
+/// Transforme l'erreur de l'analyseur en une erreur qui porte une position et une sorte, et
+/// rien du fichier : son propre message cite le texte autour de la faute.
 fn reject(text: &str, error: &toml::de::Error) -> ConfigError {
     let message = error.message();
     let kind = if message.starts_with("unknown field") {
@@ -551,10 +553,10 @@ fn validate_apps(mut raw: BTreeMap<String, RawApp>) -> Result<Vec<AppSettings>, 
 }
 
 // --------------------------------------------------------------------------
-// Locations
+// Emplacements
 // --------------------------------------------------------------------------
 
-/// The three base directories of the Hub.
+/// Les trois répertoires de base du Hub.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
     pub config_dir: PathBuf,
@@ -578,11 +580,11 @@ impl Paths {
         self.state_dir.join("audit.jsonl")
     }
 
-    /// The volatile directory, or a refusal when the system gave none: volatile
-    /// files are never written anywhere else.
+    /// Le répertoire volatil, ou un refus quand le système n'en a donné aucun : les fichiers
+    /// volatils ne sont jamais écrits ailleurs.
     ///
-    /// # Errors
-    /// [`ConfigError::Environment`] when `XDG_RUNTIME_DIR` is not usable.
+    /// # Erreurs
+    /// [`ConfigError::Environment`] quand `XDG_RUNTIME_DIR` n'est pas utilisable.
     pub fn require_runtime_dir(&self) -> Result<&Path, ConfigError> {
         self.runtime_dir.as_deref().ok_or_else(|| {
             ConfigError::Environment(
@@ -603,11 +605,11 @@ fn absolute_override(variable: &str, value: &OsString) -> Result<PathBuf, Config
     }
 }
 
-/// Resolve the three base directories (XDG rules, with the `LIBREMODULAR_*`
-/// overrides used for tests and unusual layouts). `lookup` reads one variable.
+/// Résout les trois répertoires de base (règles XDG, avec les surcharges `LIBREMODULAR_*`
+/// employées pour les tests et les dispositions inhabituelles). `lookup` lit une variable.
 ///
-/// # Errors
-/// A relative override, or no usable home directory when one is needed.
+/// # Erreurs
+/// Une surcharge relative, ou aucun répertoire personnel utilisable quand il en faut un.
 pub fn resolve_paths(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Paths, ConfigError> {
     let non_empty = |name: &str| lookup(name).filter(|value| !value.is_empty());
     let home = || -> Result<PathBuf, ConfigError> {
@@ -657,16 +659,16 @@ pub fn resolve_paths(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Paths,
     })
 }
 
-/// [`resolve_paths`] on the environment of the running process.
+/// [`resolve_paths`] sur l'environnement du processus en cours.
 ///
-/// # Errors
-/// See [`resolve_paths`].
+/// # Erreurs
+/// Voir [`resolve_paths`].
 pub fn resolve_paths_from_process() -> Result<Paths, ConfigError> {
     resolve_paths(|name| std::env::var_os(name))
 }
 
-/// The home directory, when `HOME` holds an absolute path. The script guard uses
-/// it to expand a leading `~` in a literal path.
+/// Le répertoire personnel, quand `HOME` contient un chemin absolu. Le garde-fou de script
+/// s'en sert pour développer un `~` initial dans un chemin littéral.
 #[must_use]
 pub fn home_dir(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
     lookup("HOME")
@@ -675,14 +677,14 @@ pub fn home_dir(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
         .filter(|path| path.is_absolute())
 }
 
-/// [`home_dir`] on the environment of the running process.
+/// [`home_dir`] sur l'environnement du processus en cours.
 #[must_use]
 pub fn home_dir_from_process() -> Option<PathBuf> {
     home_dir(|name| std::env::var_os(name))
 }
 
-/// The values of the named variables in the environment of the Hub, for the
-/// processes a module starts. Absent variables are left out.
+/// Les valeurs des variables nommées dans l'environnement du Hub, pour les processus qu'un
+/// module démarre. Les variables absentes sont laissées de côté.
 #[must_use]
 pub fn environment_values(names: &[&str]) -> Vec<(OsString, OsString)> {
     names
@@ -691,9 +693,9 @@ pub fn environment_values(names: &[&str]) -> Vec<(OsString, OsString)> {
         .collect()
 }
 
-/// Every variable of the environment of the running process. The launcher
-/// decides what each program it starts receives, so it works from this snapshot
-/// rather than from the environment itself.
+/// Toutes les variables de l'environnement du processus en cours. Le lanceur décide de ce que
+/// chaque programme qu'il démarre reçoit : il travaille donc sur cet instantané plutôt que
+/// sur l'environnement lui-même.
 #[must_use]
 pub fn environment_snapshot() -> Vec<(OsString, OsString)> {
     std::env::vars_os().collect()

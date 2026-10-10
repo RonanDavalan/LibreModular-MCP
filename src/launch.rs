@@ -1,12 +1,12 @@
-//! The launcher of LibreOffice and its bridge: `libremodular-launch libreoffice`.
+//! Le lanceur de LibreOffice et de son pont : `libremodular-launch libreoffice`.
 //!
-//! Why this module exists
-//! LibreOffice only listens for UNO when it was started with an `--accept`
-//! option, and its bridge is a separate process that has to find the token and the
-//! ports. Doing it by hand invites a token on a command line and an attachment to
-//! an instance that holds unsaved work. Here the argument lists are fixed by code,
-//! the token travels as the path of its file and never as its content, and nothing
-//! is started next to a LibreOffice the operator already runs.
+//! Pourquoi ce module existe
+//! LibreOffice n'écoute UNO que s'il a été démarré avec une option `--accept`, et son pont est un
+//! processus distinct qui doit trouver le jeton et les ports. Le faire à la main invite à mettre un
+//! jeton sur une ligne de commande et à se rattacher à une instance qui contient du travail non
+//! enregistré. Ici les listes d'arguments sont fixées par le code, le jeton voyage comme le chemin
+//! de son fichier et jamais comme son contenu, et rien n'est démarré à côté d'un LibreOffice que
+//! l'opérateur fait déjà tourner.
 
 use std::ffi::{OsStr, OsString};
 use std::fmt;
@@ -27,32 +27,32 @@ use crate::security::{
     replace_private_file,
 };
 
-/// The LibreOffice executable, unless the caller gives another.
+/// L'exécutable LibreOffice, sauf si l'appelant en donne un autre.
 pub const DEFAULT_SOFFICE: &str = "/usr/bin/soffice";
-/// The interpreter that runs the bridge: the system one, which has `uno`.
+/// L'interpréteur qui exécute le pont : celui du système, qui a `uno`.
 pub const DEFAULT_PYTHON: &str = "/usr/bin/python3";
-/// Where the processes of the system are listed.
+/// Où sont listés les processus du système.
 pub const DEFAULT_PROC: &str = "/proc";
-/// Put on `LD_LIBRARY_PATH` so that `import uno` finds LibreOffice's libraries.
+/// Posé sur `LD_LIBRARY_PATH` pour que `import uno` trouve les bibliothèques de LibreOffice.
 pub const LIBREOFFICE_LIBRARIES: &str = "/usr/lib/libreoffice/program";
-/// Put on `PYTHONPATH` so that the system interpreter finds `uno`.
+/// Posé sur `PYTHONPATH` pour que l'interpréteur du système trouve `uno`.
 pub const PYTHON_PACKAGES: &str = "/usr/lib/python3/dist-packages";
-/// The only variables the bridge inherits from the launcher.
+/// Les seules variables que le pont hérite du lanceur.
 pub const BRIDGE_INHERITED: [&str; 4] = ["PATH", "HOME", "LANG", "LC_ALL"];
-/// The variables of this program's own: no application has a use for them, so none
-/// is handed to LibreOffice.
+/// Les variables propres à ce programme : aucune application n'en a l'usage, donc aucune n'est
+/// remise à LibreOffice.
 pub const OWN_VARIABLES_PREFIX: &str = "LIBREMODULAR_";
-/// The name of the process a running LibreOffice has.
+/// Le nom du processus d'un LibreOffice en cours d'exécution.
 pub const SOFFICE_PROCESS: &str = "soffice.bin";
-/// The directory, under the volatile one, that holds what a launch leaves.
+/// Le répertoire, sous le volatil, qui contient ce qu'un lancement laisse.
 pub const LAUNCH_DIR: &str = "launch";
-/// The file that records the processes of the last launch.
+/// Le fichier qui enregistre les processus du dernier lancement.
 pub const RECORD_FILE: &str = "libreoffice.pids";
-/// The applications whose bridge the operator starts by hand.
+/// Les applications dont l'opérateur démarre le pont à la main.
 pub const START_BY_HAND: [&str; 4] = ["gimp", "krita", "blender", "inkscape"];
-/// Exit code of a launch that failed while doing its work.
+/// Code de sortie d'un lancement qui a échoué en faisant son travail.
 pub const EXIT_FAILED: u8 = 1;
-/// Exit code of a refusal: a wrong usage, or something the operator must change.
+/// Code de sortie d'un refus : un mauvais usage, ou quelque chose que l'opérateur doit changer.
 pub const EXIT_REFUSED: u8 = 2;
 
 const TARGET_PREFIX: &str = "libreoffice-";
@@ -64,8 +64,8 @@ const USAGE: &str = "usage:\n  \
     libremodular-launch libreoffice --stop\n\
     The bridges of the other applications are started by hand: see docs/modules/<name>.md\n";
 
-/// Where the programs are, and where the processes of the system are listed.
-/// Fixed by the caller: nothing a script or the model says can change them.
+/// Où sont les programmes, et où sont listés les processus du système. Fixé par l'appelant : rien
+/// de ce qu'un script ou le modèle dit ne peut les changer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Programs {
     pub soffice: PathBuf,
@@ -83,67 +83,67 @@ impl Default for Programs {
     }
 }
 
-/// What a launch needs, all decided before anything starts.
+/// Ce dont un lancement a besoin, tout décidé avant que rien ne démarre.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
     pub uno_port: u16,
     pub bridge_port: u16,
     pub bridge_file: PathBuf,
-    /// The file that holds the token. The token itself never leaves it.
+    /// Le fichier qui contient le jeton. Le jeton lui-même n'en sort jamais.
     pub token_file: PathBuf,
 }
 
-/// A process to start, described completely before anything runs.
+/// Un processus à démarrer, décrit complètement avant que rien ne s'exécute.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spawn {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub current_dir: PathBuf,
-    /// The whole environment of the process: nothing else is inherited.
+    /// Tout l'environnement du processus : rien d'autre n'est hérité.
     pub env: Vec<(OsString, OsString)>,
 }
 
-/// Why a launch or a stop did not happen.
+/// Pourquoi un lancement ou un arrêt n'a pas eu lieu.
 #[derive(Debug)]
 pub enum LaunchError {
-    /// No target of LibreOffice is enabled in the mode `uno`.
+    /// Aucune cible de LibreOffice n'est activée dans le mode `uno`.
     NoTarget,
-    /// Enabled targets name different values for one key.
+    /// Des cibles activées nomment des valeurs différentes pour une même clé.
     PortsDisagree {
         key: &'static str,
         values: Vec<(&'static str, Option<u16>)>,
     },
-    /// The two ports are the same.
+    /// Les deux ports sont les mêmes.
     PortsClash { port: u16 },
-    /// The bridge file cannot be trusted.
+    /// Le fichier du pont ne peut pas être cru.
     BridgeFile(SecurityError),
-    /// An instance of LibreOffice of the user already runs.
+    /// Une instance de LibreOffice de l'utilisateur tourne déjà.
     AlreadyRunning { pids: Vec<u32>, uno_port: u16 },
-    /// A bridge started by an earlier launch still runs.
+    /// Un pont démarré par un lancement antérieur tourne encore.
     BridgeStillRunning { pid: u32 },
-    /// The configuration cannot be read or is not usable.
+    /// La configuration ne peut pas être lue ou n'est pas utilisable.
     Config(ConfigError),
-    /// A file or a directory of the launcher cannot be used.
+    /// Un fichier ou un répertoire du lanceur ne peut pas être utilisé.
     Files(SecurityError),
-    /// The record of an earlier launch does not make sense.
+    /// L'enregistrement d'un lancement antérieur n'a pas de sens.
     MalformedRecord(PathBuf),
-    /// The processes of the system cannot be listed.
+    /// Les processus du système ne peuvent pas être listés.
     Processes(io::Error),
-    /// A program could not be started.
+    /// Un programme n'a pas pu être démarré.
     Start { program: PathBuf, source: io::Error },
-    /// The bridge did not start after LibreOffice did.
+    /// Le pont n'a pas démarré après LibreOffice.
     BridgeNotStarted {
         soffice_pid: u32,
         source: Box<LaunchError>,
     },
-    /// A signal could not be sent.
+    /// Un signal n'a pas pu être envoyé.
     Signal { pid: u32, source: io::Error },
-    /// The report could not be written.
+    /// Le rapport n'a pas pu être écrit.
     Output(io::Error),
 }
 
 impl LaunchError {
-    /// The exit code that goes with the error.
+    /// Le code de sortie qui va avec l'erreur.
     #[must_use]
     pub fn exit_code(&self) -> u8 {
         match self {
@@ -245,10 +245,10 @@ impl fmt::Display for LaunchError {
 impl std::error::Error for LaunchError {}
 
 // --------------------------------------------------------------------------
-// The commands: pure, nothing starts here
+// Les commandes : pures, rien ne démarre ici
 // --------------------------------------------------------------------------
 
-/// The option that makes LibreOffice listen for UNO, on the loopback address only.
+/// L'option qui fait écouter UNO à LibreOffice, sur l'adresse de bouclage seulement.
 #[must_use]
 pub fn accept_argument(uno_port: u16) -> OsString {
     OsString::from(format!(
@@ -256,10 +256,10 @@ pub fn accept_argument(uno_port: u16) -> OsString {
     ))
 }
 
-/// LibreOffice with its window. A window needs the display, the session bus and
-/// the user's settings, and the operator would give it the same by starting it
-/// from a terminal: it receives the environment of the launcher, apart from the
-/// variables of this program's own ([`OWN_VARIABLES_PREFIX`]).
+/// LibreOffice avec sa fenêtre. Une fenêtre a besoin de l'affichage, du bus de session et des
+/// réglages de l'utilisateur, et l'opérateur lui donnerait la même chose en le démarrant depuis
+/// un terminal : il reçoit l'environnement du lanceur, hors les variables propres à ce programme
+/// ([`OWN_VARIABLES_PREFIX`]).
 #[must_use]
 pub fn soffice_spawn(
     programs: &Programs,
@@ -283,8 +283,8 @@ pub fn soffice_spawn(
     }
 }
 
-/// The environment of the bridge: four inherited variables, the two that let the
-/// system interpreter find `uno`, the two ports and the path of the token file.
+/// L'environnement du pont : quatre variables héritées, les deux qui laissent l'interpréteur du
+/// système trouver `uno`, les deux ports et le chemin du fichier du jeton.
 #[must_use]
 pub fn bridge_environment(
     environment: &[(OsString, OsString)],
@@ -312,7 +312,7 @@ pub fn bridge_environment(
     env
 }
 
-/// `python3 <bridge file>`.
+/// `python3 <fichier du pont>`.
 #[must_use]
 pub fn bridge_spawn(
     programs: &Programs,
@@ -328,7 +328,7 @@ pub fn bridge_spawn(
 }
 
 // --------------------------------------------------------------------------
-// The plan, from the configuration
+// Le plan, depuis la configuration
 // --------------------------------------------------------------------------
 
 fn libreoffice_targets(config: &Config) -> Vec<&AppSettings> {
@@ -339,7 +339,7 @@ fn libreoffice_targets(config: &Config) -> Vec<&AppSettings> {
         .collect()
 }
 
-/// The one value an enabled target names for `key`, or the disagreement.
+/// L'unique valeur qu'une cible activée nomme pour `key`, ou le désaccord.
 fn agreed_port(
     targets: &[&AppSettings],
     key: &'static str,
@@ -356,10 +356,10 @@ fn agreed_port(
     }
 }
 
-/// The ports of the enabled targets of LibreOffice, which must all agree.
+/// Les ports des cibles activées de LibreOffice, qui doivent tous concorder.
 ///
-/// # Errors
-/// No target enabled, disagreeing or missing ports, or the two ports equal.
+/// # Erreurs
+/// Aucune cible activée, des ports en désaccord ou manquants, ou les deux ports égaux.
 pub fn plan_from_config(
     config: &Config,
     bridge_file: PathBuf,
@@ -383,19 +383,19 @@ pub fn plan_from_config(
 }
 
 // --------------------------------------------------------------------------
-// The processes of the system
+// Les processus du système
 // --------------------------------------------------------------------------
 
 fn current_uid() -> u32 {
     rustix::process::geteuid().as_raw()
 }
 
-/// The processes of the current user that are a running LibreOffice, read from
-/// the listing of `proc_dir` without starting any command.
+/// Les processus de l'utilisateur courant qui sont un LibreOffice en cours d'exécution, lus dans
+/// le listage de `proc_dir` sans démarrer aucune commande.
 ///
-/// # Errors
-/// [`LaunchError::Processes`] when the listing cannot be read: the launch does
-/// not go on without knowing.
+/// # Erreurs
+/// [`LaunchError::Processes`] quand le listage ne peut pas être lu : le lancement ne continue
+/// pas sans le savoir.
 pub fn running_soffice(proc_dir: &Path, uid: u32) -> Result<Vec<u32>, LaunchError> {
     let mut found = Vec::new();
     for entry in fs::read_dir(proc_dir).map_err(LaunchError::Processes)? {
@@ -419,9 +419,9 @@ pub fn running_soffice(proc_dir: &Path, uid: u32) -> Result<Vec<u32>, LaunchErro
     Ok(found)
 }
 
-/// Whether `pid` is a process started as `python3 <bridge_file>`: one of its
-/// arguments is exactly the bridge file. A process that is gone, one the user
-/// cannot read, or any other program is not.
+/// Dit si `pid` est un processus démarré comme `python3 <bridge_file>` : l'un de ses arguments
+/// est exactement le fichier du pont. Un processus disparu, un que l'utilisateur ne peut pas lire,
+/// ou tout autre programme ne l'est pas.
 #[must_use]
 pub fn is_the_bridge(proc_dir: &Path, pid: u32, bridge_file: &Path) -> bool {
     let cmdline = proc_dir.join(pid.to_string()).join("cmdline");
@@ -434,10 +434,10 @@ pub fn is_the_bridge(proc_dir: &Path, pid: u32, bridge_file: &Path) -> bool {
 }
 
 // --------------------------------------------------------------------------
-// The record of a launch
+// L'enregistrement d'un lancement
 // --------------------------------------------------------------------------
 
-/// The processes a launch started.
+/// Les processus qu'un lancement a démarrés.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Record {
     pub soffice_pid: Option<u32>,
@@ -445,7 +445,7 @@ pub struct Record {
 }
 
 impl Record {
-    /// One line per process: `soffice <pid>` and `bridge <pid> <bridge file>`.
+    /// Une ligne par processus : `soffice <pid>` et `bridge <pid> <fichier du pont>`.
     #[must_use]
     pub fn render(&self) -> String {
         let mut text = String::new();
@@ -458,7 +458,7 @@ impl Record {
         text
     }
 
-    /// Read what [`Record::render`] wrote; `None` for anything else.
+    /// Lit ce que [`Record::render`] a écrit ; `None` pour tout le reste.
     #[must_use]
     pub fn parse(text: &str) -> Option<Record> {
         let mut record = Record {
@@ -485,7 +485,7 @@ fn record_path(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join(LAUNCH_DIR).join(RECORD_FILE)
 }
 
-/// The record of the last launch, if there is one.
+/// L'enregistrement du dernier lancement, s'il y en a un.
 fn read_record(path: &Path) -> Result<Option<Record>, LaunchError> {
     match read_control_file(path, RECORD_LIMIT) {
         Ok(bytes) => String::from_utf8(bytes)
@@ -499,12 +499,12 @@ fn read_record(path: &Path) -> Result<Option<Record>, LaunchError> {
 }
 
 // --------------------------------------------------------------------------
-// Starting and stopping
+// Démarrer et arrêter
 // --------------------------------------------------------------------------
 
-/// Start `spawn` in a new process group, without a shell, with exactly its
-/// environment and with its input and output sent nowhere. The process outlives
-/// the launcher: the handle is dropped without waiting for it.
+/// Démarre `spawn` dans un nouveau groupe de processus, sans interpréteur de commandes, avec
+/// exactement son environnement et son entrée et sa sortie envoyées nulle part. Le processus
+/// survit au lanceur : le descripteur est abandonné sans l'attendre.
 fn spawn_detached(spawn: &Spawn) -> Result<u32, LaunchError> {
     let child = Command::new(&spawn.program)
         .args(&spawn.args)
@@ -536,11 +536,10 @@ fn prepare_launch_dir(paths: &Paths) -> Result<PathBuf, LaunchError> {
     Ok(record_path(runtime))
 }
 
-/// Start LibreOffice and its bridge, then record their processes.
+/// Démarre LibreOffice et son pont, puis enregistre leurs processus.
 ///
-/// # Errors
-/// A refusal before anything starts (see [`LaunchError::exit_code`]), or a
-/// failure while starting.
+/// # Erreurs
+/// Un refus avant que rien ne démarre (voir [`LaunchError::exit_code`]), ou un échec au démarrage.
 pub fn launch(
     programs: &Programs,
     paths: &Paths,
@@ -609,14 +608,14 @@ pub fn launch(
     )
 }
 
-/// Stop the bridge of the last launch, and only it.
+/// Arrête le pont du dernier lancement, et lui seul.
 ///
-/// The recorded process is signalled only if it still is the bridge: a number
-/// that another program has taken since is never touched. LibreOffice is never
-/// closed: it may hold work, and closing it is the operator's gesture.
+/// Le processus enregistré n'est signalé que s'il est toujours le pont : un numéro qu'un autre
+/// programme a pris depuis n'est jamais touché. LibreOffice n'est jamais fermé : il peut contenir
+/// du travail, et le fermer est le geste de l'opérateur.
 ///
-/// # Errors
-/// An unreadable or malformed record, or a signal that cannot be sent.
+/// # Erreurs
+/// Un enregistrement illisible ou mal formé, ou un signal qui ne peut pas être envoyé.
 pub fn stop(programs: &Programs, paths: &Paths, out: &mut dyn Write) -> Result<(), LaunchError> {
     let runtime = paths.require_runtime_dir().map_err(LaunchError::Config)?;
     let record_file = record_path(runtime);
@@ -663,10 +662,10 @@ pub fn stop(programs: &Programs, paths: &Paths, out: &mut dyn Write) -> Result<(
 }
 
 // --------------------------------------------------------------------------
-// The command line
+// La ligne de commande
 // --------------------------------------------------------------------------
 
-/// What the arguments ask for.
+/// Ce que les arguments demandent.
 #[derive(Debug, PartialEq, Eq)]
 enum Request {
     Start { bridge_file: PathBuf },
@@ -721,11 +720,11 @@ fn start(
     launch(programs, paths, &plan, environment, out)
 }
 
-/// Run the `libremodular-launch` command line and return its exit code.
+/// Exécute la ligne de commande de `libremodular-launch` et rend son code de sortie.
 ///
-/// `locate` provides the base directories, `programs` the executables and the
-/// listing of processes, `environment` what the launcher received: the binary
-/// passes the real ones, and tests pass fakes.
+/// `locate` fournit les répertoires de base, `programs` les exécutables et le listage des
+/// processus, `environment` ce que le lanceur a reçu : le binaire passe les vrais, et les tests
+/// des faux.
 pub fn run(
     args: impl IntoIterator<Item = OsString>,
     locate: &dyn Fn() -> Result<Paths, ConfigError>,
@@ -775,8 +774,7 @@ pub fn run(
     }
 }
 
-/// The launcher on the real directories, programs and environment: what the
-/// binary runs.
+/// Le lanceur sur les vrais répertoires, programmes et environnement : ce que le binaire exécute.
 pub fn run_in_process(
     args: impl IntoIterator<Item = OsString>,
     out: &mut dyn Write,

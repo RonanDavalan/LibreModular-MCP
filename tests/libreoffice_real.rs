@@ -1,13 +1,12 @@
-//! The Hub against a real LibreOffice, through the generated bridge.
+//! Le Hub face à un vrai LibreOffice, par le pont généré.
 //!
-//! Why this module exists
-//! The fakes show that the Hub and the bridge keep their word; only a real
-//! LibreOffice shows that the UNO calls of the adapter mean what they are
-//! assumed to mean. The test is ignored by default because it needs LibreOffice
-//! and its `python3-uno`; run it with `cargo test --test libreoffice_real --
-//! --ignored --nocapture`. It starts its own LibreOffice without interface on a
-//! throwaway profile and port, never touches an instance of the operator's, and
-//! stops everything it started.
+//! Pourquoi ce module existe
+//! Les faux montrent que le Hub et le pont tiennent parole ; seul un vrai LibreOffice montre que
+//! les appels UNO de l'adaptateur veulent dire ce qu'on suppose. Le test est ignoré par défaut
+//! parce qu'il exige LibreOffice et son `python3-uno` ; lancez-le avec `cargo test --test
+//! libreoffice_real -- --ignored --nocapture`. Il démarre son propre LibreOffice sans interface
+//! sur un profil et un port jetables, ne touche jamais une instance de l'opérateur, et arrête
+//! tout ce qu'il a démarré.
 
 #[macro_use]
 mod common;
@@ -37,8 +36,8 @@ fn free_port() -> u16 {
     listener.local_addr().expect("address").port()
 }
 
-/// A process that leads its own group; the whole group is stopped when this is
-/// dropped, so that whatever LibreOffice started goes with it.
+/// Un processus qui mène son propre groupe ; tout le groupe est arrêté quand il est abandonné, pour que
+/// ce que LibreOffice a démarré parte avec lui.
 struct Leader(Child);
 
 impl Drop for Leader {
@@ -59,8 +58,7 @@ impl Drop for Leader {
     }
 }
 
-/// The variables the system Python needs to import `uno`: what the launcher gives
-/// the bridge, for the same reason.
+/// Les variables dont le Python du système a besoin pour importer `uno` : ce que le lanceur donne au pont, pour la même raison.
 fn uno_environment(path: &OsString, uno_port: u16) -> Vec<(String, OsString)> {
     vec![
         ("PATH".to_owned(), path.clone()),
@@ -93,8 +91,8 @@ while True:
 desktop = ctx.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
 "#;
 
-/// A few lines of UNO run by the system Python, outside the bridge: it prepares
-/// and inspects LibreOffice the way a person would, never through the Hub.
+/// Quelques lignes d'UNO exécutées par le Python du système, hors du pont : il prépare et inspecte
+/// LibreOffice comme le ferait une personne, jamais par le Hub.
 fn uno_snippet(path: &OsString, uno_port: u16, code: &str) -> Result<String, String> {
     let output = Command::new("/usr/bin/python3")
         .args(["-c", &format!("{PRELUDE}\n{code}")])
@@ -142,7 +140,7 @@ fn start_libreoffice(base: &Path, path: &OsString, uno_port: u16) -> Result<Lead
     Ok(Leader(child))
 }
 
-/// Wait until LibreOffice answers on UNO; it listens only once it has started.
+/// Attend que LibreOffice réponde sur UNO ; il n'écoute qu'une fois démarré.
 fn wait_for_libreoffice(path: &OsString, uno_port: u16) -> Result<String, String> {
     let started = Instant::now();
     let deadline = started + Duration::from_secs(120);
@@ -165,7 +163,7 @@ fn wait_for_libreoffice(path: &OsString, uno_port: u16) -> Result<String, String
 }
 
 fn start_bridge(plan: &Plan, path: &OsString) -> Result<(Leader, u16), String> {
-    // The bridge is started exactly as the launcher starts it.
+    // Le pont est démarré exactement comme le lanceur le démarre.
     let environment = vec![(OsString::from("PATH"), path.clone())];
     let spawn = bridge_spawn(&Programs::default(), plan, &environment);
     let mut child = Command::new(&spawn.program)
@@ -249,7 +247,7 @@ fn drive(base: &Path) -> Verdict {
     );
     let mut session = Session::start(hub.server.clone());
 
-    // 1. The three targets are reachable through one connection.
+    // 1. Les trois cibles sont joignables par une seule connexion.
     let listing = session.state("hub");
     show("get_state hub", &listing);
     let modules = listing["state"]["modules"].as_array().ok_or("no modules")?;
@@ -265,8 +263,8 @@ fn drive(base: &Path) -> Verdict {
         "the version of LibreOffice was not read: {version:?}"
     );
 
-    // 2. With no document open, a script still runs, with `doc` set to None, and the
-    // state says there is no active document.
+    // 2. Sans document ouvert, un script s'exécute quand même, avec `doc` à None, et l'état dit qu'il
+    // n'y a pas de document actif.
     let bare = session.execute(
         "libreoffice-calc",
         "result = {'doc_is_none': doc is None, 'has_desktop': desktop is not None}",
@@ -290,7 +288,7 @@ fn drive(base: &Path) -> Verdict {
     );
     ensure!(empty["screenshot"] == Value::Null, "{empty}");
 
-    // 3. The model creates the first document with a script, then writes into it.
+    // 3. Le modèle crée le premier document avec un script, puis y écrit.
     let script = "\
 if doc is None:
     doc = desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())
@@ -309,7 +307,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
         "{wrote}"
     );
 
-    // 4. The state describes the document and a capture is made, unsaved.
+    // 4. L'état décrit le document et une capture est faite, sans enregistrer.
     let state = session.state("libreoffice-calc");
     show("get_state of a spreadsheet", &state);
     ensure!(state["connected"] == true, "{state}");
@@ -344,7 +342,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
         "the capture saved the document (hasLocation, isModified): {saved}"
     );
 
-    // 5. A script for another family is refused, and nothing of it runs.
+    // 5. Un script pour une autre famille est refusé, et rien de lui ne s'exécute.
     let wrong = session.execute(
         "libreoffice-writer",
         "open(LMM_WORK_DIR + '/ran', 'w').write('x')",
@@ -369,7 +367,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
         "{writer_state}"
     );
 
-    // 6. An error of the application comes back as it is.
+    // 6. Une erreur de l'application revient telle quelle.
     let broken = session.execute(
         "libreoffice-calc",
         "x = 1\nresult = doc.Sheets.getByName('Nope')",
@@ -384,8 +382,8 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
         "{broken}"
     );
 
-    // 7. A slide deck and a text document, one after the other, each on its own target.
-    // Each one is created by a script of the target that was current until then.
+    // 7. Un diaporama et un document texte, l'un après l'autre, chacun sur sa propre cible.
+    // Chacun est créé par un script de la cible qui était courante jusque-là.
     for (creator, target, factory, probe, expected, active) in [
         (
             "libreoffice-calc",
@@ -443,7 +441,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
     Ok(())
 }
 
-/// The cold start: the bridge is up and LibreOffice is not, then LibreOffice starts.
+/// Le démarrage à froid : le pont est levé et LibreOffice ne l'est pas, puis LibreOffice démarre.
 fn drive_cold_start(base: &Path) -> Verdict {
     let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
     let (uno_port, bridge_port) = (free_port(), free_port());
@@ -459,7 +457,7 @@ fn drive_cold_start(base: &Path) -> Verdict {
         bridge_file,
         token_file,
     };
-    // The bridge starts first: nothing listens on the UNO port yet.
+    // Le pont démarre d'abord : rien n'écoute encore sur le port UNO.
     let (_bridge, bridge_port) = start_bridge(&plan, &path)?;
     let hub = build_with_token(
         base,
@@ -477,7 +475,7 @@ fn drive_cold_start(base: &Path) -> Verdict {
             .to_owned()
     };
 
-    // 1. Without LibreOffice the bridge is there and does not know the version.
+    // 1. Sans LibreOffice, le pont est là et ne connaît pas la version.
     let early = session.state("hub");
     show("get_state hub, before LibreOffice", &early);
     ensure!(early["state"]["modules"][0]["connected"] == true, "{early}");
@@ -491,7 +489,7 @@ fn drive_cold_start(base: &Path) -> Verdict {
         "{without}"
     );
 
-    // 2. LibreOffice starts; the same connection of the Hub asks for the state again.
+    // 2. LibreOffice démarre ; la même connexion du Hub redemande l'état.
     let _libreoffice = start_libreoffice(base, &path, uno_port)?;
     eprintln!("{}", wait_for_libreoffice(&path, uno_port)?);
     let later = session.state("libreoffice-calc");
@@ -501,10 +499,10 @@ fn drive_cold_start(base: &Path) -> Verdict {
         "the bridge still reports a missing API: {later}"
     );
     ensure!(later["state"]["documents"] == json!([]), "{later}");
-    // The Hub keeps the version of the hello of its connection.
+    // Le Hub garde la version du hello de sa connexion.
     ensure!(later["app_version"] == "unknown", "{later}");
 
-    // 3. A new connection of the Hub announces the version the bridge now knows.
+    // 3. Une nouvelle connexion du Hub annonce la version que le pont connaît maintenant.
     hub.server.shutdown();
     let after = session.state("hub");
     show("get_state hub, on a new connection", &after);

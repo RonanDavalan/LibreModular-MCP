@@ -1,9 +1,9 @@
-//! Mechanical invariants of the code base, replayed on every run.
+//! Invariants mécaniques du code, rejoués à chaque exécution.
 //!
-//! Why this module exists
-//! Security properties that only hold by convention rot quietly. Each test here
-//! reads the code (or runs it in a fresh process) and fails when a rule is
-//! broken, and each ships a counter-proof showing the rule would be noticed.
+//! Pourquoi ce module existe
+//! Les propriétés de sécurité qui ne tiennent que par convention pourrissent en silence. Chaque
+//! test ici lit le code (ou l'exécute dans un processus neuf) et échoue quand une règle est
+//! rompue, et chacun apporte une contre-preuve qui montre que la règle serait remarquée.
 
 #[macro_use]
 mod common;
@@ -23,7 +23,7 @@ use libremodular_mcp::security::{Token, create_token, load_token_as, read_contro
 use rustix::fs::Mode;
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit, umask};
 
-// --- reading the code --------------------------------------------------------------
+// --- lecture du code ----------------------------------------------------------------
 
 fn source_files() -> Vec<(String, String)> {
     fn walk(dir: &Path, root: &Path, found: &mut Vec<(String, String)>) {
@@ -59,7 +59,7 @@ fn source_of(name: &str) -> String {
         .unwrap_or_else(|| panic!("{name} not found"))
 }
 
-/// The code of a source file without its full-line comments.
+/// Le code d'un fichier source sans ses commentaires de ligne entière.
 fn code_lines(source: &str) -> Vec<&str> {
     source
         .lines()
@@ -67,7 +67,7 @@ fn code_lines(source: &str) -> Vec<&str> {
         .collect()
 }
 
-/// The text of a function, from its opening brace to the matching closing one.
+/// Le texte d'une fonction, de son accolade ouvrante à l'accolade fermante correspondante.
 fn function_body(source: &str, name: &str) -> Option<String> {
     let start = [format!("fn {name}("), format!("fn {name}<")]
         .iter()
@@ -90,7 +90,7 @@ fn function_body(source: &str, name: &str) -> Option<String> {
     None
 }
 
-// --- process hardening precedes any token access (read from the source) ---------
+// --- le durcissement du processus précède tout accès au jeton (lu dans la source) ---
 
 fn check_hardening_precedes_token_access(source: &str, function: &str, access: &[&str]) -> Verdict {
     let Some(body) = function_body(source, function) else {
@@ -152,7 +152,7 @@ fn counter_proof_detects_a_late_hardening_call() {
     ));
 }
 
-// --- process hardening precedes any token access (observed in a fresh process) ---
+// --- le durcissement du processus précède tout accès au jeton (observé dans un processus neuf) ---
 
 const CHILD_KIND: &str = "LMM_INVARIANT_CHILD";
 const CHILD_FILE: &str = "LMM_INVARIANT_FILE";
@@ -162,7 +162,7 @@ fn core_limit() -> Rlimit {
     getrlimit(Resource::Core)
 }
 
-/// The body of the child process: report what it observed, never the token.
+/// Le corps du processus enfant : rapporter ce qu'il a observé, jamais le jeton.
 fn child(kind: &str, target: &Path) {
     match kind {
         "load" | "load-without-hardening" | "create" => {
@@ -246,7 +246,7 @@ fn paths_under(root: &Path) -> Paths {
     config::resolve_paths(|name| variables.get(name).cloned()).expect("paths")
 }
 
-/// Run this very test binary in a new process in child mode and return what it reported.
+/// Exécute ce binaire de test lui-même dans un nouveau processus, en mode enfant, et rend ce qu'il a rapporté.
 fn run_child(kind: &str, target: &Path) -> Result<String, String> {
     let output = Command::new(std::env::current_exe().expect("test binary"))
         .args(["--exact", CHILD_TEST, "--nocapture", "--test-threads=1"])
@@ -316,8 +316,8 @@ fn hardening_and_private_modes_hold_in_a_fresh_process() {
         return;
     }
     let base = common::private_tempdir();
-    // Loading and creating the token lower the core-dump limit; reading it without
-    // hardening does not, which is what the counter-proof relies on.
+    // Charger et créer le jeton abaissent la limite des vidages mémoire ; le lire sans durcissement
+    // ne l'abaisse pas, et c'est ce sur quoi s'appuie la contre-preuve.
     must_pass(check_the_core_limit_is_zero_afterwards("load", base.path()));
     must_pass(check_the_core_limit_is_zero_afterwards(
         "create",
@@ -327,7 +327,7 @@ fn hardening_and_private_modes_hold_in_a_fresh_process() {
         "load-without-hardening",
         base.path(),
     ));
-    // Everything the Hub creates is private even when the process umask is zero.
+    // Tout ce que le Hub crée est privé même quand le umask du processus est nul.
     must_pass(check_created_files_have_no_group_or_other_bit(
         "modes",
         base.path(),
@@ -338,7 +338,7 @@ fn hardening_and_private_modes_hold_in_a_fresh_process() {
     ));
 }
 
-// --- security logic lives only in security.rs ------------------------------------
+// --- la logique de sécurité ne vit que dans security.rs -----------------------------
 
 const SECURITY_ONLY_DEFINITIONS: [&str; 14] = [
     "guard_script",
@@ -357,8 +357,8 @@ const SECURITY_ONLY_DEFINITIONS: [&str; 14] = [
     "read_system_file",
 ];
 
-/// What a file other than the security module must not contain. Calling a
-/// security function is fine; implementing one is not.
+/// Ce qu'un fichier autre que le module de sécurité ne doit pas contenir. Appeler une fonction de
+/// sécurité est permis ; en implémenter une ne l'est pas.
 fn stray_security_logic(source: &str) -> Vec<String> {
     let mut problems = Vec::new();
     for (index, line) in code_lines(source).into_iter().enumerate() {
@@ -430,7 +430,7 @@ fn counter_proof_detects_stray_logic() {
     ));
 }
 
-// --- control files are only opened through the permission check -------------------
+// --- les fichiers de contrôle ne s'ouvrent que par le contrôle des permissions ------
 
 const RAW_FILE_ACCESS: [&str; 11] = [
     "File::open(",
@@ -491,8 +491,8 @@ fn counter_proof_detects_a_raw_file_access() {
     ));
 }
 
-/// What the single place that opens a file must look like: one `open`, without
-/// following links, creating files 0600, and every directory created private.
+/// À quoi doit ressembler l'unique endroit qui ouvre un fichier : un seul `open`, sans suivre les
+/// liens, créant des fichiers en 0600, et chaque répertoire créé privé.
 fn open_discipline_problems(source: &str) -> Vec<String> {
     let mut problems = Vec::new();
     let opens = code_lines(source)
@@ -571,7 +571,7 @@ fn counter_proof_a_second_open_or_a_followed_link_or_a_loose_mode_is_detected() 
     }
 }
 
-// --- the server starts hardened before it reads the token -------------------------
+// --- le serveur démarre durci avant de lire le jeton --------------------------------
 
 #[test]
 fn the_server_hardens_the_process_before_reading_the_token() {
@@ -588,12 +588,12 @@ fn the_server_hardens_the_process_before_reading_the_token() {
     ));
 }
 
-// --- every tool answer leaves through the single output point ----------------------
+// --- chaque réponse d'outil sort par l'unique point de sortie -----------------------
 
 const TOOLS: [&str; 2] = ["execute_script", "get_state"];
 
-/// Each tool returns what `finish` produced, and `finish` is the only place of
-/// the server that serialises an answer, after `output::finalize`.
+/// Chaque outil rend ce que `finish` a produit, et `finish` est le seul endroit du serveur qui
+/// sérialise une réponse, après `output::finalize`.
 fn single_exit_point(source: &str) -> Vec<String> {
     let mut problems = Vec::new();
     for tool in TOOLS {
@@ -671,7 +671,7 @@ fn counter_proof_a_tool_that_serialises_on_its_own_is_detected() {
     ));
 }
 
-// --- the network: loopback only, and only in the protocol module -----------------
+// --- le réseau : bouclage seulement, et seulement dans le module du protocole -------
 
 const NETWORK_APIS: [&str; 8] = [
     "std::net",
@@ -684,8 +684,8 @@ const NETWORK_APIS: [&str; 8] = [
     "socket2",
 ];
 
-/// Network use outside `protocol.rs`, any listening socket, and any address other
-/// than 127.0.0.1 written in the code.
+/// L'usage du réseau hors de `protocol.rs`, toute socket d'écoute, et toute adresse autre que
+/// 127.0.0.1 écrite dans le code.
 fn network_problems(files: &[(String, String)]) -> Vec<String> {
     let mut problems = Vec::new();
     for (name, source) in files {
@@ -738,7 +738,7 @@ fn network_problems(files: &[(String, String)]) -> Vec<String> {
     problems
 }
 
-/// Every `a.b.c.d` made of four numbers in a line.
+/// Chaque `a.b.c.d` fait de quatre nombres dans une ligne.
 fn dotted_quads(line: &str) -> Vec<String> {
     let mut found = Vec::new();
     let chars: Vec<char> = line.chars().collect();
@@ -812,7 +812,7 @@ fn counter_proof_stray_network_use_is_detected() {
     ));
 }
 
-// --- modules never import the security or output modules -------------------------
+// --- les modules n'importent jamais les modules de sécurité ni de sortie ------------
 
 fn module_imports(files: &[(String, String)]) -> Vec<String> {
     let mut problems = Vec::new();
@@ -848,13 +848,13 @@ fn counter_proof_a_module_importing_security_is_detected() {
     assert!(!problems.is_empty());
 }
 
-// --- only the protocol on the standard output -----------------------------------
+// --- seul le protocole sur la sortie standard ---------------------------------------
 
 fn stdout_writes(files: &[(String, String)]) -> Vec<String> {
     let mut problems = Vec::new();
     for (name, source) in files.iter().filter(|(name, _)| name != "cli.rs") {
         for (index, line) in code_lines(source).into_iter().enumerate() {
-            // `eprintln!` and `eprint!` write to the error stream and are allowed.
+            // `eprintln!` et `eprint!` écrivent sur le flux d'erreur et sont permis.
             let prints = line.matches("println!").count() + line.matches("print!(").count();
             let eprints = line.matches("eprintln!").count() + line.matches("eprint!(").count();
             if prints > eprints {
@@ -892,9 +892,9 @@ fn counter_proof_a_print_in_the_server_is_detected() {
     );
 }
 
-// --- the bridges: token and sockets only in the core, loopback only -------------
+// --- les ponts : jeton et sockets seulement dans le cœur, bouclage seulement --------
 
-/// Every Python file under `bridges/`, as (path relative to `bridges/`, text).
+/// Chaque fichier Python sous `bridges/`, comme (chemin relatif à `bridges/`, texte).
 fn bridge_files() -> Vec<(String, String)> {
     fn walk(dir: &Path, root: &Path, found: &mut Vec<(String, String)>) {
         let mut entries: Vec<_> = fs::read_dir(dir)
@@ -931,7 +931,7 @@ fn bridge_text(name: &str) -> String {
         .unwrap_or_else(|| panic!("bridges/{name} not found"))
 }
 
-/// The code of a Python file without its full-line comments.
+/// Le code d'un fichier Python sans ses commentaires de ligne entière.
 fn python_code_lines(source: &str) -> Vec<&str> {
     source
         .lines()
@@ -949,9 +949,8 @@ const BRIDGE_SOCKET_SERVERS: [&str; 7] = [
     "start_server(",
 ];
 
-/// Token comparisons and listening sockets in a bridge file other than the
-/// core. Generated files are checked separately: they must be the core and an
-/// adapter, nothing more.
+/// Les comparaisons de jeton et les sockets d'écoute dans un fichier de pont autre que le cœur.
+/// Les fichiers générés sont contrôlés à part : ils doivent être le cœur et un adaptateur, rien de plus.
 fn stray_bridge_security(files: &[(String, String)]) -> Vec<String> {
     let mut problems = Vec::new();
     for (name, source) in files {
@@ -979,8 +978,8 @@ fn stray_bridge_security(files: &[(String, String)]) -> Vec<String> {
     problems
 }
 
-/// What a generated bridge holds besides the core and its adapter: only
-/// comments, blank lines and the final call.
+/// Ce qu'un pont généré contient en plus du cœur et de son adaptateur : seulement des
+/// commentaires, des lignes vides et l'appel final.
 fn generated_extras(generated: &str, core: &str, adapter: &str) -> Vec<String> {
     let Some(rest) = generated
         .split_once(core.trim_end())
@@ -1080,8 +1079,8 @@ const CORE_FORBIDDEN: [&str; 19] = [
     "asyncio",
 ];
 
-/// Any address other than 127.0.0.1 in a bridge file, and, in the core, any
-/// outgoing connection or process launch.
+/// Toute adresse autre que 127.0.0.1 dans un fichier de pont, et, dans le cœur, toute connexion
+/// sortante ou tout lancement de processus.
 fn bridge_network_problems(files: &[(String, String)]) -> Vec<String> {
     let mut problems = Vec::new();
     for (name, source) in files {
@@ -1165,12 +1164,12 @@ fn counter_proof_a_bridge_reaching_out_is_detected() {
     ));
 }
 
-// --- starting processes: only the Inkscape module and the launcher -----------------
+// --- démarrage de processus : seulement le module Inkscape et le lanceur ------------
 
-/// The source files allowed to start a process.
+/// Les fichiers source autorisés à démarrer un processus.
 const PROCESS_STARTERS: [&str; 2] = ["modules/inkscape.rs", "launch.rs"];
 
-/// Whether `word` appears in `line` as a whole identifier.
+/// Dit si `word` apparaît dans `line` comme un identifiant entier.
 fn has_word(line: &str, word: &str) -> bool {
     line.match_indices(word).any(|(at, _)| {
         let before = line[..at].chars().next_back();
@@ -1239,7 +1238,7 @@ fn counter_proof_a_process_started_elsewhere_is_detected() {
     ] {
         must_fail(check(name, defective));
     }
-    // The two files that may start a process, and what only looks like one.
+    // Les deux fichiers qui peuvent démarrer un processus, et ce qui n'en a que l'air.
     must_pass(check(
         "launch.rs",
         "let child = Command::new(&spawn.program).spawn()?;",
@@ -1254,10 +1253,10 @@ fn counter_proof_a_process_started_elsewhere_is_detected() {
     ));
 }
 
-// --- the Inkscape module answers only through the trait --------------------------------
+// --- le module Inkscape ne répond que par le trait ----------------------------------
 
-/// The Inkscape module returns its answers and writes nowhere else, and only the
-/// registry builds it: the server sees nothing but the `Module` trait.
+/// Le module Inkscape rend ses réponses et n'écrit nulle part ailleurs, et seul le registre le
+/// construit : le serveur ne voit que le trait `Module`.
 fn inkscape_bypasses(files: &[(String, String)]) -> Vec<String> {
     let mut problems = Vec::new();
     for (name, source) in files {
@@ -1326,9 +1325,9 @@ fn counter_proof_an_inkscape_answer_taking_another_way_is_detected() {
     ));
 }
 
-// --- dependencies: exactly the approved crates, pinned to one version ----------------
+// --- dépendances : exactement les crates approuvées, figées à une version -----------
 
-/// The crates `[dependencies]` may hold, and nothing else.
+/// Les crates que `[dependencies]` peut contenir, et rien d'autre.
 const APPROVED_DEPENDENCIES: [&str; 12] = [
     "clap",
     "getrandom",
@@ -1344,7 +1343,7 @@ const APPROVED_DEPENDENCIES: [&str; 12] = [
     "toml",
 ];
 
-/// `=` followed by three numbers separated by dots.
+/// `=` suivi de trois nombres séparés par des points.
 fn is_exact_version(text: &str) -> bool {
     let Some(rest) = text.strip_prefix('=') else {
         return false;
@@ -1452,17 +1451,16 @@ fn counter_proof_an_extra_unpinned_optional_or_missing_dependency_is_detected() 
     }
 }
 
-// --- the files of the repository: no operator data, no real path --------------------
+// --- les fichiers du dépôt : aucune donnée d'opérateur, aucun chemin réel -----------
 
-/// The directory prefix a real path would start with, written in two pieces so that
-/// this file does not contain it.
+/// Le préfixe de répertoire par lequel commencerait un chemin réel, écrit en deux morceaux pour
+/// que ce fichier ne le contienne pas.
 fn home_prefix() -> String {
     ["/ho", "me/"].concat()
 }
 
-/// Every file of the repository except what the build and the tools put there: the
-/// `target` and `__pycache__` directories and the hidden directories other than
-/// `.github`.
+/// Chaque fichier du dépôt, sauf ce que la construction et les outils y déposent : les répertoires
+/// `target` et `__pycache__` et les répertoires cachés autres que `.github`.
 fn repository_files(root: &Path) -> Vec<PathBuf> {
     fn walk(dir: &Path, top: bool, found: &mut Vec<PathBuf>) {
         let mut entries: Vec<_> = fs::read_dir(dir)
@@ -1636,10 +1634,10 @@ fn counter_proof_a_real_path_or_an_operator_file_is_detected() {
     }
 }
 
-// --- server.rs: two tools, no application module, an explicit use of security -----------
+// --- server.rs : deux outils, aucun module d'application, un usage explicite de la sécurité ---
 
-/// The only items `server.rs` takes from the security module: it calls them to chain
-/// the checks in a fixed order and implements none of them. A new one is a decision.
+/// Les seuls éléments que `server.rs` prend au module de sécurité : il les appelle pour enchaîner
+/// les contrôles dans un ordre fixe et n'en implémente aucun. En ajouter un est une décision.
 const SERVER_SECURITY_ITEMS: [&str; 12] = [
     "self",
     "GuardPolicy",
@@ -1752,9 +1750,9 @@ fn counter_proof_a_third_tool_an_application_module_or_a_new_security_item_is_de
     }
 }
 
-// --- the README: the words it must not use ------------------------------------------
+// --- le README : les mots qu'il ne doit pas employer --------------------------------
 
-/// `AI` as a word of its own, `Windows` and `macOS`, anywhere in the text.
+/// `AI` comme mot à part entière, `Windows` et `macOS`, n'importe où dans le texte.
 fn readme_word_problems(text: &str) -> Vec<String> {
     let mut problems = Vec::new();
     for (number, line) in text.lines().enumerate() {
@@ -1800,11 +1798,11 @@ fn counter_proof_a_forbidden_word_in_the_readme_is_detected() {
     }
 }
 
-// --- the README and the guides of the modules say the same thing -------------------
+// --- le README et les guides des modules disent la même chose -----------------------
 
 const MODULE_GUIDES: [&str; 5] = ["gimp", "krita", "blender", "inkscape", "libreoffice"];
 
-/// Every number with at least one dot in `text`, such as `3.0.4`.
+/// Chaque nombre avec au moins un point dans `text`, comme `3.0.4`.
 fn dotted_numbers(text: &str) -> Vec<String> {
     text.split(|c: char| !(c.is_ascii_digit() || c == '.'))
         .map(|word| word.trim_matches('.'))
@@ -1813,20 +1811,20 @@ fn dotted_numbers(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// The sentence between `**Status:` and the closing `**` of a guide.
+/// La phrase entre `**Status:` et le `**` de fermeture d'un guide.
 fn guide_status(guide: &str) -> Option<String> {
     let after = guide.split_once("**Status:")?.1;
     let status = after.split_once("**")?.0;
     Some(status.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
-/// The text between a `## Example` heading and the next heading.
+/// Le texte entre un titre `## Example` et le titre suivant.
 fn example_section(text: &str) -> Option<&str> {
     let after = text.split_once("\n## Example\n")?.1;
     Some(after.split("\n## ").next().unwrap_or(after))
 }
 
-/// The bodies of the fenced blocks of `section` with the language `lang`.
+/// Les corps des blocs délimités de `section` avec le langage `lang`.
 fn fenced_blocks<'a>(section: &'a str, lang: &str) -> Vec<&'a str> {
     let opening = format!("```{lang}\n");
     section
@@ -1878,8 +1876,8 @@ fn readme_guide_problems(readme: &str, guides: &[(&str, String)]) -> Vec<String>
     match (example_section(readme), example_section(libreoffice)) {
         (Some(from_readme), Some(from_guide)) => {
             for lang in ["python", "json"] {
-                // The first block is the script, then the answer; the guide goes on with
-                // the state that followed, which the README does not repeat.
+                // Le premier bloc est le script, puis la réponse ; le guide continue avec l'état qui a suivi,
+                // que le README ne répète pas.
                 let first = |section| fenced_blocks(section, lang).first().copied();
                 if first(from_readme).is_none() || first(from_readme) != first(from_guide) {
                     problems.push(format!("the {lang} block of the example differs"));

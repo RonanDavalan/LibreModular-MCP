@@ -1,9 +1,9 @@
-//! The `cli` module of Inkscape: one Python process per script, started from a fixed argument list.
+//! Le module `cli` d'Inkscape : un processus Python par script, démarré avec une liste d'arguments fixe.
 //!
-//! Why this module exists
-//! Inkscape keeps no scripting session to join, so each script runs in a process
-//! of its own. That process must not inherit the Hub's environment or token, must
-//! not go through a shell, and must end with all of its children when its time is up.
+//! Pourquoi ce module existe
+//! Inkscape ne garde aucune session de script à rejoindre : chaque script s'exécute donc dans un
+//! processus à lui. Ce processus ne doit hériter ni de l'environnement ni du jeton du Hub, ne doit
+//! pas passer par un interpréteur de commandes, et doit finir avec tous ses enfants quand son temps est écoulé.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -23,49 +23,49 @@ use serde_json::{Map, Value, json};
 use crate::config::Limits;
 use crate::modules::{ExecReply, Health, Module, ModuleError, StateReply};
 
-/// The interpreter that runs the scripts, unless the constructor is given another.
+/// L'interpréteur qui exécute les scripts, sauf si le constructeur en reçoit un autre.
 pub const DEFAULT_PYTHON: &str = "/usr/bin/python3";
-/// Where `inkex` lives on Debian, put on `PYTHONPATH`.
+/// Où vit `inkex` sous Debian, posé sur `PYTHONPATH`.
 pub const DEFAULT_EXTENSIONS: &str = "/usr/share/inkscape/extensions";
-/// The Inkscape executable, used for its version and for captures.
+/// L'exécutable Inkscape, employé pour sa version et pour les captures.
 pub const DEFAULT_INKSCAPE: &str = "/usr/bin/inkscape";
-/// The working document, inside the work directory.
+/// Le document de travail, dans le répertoire de travail.
 pub const DOCUMENT_NAME: &str = "current.svg";
-/// The file the script is written to, inside the work directory.
+/// Le fichier où le script est écrit, dans le répertoire de travail.
 pub const SCRIPT_NAME: &str = "script.py";
-/// The only variables a started process inherits from the Hub.
+/// Les seules variables qu'un processus démarré hérite du Hub.
 pub const INHERITED_VARIABLES: [&str; 4] = ["PATH", "HOME", "LANG", "LC_ALL"];
 
-/// Set to `1` in every process: keeps numpy's BLAS from starting a thread per core.
+/// Posé à `1` dans chaque processus : empêche le BLAS de numpy de démarrer un fil par cœur.
 pub const THREAD_VARIABLES: [&str; 2] = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS"];
-/// The address space of a script process, by default.
+/// L'espace d'adressage d'un processus de script, par défaut.
 pub const DEFAULT_MEMORY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-/// Open files a script process may hold.
+/// Les fichiers ouverts qu'un processus de script peut tenir.
 pub const OPEN_FILES_LIMIT: u64 = 256;
-/// How long a capture may take.
+/// Combien de temps une capture peut prendre.
 pub const CAPTURE_TIMEOUT: Duration = Duration::from_secs(30);
-/// How long `inkscape --version` may take.
+/// Combien de temps `inkscape --version` peut prendre.
 pub const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
-/// The prefix of the line a script prints last to return a value.
+/// Le préfixe de la ligne qu'un script affiche en dernier pour rendre une valeur.
 pub const RESULT_PREFIX: &str = "LMM_RESULT: ";
-/// The prefix of the line the bootstrap writes last on the error stream.
+/// Le préfixe de la ligne que l'amorce écrit en dernier sur le flux d'erreur.
 pub const ERROR_PREFIX: &str = "LMM_ERROR: ";
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
-/// How long the output readers may take once the process group is gone.
+/// Combien de temps les lecteurs de sortie peuvent prendre une fois le groupe de processus disparu.
 const OUTPUT_GRACE: Duration = Duration::from_secs(2);
 const READ_CHUNK: usize = 64 * 1024;
 
-/// The document created at first use: a valid SVG with one empty layer.
+/// Le document créé au premier usage : un SVG valide avec un calque vide.
 pub const EMPTY_DOCUMENT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="210mm" height="297mm" viewBox="0 0 210 297">
   <g inkscape:groupmode="layer" id="layer1" inkscape:label="Layer 1"/>
 </svg>
 "#;
 
-/// Runs a script: applies the limits, then compiles the script as
-/// `<libremodular>` and reports an exception on the last line of the error stream.
-/// Arguments: script file, CPU seconds, address space bytes, open files.
+/// Exécute un script : applique les limites, puis compile le script sous le nom
+/// `<libremodular>` et signale une exception sur la dernière ligne du flux d'erreur.
+/// Arguments : fichier du script, secondes de processeur, octets d'espace d'adressage, fichiers ouverts.
 pub const SCRIPT_BOOTSTRAP: &str = r#"import sys
 sys.path[:] = [entry for entry in sys.path if entry not in ("", ".")]
 import json
@@ -115,9 +115,9 @@ except BaseException as error:
     sys.exit(1)
 "#;
 
-/// Reads the working document: applies the limits, refuses any entity
-/// declaration, never resolves or fetches anything, and prints the state.
-/// Arguments: document, CPU seconds, address space bytes, open files.
+/// Lit le document de travail : applique les limites, refuse toute déclaration d'entité, ne
+/// résout ni ne récupère jamais rien, et affiche l'état.
+/// Arguments : document, secondes de processeur, octets d'espace d'adressage, fichiers ouverts.
 pub const STATE_BOOTSTRAP: &str = r#"import sys
 sys.path[:] = [entry for entry in sys.path if entry not in ("", ".")]
 import json
@@ -189,8 +189,8 @@ state = {
 print(json.dumps(state))
 "#;
 
-/// Where the module finds the programs it starts. Fixed at construction: neither
-/// a script nor the configuration can change them.
+/// Où le module trouve les programmes qu'il démarre. Fixé à la construction : ni un script ni la
+/// configuration ne peuvent les changer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InkscapePaths {
     pub python: PathBuf,
@@ -208,34 +208,34 @@ impl Default for InkscapePaths {
     }
 }
 
-/// The file operations the module needs. The Hub provides them, with its own
-/// checks: the module never opens a file itself.
+/// Les opérations sur les fichiers dont le module a besoin. Le Hub les fournit, avec ses propres
+/// contrôles : le module n'ouvre jamais un fichier lui-même.
 pub trait WorkFiles: Send + Sync {
-    /// Create the document holding `initial` when it does not exist; refuse
-    /// anything but a private regular file of the user.
+    /// Crée le document contenant `initial` quand il n'existe pas ; refuse tout sauf un fichier ordinaire
+    /// privé de l'utilisateur.
     ///
-    /// # Errors
-    /// Why the document cannot be used.
+    /// # Erreurs
+    /// Pourquoi le document ne peut pas être utilisé.
     fn ensure_document(&self, path: &Path, initial: &[u8]) -> Result<(), String>;
 
-    /// Write the script to a private file created for it.
+    /// Écrit le script dans un fichier privé créé pour lui.
     ///
-    /// # Errors
-    /// Why the script cannot be written.
+    /// # Erreurs
+    /// Pourquoi le script ne peut pas être écrit.
     fn write_script(&self, path: &Path, text: &[u8]) -> Result<(), String>;
 }
 
-/// A process to start, described completely before anything runs.
+/// Un processus à démarrer, décrit complètement avant que rien ne s'exécute.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessSpec {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub current_dir: PathBuf,
-    /// The whole environment of the process: nothing else is inherited.
+    /// Tout l'environnement du processus : rien d'autre n'est hérité.
     pub env: Vec<(OsString, OsString)>,
 }
 
-/// What a finished process left.
+/// Ce qu'un processus terminé a laissé.
 #[derive(Debug)]
 pub struct Finished {
     pub status: ExitStatus,
@@ -243,14 +243,14 @@ pub struct Finished {
     pub stderr: Vec<u8>,
 }
 
-/// Why a process produced no outcome.
+/// Pourquoi un processus n'a produit aucun résultat.
 #[derive(Debug)]
 pub enum RunError {
-    /// The program could not be started.
+    /// Le programme n'a pas pu être démarré.
     Start(io::Error),
-    /// The process could not be waited for.
+    /// Le processus n'a pas pu être attendu.
     Wait(io::Error),
-    /// The time ran out; the whole process group was killed.
+    /// Le temps s'est écoulé ; tout le groupe de processus a été tué.
     TimedOut,
 }
 
@@ -266,8 +266,8 @@ impl fmt::Display for RunError {
 
 impl std::error::Error for RunError {}
 
-/// The environment of every process the module starts: the inherited variables
-/// that belong to [`INHERITED_VARIABLES`], then the ones the module sets.
+/// L'environnement de chaque processus que le module démarre : les variables héritées qui
+/// appartiennent à [`INHERITED_VARIABLES`], puis celles que le module pose.
 #[must_use]
 pub fn process_environment(
     inherited: &[(OsString, OsString)],
@@ -280,9 +280,9 @@ pub fn process_environment(
         .cloned()
         .collect();
     env.push(("PYTHONPATH".into(), extensions.as_os_str().to_owned()));
-    // `inkex` imports numpy, whose BLAS library starts one thread per core. Under the
-    // address-space limit, thirty-two threads each reserving their stack never finish
-    // starting and the import hangs until the timeout.
+    // `inkex` importe numpy, dont la bibliothèque BLAS démarre un fil par cœur. Sous la limite d'espace
+    // d'adressage, trente-deux fils qui réservent chacun leur pile ne finissent jamais de démarrer et
+    // l'import se bloque jusqu'au délai.
     for name in THREAD_VARIABLES {
         env.push((name.into(), "1".into()));
     }
@@ -301,8 +301,8 @@ fn limit_arguments(cpu_seconds: u32, memory_bytes: u64) -> [OsString; 3] {
     ]
 }
 
-/// `python3 -c <bootstrap> <script file> <limits>`: the script text itself is
-/// never on the command line.
+/// `python3 -c <amorce> <fichier du script> <limites>` : le texte du script n'est jamais sur la
+/// ligne de commande.
 #[must_use]
 pub fn script_command(
     paths: &InkscapePaths,
@@ -326,7 +326,7 @@ pub fn script_command(
     }
 }
 
-/// `python3 -c <state bootstrap> <document> <limits>`.
+/// `python3 -c <amorce d'état> <document> <limites>`.
 #[must_use]
 pub fn state_command(
     paths: &InkscapePaths,
@@ -373,7 +373,7 @@ pub fn capture_command(
     }
 }
 
-/// `inkscape --version`, from the root directory.
+/// `inkscape --version`, depuis le répertoire racine.
 #[must_use]
 pub fn version_command(paths: &InkscapePaths, env: Vec<(OsString, OsString)>) -> ProcessSpec {
     ProcessSpec {
@@ -384,8 +384,8 @@ pub fn version_command(paths: &InkscapePaths, env: Vec<(OsString, OsString)>) ->
     }
 }
 
-/// Read a pipe to its end, keeping at most `limit` bytes: the rest is read and
-/// dropped, so a talkative process never blocks on a full pipe.
+/// Lit un tube jusqu'au bout, en gardant au plus `limit` octets : le reste est lu et jeté, pour
+/// qu'un processus bavard ne bloque jamais sur un tube plein.
 fn drain(mut pipe: impl Read + Send + 'static, limit: usize) -> Receiver<Vec<u8>> {
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
@@ -410,18 +410,18 @@ fn drain(mut pipe: impl Read + Send + 'static, limit: usize) -> Receiver<Vec<u8>
 }
 
 fn collected(reader: Option<Receiver<Vec<u8>>>) -> Vec<u8> {
-    // A process that left the group may still hold the pipe: its output is not waited for.
+    // Un processus qui a quitté le groupe peut encore tenir le tube : sa sortie n'est pas attendue.
     reader
         .and_then(|receiver| receiver.recv_timeout(OUTPUT_GRACE).ok())
         .unwrap_or_default()
 }
 
-/// Start `spec` in a new process group, without shell and with exactly its
-/// environment, and wait at most `timeout`. Whatever happens, every process
-/// still in the group is killed before the call returns.
+/// Démarre `spec` dans un nouveau groupe de processus, sans interpréteur de commandes et avec
+/// exactement son environnement, et attend au plus `timeout`. Quoi qu'il arrive, tout processus
+/// encore dans le groupe est tué avant que l'appel ne rende.
 ///
-/// # Errors
-/// [`RunError`] when the program cannot start or the time runs out.
+/// # Erreurs
+/// [`RunError`] quand le programme ne peut pas démarrer ou que le temps s'écoule.
 pub fn run(spec: &ProcessSpec, timeout: Duration, max_output: usize) -> Result<Finished, RunError> {
     let mut child = Command::new(&spec.program)
         .args(&spec.args)
@@ -439,8 +439,8 @@ pub fn run(spec: &ProcessSpec, timeout: Duration, max_output: usize) -> Result<F
     let stderr = child.stderr.take().map(|pipe| drain(pipe, max_output));
     let deadline = Instant::now() + timeout;
     let finished = loop {
-        // NOWAIT leaves the leader unreaped: its process group id cannot be
-        // given to another process before the group is killed below.
+        // NOWAIT laisse le chef non récolté : l'identifiant de son groupe de processus ne peut pas être
+        // donné à un autre processus avant que le groupe soit tué plus bas.
         let options = WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT;
         match waitid(WaitId::Pid(group), options) {
             Ok(Some(_)) => break true,
@@ -478,7 +478,7 @@ fn signal_name(number: i32) -> &'static str {
     }
 }
 
-/// How a process ended, without inventing a traceback.
+/// Comment un processus s'est terminé, sans inventer de trace d'appels.
 #[must_use]
 pub fn describe_status(status: ExitStatus) -> String {
     if let Some(code) = status.code() {
@@ -493,8 +493,8 @@ pub fn describe_status(status: ExitStatus) -> String {
     }
 }
 
-/// Split the last line off `text` when it starts with `prefix`: the text
-/// without that line, and what follows the prefix.
+/// Détache la dernière ligne de `text` quand elle commence par `prefix` : le texte sans cette ligne,
+/// et ce qui suit le préfixe.
 fn take_last_line<'a>(text: &'a str, prefix: &str) -> Option<(&'a str, &'a str)> {
     let body = text.strip_suffix('\n').unwrap_or(text);
     let (before, last) = match body.rfind('\n') {
@@ -504,7 +504,7 @@ fn take_last_line<'a>(text: &'a str, prefix: &str) -> Option<(&'a str, &'a str)>
     last.strip_prefix(prefix).map(|rest| (before, rest))
 }
 
-/// `stdout` without its `LMM_RESULT` line, and the value it carried.
+/// `stdout` sans sa ligne `LMM_RESULT`, et la valeur qu'elle portait.
 #[must_use]
 pub fn split_result(stdout: &str) -> (String, Value) {
     if let Some((before, rest)) = take_last_line(stdout, RESULT_PREFIX)
@@ -523,8 +523,8 @@ fn text_of(object: &Map<String, Value>, key: &str) -> String {
         .to_owned()
 }
 
-/// `stderr` without the bootstrap's `LMM_ERROR` line (and the line break the
-/// bootstrap put before it), and the error it carried.
+/// `stderr` sans la ligne `LMM_ERROR` de l'amorce (et le saut de ligne que l'amorce a mis avant
+/// elle), et l'erreur qu'elle portait.
 #[must_use]
 pub fn split_error(stderr: &str) -> (String, Option<Value>) {
     if let Some((before, rest)) = take_last_line(stderr, ERROR_PREFIX)
@@ -541,7 +541,7 @@ pub fn split_error(stderr: &str) -> (String, Option<Value>) {
     (stderr.to_owned(), None)
 }
 
-/// The reply to a script from what its process left.
+/// La réponse à un script, d'après ce que son processus a laissé.
 #[must_use]
 pub fn script_reply(finished: &Finished) -> ExecReply {
     let (stdout, result) = split_result(&String::from_utf8_lossy(&finished.stdout));
@@ -564,7 +564,7 @@ pub fn script_reply(finished: &Finished) -> ExecReply {
     }
 }
 
-/// The version `inkscape --version` printed, such as `1.2.2`.
+/// La version qu'`inkscape --version` a affichée, par exemple `1.2.2`.
 fn parse_version(output: &str) -> Option<String> {
     output.lines().find_map(|line| {
         let mut words = line.split_whitespace();
@@ -574,7 +574,7 @@ fn parse_version(output: &str) -> Option<String> {
     })
 }
 
-/// The Inkscape module: no persistent process, one process per request.
+/// Le module Inkscape : aucun processus persistant, un processus par requête.
 pub struct InkscapeModule {
     paths: InkscapePaths,
     limits: Limits,
@@ -585,8 +585,8 @@ pub struct InkscapeModule {
 }
 
 impl InkscapeModule {
-    /// `inherited` holds the Hub's values of [`INHERITED_VARIABLES`]; anything
-    /// else in it is ignored. `files` performs the file operations.
+    /// `inherited` contient les valeurs du Hub pour [`INHERITED_VARIABLES`] ; tout le reste y est
+    /// ignoré. `files` effectue les opérations sur les fichiers.
     #[must_use]
     pub fn new(
         paths: InkscapePaths,
@@ -604,7 +604,7 @@ impl InkscapeModule {
         }
     }
 
-    /// The same module with another address space limit for its processes.
+    /// Le même module avec une autre limite d'espace d'adressage pour ses processus.
     #[must_use]
     pub fn with_memory_limit(mut self, bytes: u64) -> Self {
         self.memory_bytes = bytes;
@@ -712,8 +712,8 @@ impl InkscapeModule {
     }
 }
 
-/// Whether anything, a link included, is named like the working document. A
-/// stat only: whatever is there is checked by the Hub's file operations.
+/// Dit si quelque chose, un lien compris, porte le nom du document de travail. Un simple `stat` :
+/// ce qui s'y trouve est contrôlé par les opérations sur les fichiers du Hub.
 fn document_exists(path: &Path) -> bool {
     !matches!(
         std::fs::symlink_metadata(path),
@@ -774,7 +774,7 @@ impl Module for InkscapeModule {
             Duration::from_secs(u64::from(timeout_s)),
             self.limits.max_output_bytes,
         );
-        // The script stays on disk only while it runs.
+        // Le script ne reste sur le disque que pendant son exécution.
         let _ = std::fs::remove_file(&script_file);
         outcome
             .map(|finished| script_reply(&finished))
@@ -788,8 +788,8 @@ impl Module for InkscapeModule {
             Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
         };
         let app_version = self.version();
-        // Looking is not creating: the document is made by the first script, and
-        // an absent one is reported as such rather than made up.
+        // Regarder n'est pas créer : le document est fait par le premier script, et un document absent
+        // est signalé comme tel plutôt qu'inventé.
         if !document_exists(&work_dir.join(DOCUMENT_NAME)) {
             return Ok(StateReply {
                 state: json!({}),
@@ -814,7 +814,7 @@ impl Module for InkscapeModule {
         })
     }
 
-    /// No process outlives a request: there is nothing to release, and an
-    /// Inkscape the operator opened is never touched.
+    /// Aucun processus ne survit à une requête : il n'y a rien à libérer, et un Inkscape que
+    /// l'opérateur a ouvert n'est jamais touché.
     fn close(&self) {}
 }

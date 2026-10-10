@@ -1,10 +1,10 @@
-//! Append-only JSON Lines audit journal.
+//! Journal d'audit JSON Lines, en ajout seul.
 //!
-//! Why this module exists
-//! After the fact, the operator must be able to tell what the model asked the Hub
-//! to run, without the journal itself becoming a second copy of the documents, the
-//! scripts or the token. When the journal cannot be written, running a script
-//! without a trace is worse than refusing, so failure is reported to the caller.
+//! Pourquoi ce module existe
+//! Après coup, l'opérateur doit pouvoir dire ce que le modèle a demandé au Hub
+//! d'exécuter, sans que le journal devienne une seconde copie des documents, des
+//! scripts ou du jeton. Quand le journal ne peut pas être écrit, exécuter un script
+//! sans trace est pire que refuser : l'échec est donc signalé à l'appelant.
 
 use std::fmt;
 use std::fs;
@@ -21,7 +21,7 @@ use crate::security::{
     Category, ControlAccess, SecurityError, Token, ensure_private_dir, open_control_file,
 };
 
-/// The fixed keys of a journal line, in the order they are written.
+/// Les clés fixes d'une ligne du journal, dans l'ordre où elles sont écrites.
 pub const ENTRY_KEYS: [&str; 9] = [
     "ts",
     "tool",
@@ -36,7 +36,7 @@ pub const ENTRY_KEYS: [&str; 9] = [
 pub const DEFAULT_MAX_BYTES: u64 = 10 * 1024 * 1024;
 pub const DEFAULT_GENERATIONS: usize = 5;
 
-/// The journal cannot be written; the caller must refuse to execute.
+/// Le journal ne peut pas être écrit ; l'appelant doit refuser d'exécuter.
 #[derive(Debug)]
 pub struct AuditUnavailable {
     reason: String,
@@ -58,14 +58,14 @@ impl fmt::Display for AuditUnavailable {
 
 impl std::error::Error for AuditUnavailable {}
 
-/// What the guard decided, as the journal records it.
+/// Ce que le garde-fou a décidé, tel que le journal l'enregistre.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuardOutcome {
-    /// Nothing found: written as an empty list.
+    /// Rien trouvé : écrit comme une liste vide.
     Passed,
-    /// Refused, with the categories found.
+    /// Refusé, avec les catégories trouvées.
     Refused(Vec<Category>),
-    /// The operator lifted the guard: written as `"bypassed"`.
+    /// L'opérateur a levé le garde-fou : écrit `"bypassed"`.
     Bypassed,
 }
 
@@ -84,11 +84,11 @@ impl GuardOutcome {
     }
 }
 
-/// One tool call. Only these fields can reach the journal: there is no place for
-/// an output, a document or a script text to slip in.
+/// Un appel d'outil. Seuls ces champs peuvent atteindre le journal : il n'y a pas de
+/// place pour qu'une sortie, un document ou le texte d'un script s'y glisse.
 #[derive(Debug, Clone, Default)]
 pub struct AuditEntry {
-    /// Left empty, the journal stamps the entry with its clock.
+    /// Laissé vide, le journal date l'entrée avec son horloge.
     pub ts: Option<String>,
     pub tool: Option<String>,
     pub target_app: Option<String>,
@@ -100,7 +100,7 @@ pub struct AuditEntry {
     pub output_bytes: Option<u64>,
 }
 
-/// Size in bytes and SHA-256 of a script, for the journal.
+/// Taille en octets et SHA-256 d'un script, pour le journal.
 #[must_use]
 pub fn script_fingerprint(script: &str) -> (usize, String) {
     let digest = Sha256::digest(script.as_bytes());
@@ -111,7 +111,7 @@ pub fn script_fingerprint(script: &str) -> (usize, String) {
     (script.len(), hex)
 }
 
-/// Days since 1970-01-01 to a calendar date (proleptic Gregorian).
+/// Jours depuis le 01/01/1970 vers une date du calendrier (grégorien proleptique).
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let shifted = days + 719_468;
     let era = shifted.div_euclid(146_097);
@@ -131,7 +131,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     (year, month, day)
 }
 
-/// RFC 3339 in UTC with millisecond precision.
+/// RFC 3339 en UTC, à la milliseconde.
 #[must_use]
 pub fn format_timestamp(moment: SystemTime) -> String {
     let (seconds, millis) = match moment.duration_since(UNIX_EPOCH) {
@@ -156,7 +156,7 @@ pub fn format_timestamp(moment: SystemTime) -> String {
 
 type Clock = Box<dyn Fn() -> SystemTime + Send + Sync>;
 
-/// The audit journal: one JSON object per line, private, append-only, rotated.
+/// Le journal d'audit : un objet JSON par ligne, privé, en ajout seul, avec rotation.
 pub struct AuditLog {
     path: PathBuf,
     token: Token,
@@ -181,7 +181,7 @@ impl AuditLog {
         }
     }
 
-    /// Rotate once the journal exceeds `max_bytes`, keeping `generations` old files.
+    /// Fait la rotation dès que le journal dépasse `max_bytes`, en gardant `generations` anciens fichiers.
     #[must_use]
     pub fn with_rotation(mut self, max_bytes: u64, generations: usize) -> Self {
         self.max_bytes = max_bytes;
@@ -189,7 +189,7 @@ impl AuditLog {
         self
     }
 
-    /// Write the text of each script into the journal. Off unless the operator asks.
+    /// Écrit le texte de chaque script dans le journal. Désactivé sauf demande de l'opérateur.
     #[must_use]
     pub fn with_script_text(mut self, enabled: bool) -> Self {
         self.audit_script_text = enabled;
@@ -239,7 +239,7 @@ impl AuditLog {
         let Value::Object(safe) = safe else {
             return Err(OutputError::NotAnObject);
         };
-        // The fixed keys come first, in a fixed order, so the journal reads the same way each time.
+        // Les clés fixes viennent d'abord, dans un ordre fixe, pour que le journal se lise toujours de la même façon.
         let mut parts = Vec::new();
         let mut ordered: Vec<&str> = ENTRY_KEYS.to_vec();
         ordered.extend(["script_text", "truncated"]);
@@ -255,13 +255,13 @@ impl AuditLog {
         Ok(format!("{{{}}}\n", parts.join(",")))
     }
 
-    /// Check that a line could be appended now, without writing one.
+    /// Vérifie qu'une ligne pourrait être ajoutée maintenant, sans en écrire une.
     ///
-    /// A script must not reach an application when its call could not be
-    /// recorded, so this runs before anything is sent.
+    /// Un script ne doit pas atteindre une application quand son appel n'a pas pu être
+    /// enregistré : cette vérification passe donc avant tout envoi.
     ///
-    /// # Errors
-    /// [`AuditUnavailable`] when the directory or the journal cannot be used safely.
+    /// # Erreurs
+    /// [`AuditUnavailable`] quand le répertoire ou le journal ne peut pas être utilisé en sécurité.
     pub fn probe(&self) -> Result<(), AuditUnavailable> {
         let parent = self.path.parent().ok_or_else(|| {
             AuditUnavailable::new(&SecurityError::InvalidPath {
@@ -274,10 +274,10 @@ impl AuditLog {
             .map_err(|error| AuditUnavailable::new(&error))
     }
 
-    /// Append one line. `script_text` is written only when enabled by configuration.
+    /// Ajoute une ligne. `script_text` n'est écrit que si la configuration l'active.
     ///
-    /// # Errors
-    /// [`AuditUnavailable`] whenever the line cannot be written safely.
+    /// # Erreurs
+    /// [`AuditUnavailable`] chaque fois que la ligne ne peut pas être écrite en sécurité.
     pub fn record(
         &self,
         entry: &AuditEntry,

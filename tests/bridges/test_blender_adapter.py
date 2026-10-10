@@ -1,10 +1,10 @@
-"""Tests of bridges/adapters/blender.py with a fake bpy, and without any.
+"""Tests de bridges/adapters/blender.py avec un faux bpy, et sans aucun.
 
-Why this module exists
-Blender is not installed where these tests run. A fake `bpy` shows that the
-adapter reads the documented state and hands work to Blender's main thread only
-when a loop runs there; `bpy` as a stand-alone package, whose timers never run,
-must get direct calls, or every request would wait forever.
+Pourquoi ce module existe
+Blender n'est pas installé là où ces tests s'exécutent. Un faux `bpy` montre que l'adaptateur lit l'état
+documenté et ne confie du travail au fil principal de Blender que quand une boucle y tourne ; `bpy` en
+tant que paquet autonome, dont les minuteurs ne tournent jamais, doit recevoir des appels directs, sinon
+chaque requête attendrait indéfiniment.
 """
 
 import contextlib
@@ -40,8 +40,8 @@ class FakeObject:
 
 
 class FakeTimers:
-    """bpy.app.timers: with `runs`, a main loop in its own thread calls each
-    registered function until it returns None; without, nothing ever runs."""
+    """bpy.app.timers : avec `runs`, une boucle principale dans son propre fil appelle chaque fonction
+    enregistrée jusqu'à ce qu'elle rende None ; sans, rien ne s'exécute jamais."""
 
     def __init__(self, runs=True):
         self.runs = runs
@@ -93,7 +93,7 @@ def fake_bpy(background=False, timers=None, version="4.3.2", scene=True):
 
 @contextlib.contextmanager
 def bpy_module(module):
-    """Install `module` as bpy; None makes `import bpy` fail."""
+    """Installe `module` comme bpy ; None fait échouer `import bpy`."""
     saved = sys.modules.get("bpy", "absent")
     sys.modules["bpy"] = module
     try:
@@ -120,8 +120,8 @@ EXPECTED_STATE = {
 
 
 def check_direct_without_a_running_loop(adapter_module):
-    """`bpy` installed as a package: background mode, timers that never run.
-    A call from another thread must come back, run in that thread."""
+    """`bpy` installé comme paquet : mode arrière-plan, minuteurs qui ne tournent jamais. Un appel
+    depuis un autre fil doit revenir, exécuté dans ce fil."""
     timers = FakeTimers(runs=False)
     with bpy_module(fake_bpy(background=True, timers=timers)):
         adapter = adapter_module.BlenderAdapter()

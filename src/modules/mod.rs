@@ -1,9 +1,9 @@
-//! The interface every application module implements, and the generic `tcp` module.
+//! L'interface que chaque module d'application implémente, et le module générique `tcp`.
 //!
-//! Why this module exists
-//! Adding an application must not touch the server or the protocol: the server
-//! only ever sees this trait. Modules know how to reach an application and how
-//! to read its answers; every security check stays in the Hub that calls them.
+//! Pourquoi ce module existe
+//! Ajouter une application ne doit toucher ni le serveur ni le protocole : le serveur ne voit
+//! jamais que ce trait. Les modules savent comment joindre une application et lire ses réponses ;
+//! chaque contrôle de sécurité reste dans le Hub qui les appelle.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -16,16 +16,16 @@ use crate::protocol::{BridgeClient, BridgeConnector, BridgeError};
 pub mod inkscape;
 pub mod libreoffice;
 
-/// How long the Hub waits for the answer to a `ping`.
+/// Combien de temps le Hub attend la réponse à un `ping`.
 pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
-/// How long the `tcp` module waits before it connects again after a lost
-/// connection: a bridge frees its single place a moment after the previous
-/// connection closed, and an immediate attempt would be turned away.
+/// Combien de temps le module `tcp` attend avant de se reconnecter après une connexion perdue :
+/// un pont libère sa place unique un instant après la fermeture de la connexion précédente, et
+/// une tentative immédiate serait refusée.
 pub const RECONNECT_DELAY: Duration = Duration::from_millis(100);
-/// The reason given for an enabled application that has no module in this build.
+/// La raison donnée pour une application activée qui n'a pas de module dans cette construction.
 pub const NOT_IN_BUILD: &str = "module not available in this build";
 
-/// Whether an application can be reached, as far as a probe can tell.
+/// Dit si une application peut être jointe, pour autant qu'une sonde puisse le dire.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Health {
     pub connected: bool,
@@ -33,37 +33,37 @@ pub struct Health {
     pub bridge_version: Option<String>,
 }
 
-/// The answer of a bridge to a script, as the application reported it.
+/// La réponse d'un pont à un script, telle que l'application l'a rapportée.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExecReply {
-    /// Whether the script ran to its end without an exception.
+    /// Dit si le script est allé jusqu'au bout sans exception.
     pub ok: bool,
     pub stdout: String,
     pub stderr: String,
     pub result: Value,
-    /// `null`, or `{"type", "message", "traceback"}` exactly as the application gave them.
+    /// `null`, ou `{"type", "message", "traceback"}` exactement comme l'application les a donnés.
     pub error: Value,
 }
 
-/// The state of an application, as its bridge reported it.
+/// L'état d'une application, tel que son pont l'a rapporté.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StateReply {
     pub state: Value,
-    /// Where the bridge says it wrote the capture; the Hub still has to accept it.
+    /// Où le pont dit avoir écrit la capture ; le Hub doit encore l'accepter.
     pub screenshot: Option<PathBuf>,
     pub warnings: Vec<String>,
     pub app_version: Option<String>,
     pub bridge_version: Option<String>,
 }
 
-/// Why a module produced no answer.
+/// Pourquoi un module n'a produit aucune réponse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleError {
-    /// The application is still busy with an earlier request.
+    /// L'application est encore occupée par une requête antérieure.
     Busy,
-    /// No answer within the allowed time.
+    /// Aucune réponse dans le délai permis.
     Timeout,
-    /// The application cannot be reached; the text says why.
+    /// L'application ne peut pas être jointe ; le texte dit pourquoi.
     Unavailable(String),
 }
 
@@ -79,16 +79,16 @@ impl std::fmt::Display for ModuleError {
 
 impl std::error::Error for ModuleError {}
 
-/// One application, as the Hub reaches it.
+/// Une application, telle que le Hub la joint.
 pub trait Module: Send + Sync {
-    /// Probe the application without running anything in it.
+    /// Sonde l'application sans rien y exécuter.
     fn health(&self) -> Health;
 
-    /// Run `script` once, waiting at most `timeout_s` seconds. `work_dir` is the
-    /// directory the Hub prepared for this application's files.
+    /// Exécute `script` une fois, en attendant au plus `timeout_s` secondes. `work_dir` est le
+    /// répertoire que le Hub a préparé pour les fichiers de cette application.
     ///
-    /// # Errors
-    /// [`ModuleError`] when there is no answer from the application.
+    /// # Erreurs
+    /// [`ModuleError`] quand l'application ne répond pas.
     fn execute(
         &self,
         script: &str,
@@ -96,20 +96,19 @@ pub trait Module: Send + Sync {
         work_dir: &Path,
     ) -> Result<ExecReply, ModuleError>;
 
-    /// Ask for the current state, and for a capture written to `capture_path`.
-    /// `work_dir` is the same directory [`Module::execute`] receives for this
-    /// application, so that a module whose document lives there can read it
-    /// without having run a script first.
+    /// Demande l'état courant, et une capture écrite dans `capture_path`. `work_dir` est le même
+    /// répertoire que [`Module::execute`] reçoit pour cette application, pour qu'un module dont le
+    /// document vit là puisse le lire sans avoir exécuté de script d'abord.
     ///
-    /// # Errors
-    /// [`ModuleError`] when there is no answer from the application.
+    /// # Erreurs
+    /// [`ModuleError`] quand l'application ne répond pas.
     fn state(&self, capture_path: &Path, work_dir: &Path) -> Result<StateReply, ModuleError>;
 
-    /// Release the connection. Never closes or stops the application.
+    /// Libère la connexion. Ne ferme ni n'arrête jamais l'application.
     fn close(&self);
 }
 
-/// An enabled application that cannot be used: every call says why.
+/// Une application activée qui ne peut pas être utilisée : chaque appel dit pourquoi.
 #[derive(Debug, Clone)]
 pub struct UnavailableModule {
     reason: String,
@@ -148,7 +147,7 @@ fn text(object: &Map<String, Value>, key: &str) -> String {
         .to_owned()
 }
 
-/// Keep the three documented fields of an error, each as text.
+/// Garde les trois champs documentés d'une erreur, chacun en texte.
 fn error_value(raw: Option<&Value>) -> Value {
     match raw {
         Some(Value::Object(error)) => json!({
@@ -170,35 +169,35 @@ fn is_busy(object: &Map<String, Value>) -> bool {
     object.get("busy").and_then(Value::as_bool) == Some(true)
 }
 
-/// The generic module of the `tcp` mode: a bridge loaded in the application,
-/// listening on a loopback port.
+/// Le module générique du mode `tcp` : un pont chargé dans l'application, qui écoute sur un port
+/// de bouclage.
 ///
-/// The connection is opened on first use. `health` and `state` may reconnect
-/// once when the connection was lost; `execute` does so only when nothing of the
-/// script was written, and never sends a script again once it may have reached
-/// the bridge. Every second attempt waits [`RECONNECT_DELAY`] first.
+/// La connexion est ouverte au premier usage. `health` et `state` peuvent se reconnecter une fois
+/// quand la connexion a été perdue ; `execute` ne le fait que si rien du script n'a été écrit, et
+/// n'envoie jamais un script une seconde fois dès qu'il a pu atteindre le pont. Toute seconde
+/// tentative attend d'abord [`RECONNECT_DELAY`].
 pub struct TcpModule {
     connector: BridgeConnector,
     state_timeout: Duration,
     reconnect_delay: Duration,
-    /// The family named in every request, for a bridge that serves several.
+    /// La famille nommée dans chaque requête, pour un pont qui en sert plusieurs.
     family: Option<&'static str>,
     slot: SharedConnection,
 }
 
-/// The one connection to a bridge. A bridge accepts a single connection, so the
-/// modules of several targets that one bridge serves hold the same slot.
+/// L'unique connexion à un pont. Un pont n'accepte qu'une connexion : les modules de plusieurs
+/// cibles qu'un même pont sert tiennent donc le même emplacement.
 pub type SharedConnection = Arc<Mutex<Option<Arc<BridgeClient>>>>;
 
-/// A slot with no connection yet.
+/// Un emplacement sans connexion pour l'instant.
 #[must_use]
 pub fn new_connection_slot() -> SharedConnection {
     Arc::new(Mutex::new(None))
 }
 
 impl TcpModule {
-    /// `state_timeout` bounds the wait for a `state` answer. A second attempt to
-    /// connect waits [`RECONNECT_DELAY`].
+    /// `state_timeout` borne l'attente d'une réponse `state`. Une seconde tentative de connexion
+    /// attend [`RECONNECT_DELAY`].
     #[must_use]
     pub fn new(connector: BridgeConnector, state_timeout: Duration) -> Self {
         TcpModule {
@@ -210,16 +209,16 @@ impl TcpModule {
         }
     }
 
-    /// The same module for one family of a bridge that serves several: every
-    /// `execute` and `state` request names it.
+    /// Le même module pour une famille d'un pont qui en sert plusieurs : chaque requête `execute` et
+    /// `state` la nomme.
     #[must_use]
     pub fn with_family(mut self, family: &'static str) -> Self {
         self.family = Some(family);
         self
     }
 
-    /// The same module over a connection other modules use too, so that targets
-    /// served by one bridge open a single connection and share its busy state.
+    /// Le même module sur une connexion que d'autres modules emploient aussi, pour que les cibles
+    /// servies par un pont ouvrent une seule connexion et en partagent l'état d'occupation.
     #[must_use]
     pub fn with_shared_connection(mut self, slot: SharedConnection) -> Self {
         self.slot = slot;
@@ -233,7 +232,7 @@ impl TcpModule {
         payload
     }
 
-    /// The same module with another wait before a second attempt to connect.
+    /// Le même module avec une autre attente avant une seconde tentative de connexion.
     #[must_use]
     pub fn with_reconnect_delay(mut self, delay: Duration) -> Self {
         self.reconnect_delay = delay;
@@ -264,7 +263,7 @@ impl TcpModule {
         }
     }
 
-    /// Send a request that is safe to repeat; reconnect once if the connection was lost.
+    /// Envoie une requête sans danger à répéter ; se reconnecte une fois si la connexion a été perdue.
     fn idempotent(
         &self,
         payload: &Value,
@@ -311,7 +310,7 @@ impl Module for TcpModule {
                 app_version: Some(client.hello().app_version.clone()),
                 bridge_version: Some(client.hello().bridge_version.clone()),
             },
-            // Busy means a script is running: the bridge is there.
+            // Occupé signifie qu'un script tourne : le pont est là.
             Err(BridgeError::Busy) => match self.slot.lock().ok().and_then(|slot| slot.clone()) {
                 Some(client) => Health {
                     connected: true,
@@ -341,14 +340,14 @@ impl Module for TcpModule {
         let (answer, client) = loop {
             attempt += 1;
             if attempt > 1 {
-                // A bridge frees its single place a moment after the connection
-                // that held it closed: an immediate attempt would be turned away.
+                // Un pont libère sa place unique un instant après la fermeture de la connexion qui la tenait :
+                // une tentative immédiate serait refusée.
                 std::thread::sleep(self.reconnect_delay);
             }
             let client = self.client().map_err(module_error)?;
             match client.request(payload.clone(), timeout) {
                 Ok(answer) => break (answer, client),
-                // Nothing was written: trying on a fresh connection is not a replay.
+                // Rien n'a été écrit : essayer sur une connexion neuve n'est pas un rejeu.
                 Err(BridgeError::Disconnected { sent: false }) if attempt < 2 => {
                     self.forget(&client);
                 }

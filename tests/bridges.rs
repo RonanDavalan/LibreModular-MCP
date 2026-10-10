@@ -1,11 +1,11 @@
-//! The Python bridges seen from the Hub: their own test suite, the generated
-//! GIMP, Krita and Blender bridges driven end to end by the Hub's `tcp` module,
-//! and the LibreOffice bridge driven by the Hub's three LibreOffice targets.
+//! Les ponts Python vus du Hub : leur propre suite de tests, les ponts générés de GIMP, Krita et
+//! Blender pilotés de bout en bout par le module `tcp` du Hub, et le pont LibreOffice piloté par les
+//! trois cibles LibreOffice du Hub.
 //!
-//! Why this module exists
-//! `cargo test` is the one command that proves the product works. It must run
-//! the Python tests of the bridges, fail when Python is missing rather than skip,
-//! and show that the Hub's client and a real bridge file understand each other.
+//! Pourquoi ce module existe
+//! `cargo test` est la seule commande qui prouve que le produit fonctionne. Elle doit exécuter les
+//! tests Python des ponts, échouer quand Python manque au lieu d'ignorer, et montrer que le client du
+//! Hub et un vrai fichier de pont se comprennent.
 
 #[macro_use]
 mod common;
@@ -58,8 +58,8 @@ fn the_python_tests_of_the_bridges_pass() {
     assert!(!report.contains(FILE_TOKEN));
 }
 
-/// A bridge running as a Python program; it is killed when dropped, whatever
-/// the test concluded.
+/// Un pont qui tourne comme un programme Python ; il est tué quand il est abandonné, quelle que
+/// soit la conclusion du test.
 struct BridgeProcess {
     child: Child,
     port: u16,
@@ -71,8 +71,8 @@ impl BridgeProcess {
         BridgeProcess::start_with(bridge_file, token_file, &[])
     }
 
-    /// `flags` go to `python3` before the bridge file. The environment is exactly
-    /// the five variables set below: nothing else of the machine reaches the bridge.
+    /// `flags` va à `python3` avant le fichier du pont. L'environnement est exactement les cinq variables
+    /// posées plus bas : rien d'autre de la machine n'atteint le pont.
     fn start_with(
         bridge_file: &Path,
         token_file: &Path,
@@ -125,7 +125,7 @@ impl BridgeProcess {
         }
     }
 
-    /// Everything the bridge wrote on its error stream since the listening line.
+    /// Tout ce que le pont a écrit sur son flux d'erreur depuis la ligne d'écoute.
     fn said(&self) -> Vec<String> {
         self.lines.try_iter().collect()
     }
@@ -138,11 +138,10 @@ impl Drop for BridgeProcess {
     }
 }
 
-/// The Hub's own module must reach the bridge of `app`, run a script, get a
-/// Python traceback back, read the state and probe it. Plain `python3` is not
-/// the application, whether or not the application is installed: the bridge
-/// either reports its API missing, or reads it directly without waiting for a
-/// main loop. Every failure names its step.
+/// Le module propre du Hub doit atteindre le pont de `app`, exécuter un script, recevoir en retour
+/// une trace d'appels Python, lire l'état et le sonder. Un `python3` ordinaire n'est pas l'application,
+/// qu'elle soit installée ou non : le pont rapporte soit que son API manque, soit la lit directement sans
+/// attendre une boucle principale. Chaque échec nomme son étape.
 fn check_the_hub_drives_the_bridge(bridge_file: &Path, app: &'static str) -> Verdict {
     let base = common::private_tempdir();
     let token_file = base.path().join("token");
@@ -156,8 +155,8 @@ fn check_the_hub_drives_the_bridge(bridge_file: &Path, app: &'static str) -> Ver
     let outcome = (|| -> Verdict {
         let health = module.health();
         if !health.connected {
-            // Give the bridge time to notice the closed connection and free its
-            // single place, then ask the handshake itself what went wrong.
+            // Laisser au pont le temps de remarquer la connexion fermée et de libérer sa place unique, puis
+            // demander à la poignée de main elle-même ce qui n'allait pas.
             std::thread::sleep(Duration::from_millis(300));
             let why = connector
                 .connect()
@@ -283,7 +282,7 @@ fn counter_proof_a_bridge_on_the_port_of_another_application_is_refused() {
     ));
 }
 
-// --- the LibreOffice bridge, without LibreOffice -------------------------------------
+// --- le pont LibreOffice, sans LibreOffice ------------------------------------------
 
 const LIBREOFFICE_TARGETS: [&str; 3] = [
     "libreoffice-writer",
@@ -291,10 +290,9 @@ const LIBREOFFICE_TARGETS: [&str; 3] = [
     "libreoffice-impress",
 ];
 
-/// `python3 -S` starts without the `site` module, so the packages the system
-/// installs for it, `uno` among them, cannot be found, whatever the machine has.
-/// The check first makes sure of that, then drives each of the three targets of
-/// the Hub against the bridge file, naming the step that failed.
+/// `python3 -S` démarre sans le module `site`, de sorte que les paquets que le système installe pour
+/// lui, `uno` compris, restent introuvables, quelle que soit la machine. Le contrôle s'en assure d'abord,
+/// puis pilote chacune des trois cibles du Hub contre le fichier du pont, en nommant l'étape qui a échoué.
 fn check_the_hub_reaches_the_libreoffice_bridge_without_libreoffice(bridge_file: &Path) -> Verdict {
     let probe = Command::new("python3")
         .args(["-S", "-c", "import uno"])

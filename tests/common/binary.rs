@@ -1,10 +1,10 @@
-//! The real `libremodular-mcp` binary, started in private temporary directories.
+//! Le vrai binaire `libremodular-mcp`, démarré dans des répertoires temporaires privés.
 //!
-//! Why this module exists
-//! The standard output belongs to the protocol and the Hub refuses to start when a
-//! security condition cannot be verified: both are only observable on the binary
-//! itself. Every test that starts it needs the same private layout, token, command
-//! and JSON-RPC line, so they live here once.
+//! Pourquoi ce module existe
+//! La sortie standard appartient au protocole et le Hub refuse de démarrer quand une condition de
+//! sécurité ne peut pas être vérifiée : les deux ne s'observent que sur le binaire lui-même. Chaque
+//! test qui le démarre a besoin de la même disposition privée, du même jeton, de la même commande et
+//! de la même ligne JSON-RPC : elles vivent donc ici une seule fois.
 
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -40,7 +40,7 @@ pub fn layout(base: &Path) -> Layout {
     }
 }
 
-/// Write a private configuration directory with a token and `config_text`.
+/// Écrit un répertoire de configuration privé avec un jeton et `config_text`.
 pub fn prepare(layout: &Layout, token: &str, config_text: &str) {
     let dir = layout.config.join("libremodular-mcp");
     fs::create_dir_all(&dir).expect("config dir");
@@ -69,7 +69,7 @@ pub fn rpc(id: u64, method: &str, params: Value) -> String {
     json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string()
 }
 
-/// An MCP client driving a running `libremodular-mcp serve`, one request at a time.
+/// Un client MCP qui pilote un `libremodular-mcp serve` en cours d'exécution, une requête à la fois.
 pub struct McpProcess {
     child: Child,
     stdin: ChildStdin,
@@ -79,7 +79,7 @@ pub struct McpProcess {
 }
 
 impl McpProcess {
-    /// Start the binary with `command` and open the session.
+    /// Démarre le binaire avec `command` et ouvre la session.
     pub fn start(mut command: Command) -> McpProcess {
         let mut child = command.spawn().expect("start the Hub");
         let stdin = child.stdin.take().expect("stdin");
@@ -107,7 +107,7 @@ impl McpProcess {
         process
     }
 
-    /// Send a request and return the whole response line, parsed.
+    /// Envoie une requête et rend toute la ligne de réponse, analysée.
     pub fn request(&mut self, method: &str, params: Value) -> Value {
         let id = self.next_id;
         self.next_id += 1;
@@ -119,7 +119,7 @@ impl McpProcess {
         serde_json::from_str(&line).expect("a protocol line")
     }
 
-    /// Call a tool and return the JSON object its answer carries as text.
+    /// Appelle un outil et rend l'objet JSON que sa réponse porte comme texte.
     pub fn call(&mut self, tool: &str, arguments: Value) -> Value {
         let response = self.request("tools/call", json!({"name": tool, "arguments": arguments}));
         let text = response["result"]["content"][0]["text"]
@@ -128,8 +128,7 @@ impl McpProcess {
         serde_json::from_str(text).expect("a JSON answer")
     }
 
-    /// Close the session and wait for the process; returns what it wrote besides
-    /// the lines already read.
+    /// Ferme la session et attend le processus ; rend ce qu'il a écrit en plus des lignes déjà lues.
     pub fn finish(self) -> (Output, Vec<String>) {
         let McpProcess {
             child,

@@ -1,10 +1,10 @@
-//! The bridge client against the reference bridge.
+//! Le client du pont face au pont de référence.
 //!
-//! Why this module exists
-//! The client is the only door between the Hub and code running with the user's
-//! rights. These tests show that it authenticates, bounds what it reads, keeps a
-//! single request in flight and never sends a script twice, and that each check
-//! notices a bridge built to break it.
+//! Pourquoi ce module existe
+//! Le client est la seule porte entre le Hub et du code qui s'exécute avec les droits de
+//! l'utilisateur. Ces tests montrent qu'il s'authentifie, borne ce qu'il lit, garde une seule
+//! requête en vol et n'envoie jamais un script deux fois, et que chaque contrôle remarque un pont
+//! construit pour le casser.
 
 #[macro_use]
 mod common;
@@ -64,10 +64,10 @@ fn hello_is_checked_and_reports_the_bridge() {
     assert_eq!(bridge.scripts(), vec!["result = 1".to_owned()]);
 }
 
-// --- the bridge refuses a wrong token: the reference implementation and its defect ---
+// --- le pont refuse un mauvais jeton : l'implémentation de référence et son défaut ----
 
-/// A bridge must close, without answering, a connection whose hello carries a
-/// wrong token or that does not start with a hello at all.
+/// Un pont doit fermer, sans répondre, une connexion dont le hello porte un mauvais jeton ou qui
+/// ne commence pas du tout par un hello.
 fn check_bridge_rejects_strangers(port: u16) -> Verdict {
     let wrong = b"{\"type\":\"hello\",\"token\":\"test-token-9999\",\"protocol\":1}\n";
     let answer = raw_exchange(port, wrong);
@@ -125,13 +125,13 @@ fn every_bad_hello_is_a_typed_error_that_never_shows_the_token() {
     }
 }
 
-// --- the bridge must be the application configured on its port --------------------
+// --- le pont doit être l'application configurée sur son port ------------------------
 
-/// A way to connect that returns the application it accepted.
+/// Une façon de se connecter qui rend l'application qu'elle a acceptée.
 type Connect<'a> = &'a dyn Fn(u16) -> Result<String, BridgeError>;
 
-/// A bridge announcing `krita` on the port configured for `gimp` must be refused
-/// as a handshake failure that does not repeat the announced name.
+/// Un pont qui annonce `krita` sur le port configuré pour `gimp` doit être refusé comme un échec de
+/// poignée de main qui ne répète pas le nom annoncé.
 fn check_another_application_is_refused(connect: Connect<'_>) -> Verdict {
     let bridge = FakeBridge::start(FAKE_TOKEN, HelloMode::OtherApp, handler(|_| ok_reply()));
     match connect(bridge.port()) {
@@ -148,8 +148,8 @@ fn check_another_application_is_refused(connect: Connect<'_>) -> Verdict {
     }
 }
 
-/// Defective on purpose: a client that checks everything in the hello but the
-/// application, written here without the Hub's code.
+/// Défectueux exprès : un client qui contrôle tout dans le hello sauf l'application, écrit ici sans
+/// le code du Hub.
 fn connect_without_checking_the_application(port: u16) -> Result<String, BridgeError> {
     let refused = || BridgeError::Handshake("defective client");
     let mut stream = TcpStream::connect(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
@@ -196,10 +196,10 @@ fn nothing_listening_is_a_connection_error() {
     assert!(matches!(error, BridgeError::Connect(_)), "{error}");
 }
 
-// --- bounded lines -----------------------------------------------------------
+// --- lignes bornées -----------------------------------------------------------------
 
 fn check_endless_line_is_refused(client_limits: &Limits) -> Verdict {
-    // A line far longer than the limit, never terminated.
+    // Une ligne bien plus longue que la limite, jamais terminée.
     let bridge = FakeBridge::start(
         FAKE_TOKEN,
         HelloMode::Normal,
@@ -256,7 +256,7 @@ fn an_answer_with_another_id_is_a_protocol_error() {
     assert!(!client.is_usable());
 }
 
-// --- one request at a time -------------------------------------------------------
+// --- une requête à la fois ----------------------------------------------------------
 
 #[test]
 fn a_second_request_while_one_is_running_is_busy_at_once_and_not_sent() {
@@ -347,10 +347,10 @@ fn close_releases_the_connection_and_sends_nothing() {
     assert_eq!(bridge.requests(), 0);
 }
 
-// --- reconnecting after the bridge closed the connection ---------------------------
+// --- se reconnecter après que le pont a fermé la connexion --------------------------
 
-/// The bridge closes the connection, then turns away any connection made within
-/// 50 ms of that close; `health` right afterwards must still reach it.
+/// Le pont ferme la connexion, puis refuse toute connexion faite dans les 50 ms qui suivent cette
+/// fermeture ; `health` juste après doit tout de même l'atteindre.
 fn check_health_reconnects_after_a_close(reconnect_delay: Duration) -> Verdict {
     let bridge = FakeBridge::start_slow_to_release(
         FAKE_TOKEN,
@@ -393,12 +393,12 @@ fn counter_proof_a_module_that_reconnects_at_once_is_turned_away() {
     must_fail(check_health_reconnects_after_a_close(Duration::ZERO));
 }
 
-// --- the second attempt of `execute` also waits ----------------------------------------
+// --- la seconde tentative de `execute` attend aussi ---------------------------------
 
-/// A script times out and the bridge then closes the connection without having
-/// answered. The next script finds the connection gone before writing anything,
-/// so it may be sent on a new one, but not before the bridge frees its place:
-/// the bridge turns away any connection made within 50 ms of the close.
+/// Un script dépasse son délai et le pont ferme alors la connexion sans avoir répondu. Le script
+/// suivant trouve la connexion disparue avant d'écrire quoi que ce soit : il peut donc être envoyé sur
+/// une nouvelle, mais pas avant que le pont libère sa place : le pont refuse toute connexion faite
+/// dans les 50 ms qui suivent la fermeture.
 fn check_execute_reconnects_after_a_late_close(reconnect_delay: Duration) -> Verdict {
     let requests = Arc::new(AtomicUsize::new(0));
     let counted = Arc::clone(&requests);
@@ -407,7 +407,7 @@ fn check_execute_reconnects_after_a_late_close(reconnect_delay: Duration) -> Ver
         HelloMode::Normal,
         handler(move |_| {
             if counted.fetch_add(1, Ordering::SeqCst) == 0 {
-                // Longer than the one second the first script is given.
+                // Plus long que la seconde accordée au premier script.
                 Reply::CloseAfter(Duration::from_millis(1300))
             } else {
                 ok_reply()
@@ -425,7 +425,7 @@ fn check_execute_reconnects_after_a_late_close(reconnect_delay: Duration) -> Ver
         matches!(first, Err(libremodular_mcp::modules::ModuleError::Timeout)),
         "the first script was expected to time out: {first:?}"
     );
-    // Call again the moment the bridge has closed, inside its 50 ms of grace.
+    // Rappeler à l'instant où le pont vient de se fermer, dans ses 50 ms de grâce.
     let deadline = Instant::now() + Duration::from_secs(5);
     while bridge.stats().closed.load(Ordering::SeqCst) == 0 {
         ensure!(

@@ -1,13 +1,13 @@
-//! The launcher of LibreOffice and its bridge, with fake programs and a fake `/proc`.
+//! Le lanceur de LibreOffice et de son pont, avec de faux programmes et un faux `/proc`.
 //!
-//! Why this module exists
-//! The launcher starts two programs and later stops one of them, on the word of a
-//! file it wrote. These tests show that nothing is started through a shell or next
-//! to a LibreOffice of the operator's, that the token never reaches a child, that
-//! the environment of the bridge is exactly the listed one, and that a process
-//! number taken by another program is never signalled. Nothing here depends on a
-//! LibreOffice, a `uno` or a Python package being installed, and the processes of
-//! the machine are never looked at, apart from the two tests that say so.
+//! Pourquoi ce module existe
+//! Le lanceur démarre deux programmes et en arrête ensuite un, sur la foi d'un fichier qu'il a
+//! écrit. Ces tests montrent que rien n'est démarré par un interpréteur de commandes ni à côté
+//! d'un LibreOffice de l'opérateur, que le jeton n'atteint jamais un enfant, que l'environnement
+//! du pont est exactement celui qui est listé, et qu'un numéro de processus pris par un autre
+//! programme n'est jamais signalé. Rien ici ne dépend de l'installation d'un LibreOffice, d'un
+//! `uno` ou d'un paquet Python, et les processus de la machine ne sont jamais regardés, hors les
+//! deux tests qui le disent.
 
 #[macro_use]
 mod common;
@@ -34,17 +34,17 @@ const BRIDGE_PORT: u16 = 9304;
 
 static PROCESS_START: Mutex<()> = Mutex::new(());
 
-/// Held while a fake program is written and while any process is started. A process
-/// started in one test copies, until its `exec`, every file another test has open for
-/// writing; running that file then fails with "Text file busy". Tests share one process,
-/// so they take turns.
+/// Tenu pendant qu'un faux programme est écrit et pendant qu'un processus est démarré. Un
+/// processus démarré dans un test copie, jusqu'à son `exec`, chaque fichier qu'un autre test a
+/// ouvert en écriture ; exécuter ce fichier échoue alors avec « Text file busy ». Les tests
+/// partagent un processus, ils passent donc à tour de rôle.
 fn one_at_a_time() -> MutexGuard<'static, ()> {
     PROCESS_START
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// The first `python3` on the test's PATH: the interpreter of the fake programs.
+/// Le premier `python3` du PATH du test : l'interpréteur des faux programmes.
 fn python() -> PathBuf {
     let path = std::env::var_os("PATH").expect("PATH");
     std::env::split_paths(&path)
@@ -53,9 +53,10 @@ fn python() -> PathBuf {
         .expect("python3 is required to test the launcher")
 }
 
-/// A fake program: it writes what it received to `report` and stays alive, so that
-/// it can be signalled, until the directory of the test is removed. `/proc/self/environ` holds the environment exactly as it
-/// was given, whatever the interpreter did to its own copy afterwards.
+/// Un faux programme : il écrit ce qu'il a reçu dans `report` et reste vivant, pour pouvoir être
+/// signalé, jusqu'à ce que le répertoire du test soit supprimé. `/proc/self/environ` contient
+/// l'environnement exactement tel qu'il a été donné, quoi que l'interpréteur ait fait ensuite de
+/// sa propre copie.
 fn write_fake_program(path: &Path, report: &Path) {
     let text = format!(
         "#!{python}\n\
@@ -80,7 +81,7 @@ fn write_fake_program(path: &Path, report: &Path) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).expect("mode 700");
 }
 
-/// What the fake programs are given, and the directories around them.
+/// Ce que les faux programmes reçoivent, et les répertoires autour d'eux.
 struct Setup {
     _base: tempfile::TempDir,
     root: PathBuf,
@@ -178,7 +179,7 @@ impl Setup {
         Ok(String::from_utf8(out).expect("utf-8"))
     }
 
-    /// A process of the fake `/proc`.
+    /// Un processus du faux `/proc`.
     fn fake_process(&self, pid: u32, comm: &str, arguments: &[&str]) {
         let dir = self.programs.proc_dir.join(pid.to_string());
         private_dir(&dir);
@@ -188,7 +189,7 @@ impl Setup {
         write_file(&dir.join("cmdline"), 0o444, &cmdline);
     }
 
-    /// Both fake programs are alive: the fake `/proc` shows what a real one would.
+    /// Les deux faux programmes sont vivants : le faux `/proc` montre ce qu'un vrai montrerait.
     fn mirror_the_started_processes(&self) -> (u32, u32) {
         let soffice = report_of(&self.soffice_report);
         let bridge = report_of(&self.bridge_report);
@@ -211,7 +212,7 @@ impl Setup {
 }
 
 impl Drop for Setup {
-    /// Whatever a test concluded, the fake programs do not outlive it.
+    /// Quelle que soit la conclusion d'un test, les faux programmes ne lui survivent pas.
     fn drop(&mut self) {
         for report in [&self.soffice_report, &self.bridge_report] {
             if let Ok(text) = fs::read_to_string(report)
@@ -240,7 +241,7 @@ fn pid_of(report: &Value) -> u32 {
     u32::try_from(report["pid"].as_u64().expect("pid")).expect("pid fits")
 }
 
-/// What a fake program wrote about itself; waits for it, as the process is detached.
+/// Ce qu'un faux programme a écrit de lui-même ; l'attend, puisque le processus est détaché.
 fn report_of(path: &Path) -> Value {
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
@@ -258,7 +259,7 @@ fn report_of(path: &Path) -> Value {
     }
 }
 
-/// The variables the launcher itself is given, including some that must not travel.
+/// Les variables que le lanceur lui-même reçoit, dont certaines ne doivent pas voyager.
 fn environment() -> Vec<(OsString, OsString)> {
     [
         ("PATH", "/usr/bin:/bin"),
@@ -283,7 +284,7 @@ fn text_of(report: &Value, key: &str) -> Vec<String> {
         .collect()
 }
 
-// --- the commands -----------------------------------------------------------------------
+// --- les commandes ---------------------------------------------------------------------
 
 #[test]
 fn libreoffice_is_started_with_a_window_from_a_fixed_list_of_arguments() {
@@ -357,16 +358,16 @@ fn the_bridge_environment_is_exactly_the_listed_one() {
     assert_eq!(got, expected);
 }
 
-// --- what the children really receive ---------------------------------------------------
+// --- ce que les enfants reçoivent vraiment ---------------------------------------------
 
-/// How a launch is done: the launcher, or something built to do it wrongly.
+/// Comment un lancement se fait : le lanceur, ou quelque chose construit pour le faire mal.
 type Launcher<'l> = &'l dyn Fn(&Setup) -> Result<(), String>;
 
 fn the_real_launcher(setup: &Setup) -> Result<(), String> {
     setup.launch().map(drop).map_err(|error| error.to_string())
 }
 
-/// Defective on purpose: the same two programs, through `sh -c` and one string.
+/// Défectueux exprès : les deux mêmes programmes, par `sh -c` et une seule chaîne.
 fn through_a_shell(setup: &Setup) -> Result<(), String> {
     let plan = setup.plan();
     let soffice = soffice_spawn(&setup.programs, &plan, &environment());
@@ -387,8 +388,8 @@ fn through_a_shell(setup: &Setup) -> Result<(), String> {
     Ok(())
 }
 
-/// Defective on purpose: the real launcher's commands, with the token's content
-/// added to the bridge's environment.
+/// Défectueux exprès : les vraies commandes du lanceur, avec le contenu du jeton ajouté à
+/// l'environnement du pont.
 fn with_the_token_in_the_environment(setup: &Setup) -> Result<(), String> {
     let plan = setup.plan();
     let soffice = soffice_spawn(&setup.programs, &plan, &environment());
@@ -535,8 +536,8 @@ fn the_bridge_inherits_only_what_is_listed_and_libreoffice_what_it_was_given() {
     ];
     expected.sort();
     assert_eq!(bridge, expected);
-    // A window needs the display and the session: it gets the launcher's environment,
-    // except the variables of this program's own.
+    // Une fenêtre a besoin de l'affichage et de la session : elle reçoit l'environnement du lanceur,
+    // sauf les variables propres à ce programme.
     let soffice = text_of(&report_of(&setup.soffice_report), "environment");
     let mut expected: Vec<String> = environment()
         .iter()
@@ -593,10 +594,10 @@ fn only_the_loopback_address_is_named_in_what_is_started() {
     assert!(argv[0].contains("host=127.0.0.1,"), "{argv:?}");
 }
 
-// --- a LibreOffice that is already running -------------------------------------------------
+// --- un LibreOffice déjà en cours d'exécution ----------------------------------------------
 
-/// With a `soffice.bin` of the user in the listing, nothing starts: no program,
-/// no record. The message says what to do.
+/// Avec un `soffice.bin` de l'utilisateur dans le listage, rien ne démarre : ni programme ni
+/// enregistrement. Le message dit quoi faire.
 fn check_nothing_starts_beside_a_running_libreoffice(launcher: Launcher<'_>) -> Verdict {
     let setup = setup();
     setup.fake_process(
@@ -615,14 +616,14 @@ fn check_nothing_starts_beside_a_running_libreoffice(launcher: Launcher<'_>) -> 
     Ok(())
 }
 
-/// Defective on purpose: the programs are started without looking for LibreOffice.
+/// Défectueux exprès : les programmes sont démarrés sans chercher LibreOffice.
 fn without_looking_for_libreoffice(setup: &Setup) -> Result<(), String> {
     let plan = setup.plan();
     let soffice = soffice_spawn(&setup.programs, &plan, &environment());
     detached(soffice.program.to_str().expect("utf-8"), &[], &soffice.env)
         .map(drop)
         .map_err(|e| e.to_string())?;
-    // Wait until it has run, so that the check sees what this launcher did.
+    // Attendre qu'il ait tourné, pour que le contrôle voie ce que ce lanceur a fait.
     report_of(&setup.soffice_report);
     Err("started".to_owned())
 }
@@ -681,7 +682,7 @@ fn only_a_soffice_bin_of_the_same_user_counts() {
 
 #[test]
 fn the_real_listing_of_processes_can_be_read() {
-    // What it holds depends on the machine: only that it is readable is asserted.
+    // Ce qu'il contient dépend de la machine : seule sa lisibilité est vérifiée.
     assert!(running_soffice(Path::new("/proc"), common::current_uid()).is_ok());
 }
 
@@ -690,7 +691,7 @@ fn a_bridge_of_an_earlier_launch_that_still_runs_makes_the_launcher_refuse() {
     let setup = setup();
     setup.launch().expect("first launch");
     setup.mirror_the_started_processes();
-    // LibreOffice was closed by hand; the bridge is still there.
+    // LibreOffice a été fermé à la main ; le pont est toujours là.
     fs::remove_dir_all(
         setup
             .programs
@@ -703,7 +704,7 @@ fn a_bridge_of_an_earlier_launch_that_still_runs_makes_the_launcher_refuse() {
     assert!(error.to_string().contains("--stop"), "{error}");
 }
 
-// --- the configuration --------------------------------------------------------------------
+// --- la configuration -----------------------------------------------------------------------
 
 #[test]
 fn the_ports_come_from_the_enabled_targets_and_must_agree() {
@@ -775,7 +776,7 @@ fn a_target_enabled_in_another_mode_is_not_launched_for() {
     assert!(matches!(none, LaunchError::NoTarget));
 }
 
-// --- the bridge file ------------------------------------------------------------------
+// --- le fichier du pont --------------------------------------------------------------------
 
 #[test]
 fn a_bridge_file_that_cannot_be_trusted_is_refused_and_nothing_starts() {
@@ -816,7 +817,7 @@ fn a_bridge_file_that_cannot_be_trusted_is_refused_and_nothing_starts() {
     assert!(!setup.record_file().exists());
 }
 
-// --- the record -----------------------------------------------------------------------
+// --- l'enregistrement ----------------------------------------------------------------------
 
 #[test]
 fn the_record_lists_both_processes_in_a_private_file_of_a_private_directory() {
@@ -873,8 +874,8 @@ fn a_record_that_is_a_link_stops_the_launch_and_is_never_written_through() {
     )
     .expect("mode");
     symlink(&victim, setup.record_file()).expect("link");
-    // A link at the record's place makes the record unreadable as a control file:
-    // the launcher stops there instead of following it.
+    // Un lien à la place de l'enregistrement rend l'enregistrement illisible comme fichier de
+    // contrôle : le lanceur s'arrête là au lieu de le suivre.
     let error = setup.launch().expect_err("refused");
     assert_eq!(error.exit_code(), 1, "{error}");
     assert_eq!(fs::read_to_string(&victim).expect("victim"), "precious\n");
@@ -911,13 +912,13 @@ fn a_bridge_that_cannot_start_leaves_libreoffice_alone_and_says_so() {
     assert_eq!(record, format!("soffice {soffice}\n"));
 }
 
-// --- stopping --------------------------------------------------------------------------------
+// --- l'arrêt -----------------------------------------------------------------------------------
 
 fn wait_until_gone(pid: u32) -> bool {
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
-        // A child of this test process stays a zombie until it is waited for:
-        // its state is read, since a signal still reaches a zombie.
+        // Un enfant de ce processus de test reste zombie tant qu'il n'est pas attendu : son état est lu,
+        // puisqu'un signal atteint encore un zombie.
         let state = fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
         if state.is_empty() || state.contains(") Z ") {
             return true;
@@ -957,8 +958,8 @@ fn stop_ends_the_bridge_only_and_leaves_libreoffice_to_its_operator() {
     assert!(again.contains("nothing to stop"), "{again}");
 }
 
-/// A record names a process number that belongs to another program now: stopping
-/// must not touch it. `stopper` is what stops the bridge.
+/// Un enregistrement nomme un numéro de processus qui appartient maintenant à un autre programme :
+/// l'arrêt ne doit pas y toucher. `stopper` est ce qui arrête le pont.
 type Stopper<'s> = &'s dyn Fn(&Setup, &Record);
 
 fn the_real_stop(setup: &Setup, _: &Record) {
@@ -966,7 +967,7 @@ fn the_real_stop(setup: &Setup, _: &Record) {
     let _ = stop(&setup.programs, &setup.paths, &mut out);
 }
 
-/// Defective on purpose: it trusts the record and signals the number in it.
+/// Défectueux exprès : il fait confiance à l'enregistrement et signale le numéro qu'il contient.
 fn stop_without_checking_the_command_line(setup: &Setup, record: &Record) {
     if let Some((pid, _)) = &record.bridge {
         kill(*pid);
@@ -984,7 +985,7 @@ fn check_a_reused_process_number_is_never_signalled(stopper: Stopper<'_>) -> Ver
         .map_err(|e| e.to_string())?;
     drop(turn);
     let pid = other.id();
-    // The listing says that process is not the bridge.
+    // Le listage dit que ce processus n'est pas le pont.
     setup.fake_process(pid, "python3", &["python3", "-c", "import time"]);
     let record = Record {
         soffice_pid: None,
@@ -1079,7 +1080,7 @@ fn a_recorded_bridge_that_is_gone_is_reported_and_the_record_removed() {
     assert!(!setup.record_file().exists());
 }
 
-// --- with the real /proc ---------------------------------------------------------------
+// --- avec le vrai /proc ----------------------------------------------------------------------
 
 #[test]
 fn the_bridge_is_recognised_by_an_argument_of_its_real_command_line() {
@@ -1094,7 +1095,7 @@ fn the_bridge_is_recognised_by_an_argument_of_its_real_command_line() {
     drop(turn);
     let pid = child.id();
     let real = Path::new("/proc");
-    // Right after the program was executed its command line may not be there yet.
+    // Juste après l'exécution du programme, sa ligne de commande peut ne pas être encore là.
     let deadline = Instant::now() + Duration::from_secs(5);
     while !is_the_bridge(real, pid, &setup.bridge_file) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
@@ -1123,7 +1124,7 @@ fn the_bridge_is_recognised_by_an_argument_of_its_real_command_line() {
     );
 }
 
-// --- the command line -------------------------------------------------------------------------
+// --- la ligne de commande ---------------------------------------------------------------------
 
 struct Run {
     code: u8,
@@ -1244,7 +1245,7 @@ fn from_the_command_line_the_launch_and_the_stop_work_and_report_their_exit_code
         text_of(&soffice, "argv")[0],
         "--accept=socket,host=127.0.0.1,port=2002;urp;"
     );
-    // The same with the other spelling of the option.
+    // La même chose avec l'autre graphie de l'option.
     setup.mirror_the_started_processes();
     let again = run_args(
         &setup,

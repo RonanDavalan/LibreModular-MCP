@@ -1,10 +1,10 @@
-//! Hub-side security primitives: token, private files, paths, script guard, bounds.
+//! Primitives de sécurité du côté du Hub : jeton, fichiers privés, chemins, garde-fou de script, bornes.
 //!
-//! Why this module exists
-//! A script runs with the user's rights inside an application, and everything the
-//! Hub returns leaves the machine. Keeping every check in one module means a
-//! reviewer can read the whole security surface at once, and no other module can
-//! quietly grow a weaker copy of a check.
+//! Pourquoi ce module existe
+//! Un script s'exécute avec les droits de l'utilisateur dans une application, et tout ce que le
+//! Hub rend quitte la machine. Garder chaque contrôle dans un seul module permet à un relecteur
+//! de lire toute la surface de sécurité d'un coup, et empêche tout autre module de laisser
+//! pousser en douce une copie plus faible d'un contrôle.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, VecDeque};
@@ -27,9 +27,9 @@ use rustix::fs::{Mode as FileMode, OFlags};
 use rustix::io::Errno;
 use rustix::process::{Resource, Rlimit};
 
-/// Marker that ends every string cut to fit a size bound.
+/// Marqueur qui termine toute chaîne coupée pour tenir dans une borne de taille.
 pub const TRUNCATION_MARKER: &str = "[truncated]";
-/// Number of hexadecimal characters in the bridge token.
+/// Nombre de caractères hexadécimaux du jeton du pont.
 pub const TOKEN_HEX_LENGTH: usize = 64;
 
 const TOKEN_READ_CAP: u64 = 4096;
@@ -40,13 +40,13 @@ const GROUP_AND_OTHER_BITS: u32 = 0o077;
 const GROUP_AND_OTHER_WRITE_BITS: u32 = 0o022;
 
 // --------------------------------------------------------------------------
-// Errors
+// Erreurs
 // --------------------------------------------------------------------------
 
-/// A security condition failed or could not be verified.
+/// Une condition de sécurité a échoué ou n'a pas pu être vérifiée.
 ///
-/// No variant ever carries the content of a file or the token: only paths, modes
-/// and sizes, so that a message can be shown to the operator without leaking.
+/// Aucune variante ne porte jamais le contenu d'un fichier ni le jeton : seulement des chemins,
+/// des modes et des tailles, pour qu'un message puisse être montré à l'opérateur sans fuite.
 #[derive(Debug)]
 pub enum SecurityError {
     Hardening(&'static str),
@@ -112,7 +112,7 @@ pub enum SecurityError {
 }
 
 impl SecurityError {
-    /// Whether the error means the file does not exist (as opposed to being unsafe).
+    /// Dit si l'erreur signifie que le fichier n'existe pas (par opposition à être peu sûr).
     #[must_use]
     pub fn is_not_found(&self) -> bool {
         matches!(self, SecurityError::NotFound { .. })
@@ -223,15 +223,15 @@ fn io_error(action: &'static str, path: &Path, source: io::Error) -> SecurityErr
 }
 
 // --------------------------------------------------------------------------
-// Process hardening
+// Durcissement du processus
 // --------------------------------------------------------------------------
 
-/// Disable core dumps and restrict the file creation mask.
+/// Désactive les vidages mémoire et restreint le masque de création de fichiers.
 ///
-/// Must run before the token is read so that a crash cannot write it to disk.
+/// Doit s'exécuter avant la lecture du jeton, pour qu'un plantage ne puisse pas l'écrire sur disque.
 ///
-/// # Errors
-/// Fails closed when the core-dump limit cannot be lowered.
+/// # Erreurs
+/// Échoue fermé quand la limite des vidages mémoire ne peut pas être abaissée.
 pub fn harden_process() -> Result<(), SecurityError> {
     rustix::process::setrlimit(
         Resource::Core,
@@ -246,15 +246,15 @@ pub fn harden_process() -> Result<(), SecurityError> {
 }
 
 // --------------------------------------------------------------------------
-// Files and directories
+// Fichiers et répertoires
 // --------------------------------------------------------------------------
 
 fn current_uid() -> u32 {
     rustix::process::geteuid().as_raw()
 }
 
-/// How a control file is opened. Truncation is not an option: a control file is
-/// only ever read, appended to, or created.
+/// Comment un fichier de contrôle est ouvert. La troncature n'est pas une option : un fichier de
+/// contrôle n'est jamais que lu, complété ou créé.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControlAccess {
     Read,
@@ -272,10 +272,10 @@ impl ControlAccess {
     }
 }
 
-/// Open without following a final symbolic link; refuse anything but a regular file.
+/// Ouvre sans suivre un lien symbolique final ; refuse tout sauf un fichier ordinaire.
 ///
-/// # Errors
-/// Refuses links, non-regular files and any failure of the open itself.
+/// # Erreurs
+/// Refuse les liens, les fichiers non ordinaires et tout échec de l'ouverture elle-même.
 pub fn open_regular_nofollow(path: &Path, access: ControlAccess) -> Result<File, SecurityError> {
     let flags = access.flags() | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK;
     let fd =
@@ -303,20 +303,20 @@ pub fn open_regular_nofollow(path: &Path, access: ControlAccess) -> Result<File,
     Ok(file)
 }
 
-/// Open a token, journal or capture file after checking owner and permissions.
+/// Ouvre un jeton, un journal ou un fichier de capture après contrôle du propriétaire et des permissions.
 ///
-/// The file must belong to the current user and carry no group or other bit.
+/// Le fichier doit appartenir à l'utilisateur courant et ne porter aucun bit de groupe ni des autres.
 ///
-/// # Errors
-/// Any failure of [`open_regular_nofollow`], a foreign owner, or a loose mode.
+/// # Erreurs
+/// Tout échec de [`open_regular_nofollow`], un propriétaire étranger, ou un mode trop ouvert.
 pub fn open_control_file(path: &Path, access: ControlAccess) -> Result<File, SecurityError> {
     open_control_file_as(path, access, current_uid())
 }
 
-/// Same as [`open_control_file`] with an explicit expected owner.
+/// Comme [`open_control_file`] avec un propriétaire attendu explicite.
 ///
-/// # Errors
-/// See [`open_control_file`].
+/// # Erreurs
+/// Voir [`open_control_file`].
 pub fn open_control_file_as(
     path: &Path,
     access: ControlAccess,
@@ -339,12 +339,12 @@ pub fn open_control_file_as(
     Ok(file)
 }
 
-/// Create a private file holding `initial` when nothing has that name yet; when
-/// something has, it must be a private regular file of the current user. A
-/// symbolic link is refused, never followed.
+/// Crée un fichier privé contenant `initial` quand rien ne porte encore ce nom ; quand quelque chose
+/// le porte, ce doit être un fichier ordinaire privé de l'utilisateur courant. Un lien symbolique
+/// est refusé, jamais suivi.
 ///
-/// # Errors
-/// A link, a non-regular file, a foreign owner, a loose mode, or an I/O failure.
+/// # Erreurs
+/// Un lien, un fichier non ordinaire, un propriétaire étranger, un mode trop ouvert, ou un échec d'E/S.
 pub fn ensure_private_file(path: &Path, initial: &[u8]) -> Result<(), SecurityError> {
     match open_control_file(path, ControlAccess::CreateNew) {
         Ok(mut file) => file
@@ -357,12 +357,12 @@ pub fn ensure_private_file(path: &Path, initial: &[u8]) -> Result<(), SecurityEr
     }
 }
 
-/// Write `bytes` to a private file created for the purpose: whatever had that
-/// name is removed first (a link itself, never its target), then the file is
-/// created exclusively in mode 600, so a link planted in between is refused.
+/// Écrit `bytes` dans un fichier privé créé pour l'occasion : ce qui portait ce nom est d'abord
+/// retiré (un lien lui-même, jamais sa cible), puis le fichier est créé en exclusivité en mode 600,
+/// de sorte qu'un lien posé entre-temps est refusé.
 ///
-/// # Errors
-/// A directory of that name, or any failure to remove, create or write.
+/// # Erreurs
+/// Un répertoire de ce nom, ou tout échec de suppression, de création ou d'écriture.
 pub fn replace_private_file(path: &Path, bytes: &[u8]) -> Result<(), SecurityError> {
     match fs::symlink_metadata(path) {
         Ok(info) if info.is_dir() => {
@@ -379,23 +379,23 @@ pub fn replace_private_file(path: &Path, bytes: &[u8]) -> Result<(), SecurityErr
         .map_err(|e| io_error("write", path, e))
 }
 
-/// Read a control file (token, configuration) in one bounded read.
+/// Lit un fichier de contrôle (jeton, configuration) en une seule lecture bornée.
 ///
-/// The single entry point for every file the Hub trusts to control its behaviour:
-/// regular file, no symbolic link, owned by the current user, no group or other
-/// permission bit, at most `max_bytes` long.
+/// L'unique point d'entrée de tout fichier auquel le Hub fait confiance pour piloter son
+/// comportement : fichier ordinaire, sans lien symbolique, appartenant à l'utilisateur courant,
+/// sans bit de groupe ni des autres, d'au plus `max_bytes`.
 ///
-/// # Errors
-/// [`SecurityError::NotFound`] when the file is absent; any other variant means
-/// the file exists but cannot be trusted.
+/// # Erreurs
+/// [`SecurityError::NotFound`] quand le fichier est absent ; toute autre variante signifie que
+/// le fichier existe mais ne peut pas être cru.
 pub fn read_control_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, SecurityError> {
     read_control_file_as(path, max_bytes, current_uid())
 }
 
-/// Same as [`read_control_file`] with an explicit expected owner.
+/// Comme [`read_control_file`] avec un propriétaire attendu explicite.
 ///
-/// # Errors
-/// See [`read_control_file`].
+/// # Erreurs
+/// Voir [`read_control_file`].
 pub fn read_control_file_as(
     path: &Path,
     max_bytes: u64,
@@ -415,23 +415,23 @@ pub fn read_control_file_as(
     Ok(data)
 }
 
-/// Check a file the Hub is about to hand to another program to run: an absolute
-/// path to a regular file, not a link, owned by the current user and not
-/// writable by the group or by others. Its content is not read.
+/// Contrôle un fichier que le Hub s'apprête à confier à un autre programme pour exécution : un
+/// chemin absolu vers un fichier ordinaire, pas un lien, appartenant à l'utilisateur courant et
+/// non inscriptible par le groupe ni par les autres. Son contenu n'est pas lu.
 ///
-/// Reading it stays allowed to everyone: such a file is code, not a secret.
+/// Sa lecture reste permise à tous : un tel fichier est du code, pas un secret.
 ///
-/// # Errors
-/// A relative path, a link, a non-regular file, a foreign owner, or a mode that
-/// lets the group or others change the file.
+/// # Erreurs
+/// Un chemin relatif, un lien, un fichier non ordinaire, un propriétaire étranger, ou un mode qui
+/// permet au groupe ou aux autres de modifier le fichier.
 pub fn check_trusted_file(path: &Path) -> Result<(), SecurityError> {
     check_trusted_file_as(path, current_uid())
 }
 
-/// Same as [`check_trusted_file`] with an explicit expected owner.
+/// Comme [`check_trusted_file`] avec un propriétaire attendu explicite.
 ///
-/// # Errors
-/// See [`check_trusted_file`].
+/// # Erreurs
+/// Voir [`check_trusted_file`].
 pub fn check_trusted_file_as(path: &Path, expected_uid: u32) -> Result<(), SecurityError> {
     if !path.is_absolute() {
         return Err(SecurityError::InvalidPath {
@@ -454,13 +454,13 @@ pub fn check_trusted_file_as(path: &Path, expected_uid: u32) -> Result<(), Secur
     Ok(())
 }
 
-/// Read a file the system provides, such as one under `/proc`: a regular file
-/// that is not a link, read in one bounded read. Unlike a control file it is
-/// not ours to protect, so its owner and mode are not checked.
+/// Lit un fichier que le système fournit, comme un fichier sous `/proc` : un fichier ordinaire qui
+/// n'est pas un lien, lu en une seule lecture bornée. Contrairement à un fichier de contrôle, il
+/// n'est pas à nous de le protéger : son propriétaire et son mode ne sont donc pas contrôlés.
 ///
-/// # Errors
-/// [`SecurityError::NotFound`] when it is gone (a process that ended), a link, a
-/// non-regular file, a read failure, or more than `max_bytes` of content.
+/// # Erreurs
+/// [`SecurityError::NotFound`] quand il a disparu (un processus terminé), un lien, un fichier non
+/// ordinaire, un échec de lecture, ou plus de `max_bytes` de contenu.
 pub fn read_system_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, SecurityError> {
     let file = open_regular_nofollow(path, ControlAccess::Read)?;
     let mut data = Vec::new();
@@ -476,18 +476,18 @@ pub fn read_system_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, Security
     Ok(data)
 }
 
-/// Create the directory with mode 700, or verify an existing one is private.
+/// Crée le répertoire en mode 700, ou vérifie qu'un répertoire existant est privé.
 ///
-/// # Errors
-/// Refuses links, non-directories, foreign owners and group/other permissions.
+/// # Erreurs
+/// Refuse les liens, les non-répertoires, les propriétaires étrangers et les permissions de groupe ou des autres.
 pub fn ensure_private_dir(path: &Path) -> Result<(), SecurityError> {
     ensure_private_dir_as(path, current_uid())
 }
 
-/// Same as [`ensure_private_dir`] with an explicit expected owner.
+/// Comme [`ensure_private_dir`] avec un propriétaire attendu explicite.
 ///
-/// # Errors
-/// See [`ensure_private_dir`].
+/// # Erreurs
+/// Voir [`ensure_private_dir`].
 pub fn ensure_private_dir_as(path: &Path, expected_uid: u32) -> Result<(), SecurityError> {
     let info = match fs::symlink_metadata(path) {
         Ok(info) => info,
@@ -529,23 +529,23 @@ pub fn ensure_private_dir_as(path: &Path, expected_uid: u32) -> Result<(), Secur
 }
 
 // --------------------------------------------------------------------------
-// Token
+// Jeton
 // --------------------------------------------------------------------------
 
-/// The secret shared with the bridges.
+/// Le secret partagé avec les ponts.
 ///
-/// It has no `Display` and its `Debug` output hides the value, so that logging a
-/// structure that holds it cannot leak it.
+/// Il n'a pas de `Display` et sa sortie `Debug` masque la valeur, pour que journaliser une
+/// structure qui le contient ne puisse pas le divulguer.
 #[derive(Clone)]
 pub struct Token(String);
 
 impl Token {
-    /// Wrap a non-empty secret. [`load_token`] is the only way to obtain the token
-    /// the bridges expect; this constructor exists so that components can be built
-    /// with any secret.
+    /// Enveloppe un secret non vide. [`load_token`] est le seul moyen d'obtenir le jeton que les ponts
+    /// attendent ; ce constructeur existe pour que des composants puissent être construits avec un
+    /// secret quelconque.
     ///
-    /// # Errors
-    /// An empty value would match everywhere, so it is refused.
+    /// # Erreurs
+    /// Une valeur vide correspondrait partout, elle est donc refusée.
     pub fn new(value: impl Into<String>) -> Result<Token, SecurityError> {
         let value = value.into();
         if value.is_empty() {
@@ -554,7 +554,7 @@ impl Token {
         Ok(Token(value))
     }
 
-    /// The secret itself. Callers must never log it or return it.
+    /// Le secret lui-même. Les appelants ne doivent jamais le journaliser ni le rendre.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -571,18 +571,18 @@ fn is_valid_token_text(text: &[u8]) -> bool {
     text.len() == TOKEN_HEX_LENGTH && text.iter().all(u8::is_ascii_hexdigit)
 }
 
-/// Read and validate the bridge token (64 hexadecimal characters).
+/// Lit et valide le jeton du pont (64 caractères hexadécimaux).
 ///
-/// # Errors
-/// Any unsafe or malformed token file. The message never contains the token.
+/// # Erreurs
+/// Tout fichier de jeton peu sûr ou mal formé. Le message ne contient jamais le jeton.
 pub fn load_token(path: &Path) -> Result<Token, SecurityError> {
     load_token_as(path, current_uid())
 }
 
-/// Same as [`load_token`] with an explicit expected owner.
+/// Comme [`load_token`] avec un propriétaire attendu explicite.
 ///
-/// # Errors
-/// See [`load_token`].
+/// # Erreurs
+/// Voir [`load_token`].
 pub fn load_token_as(path: &Path, expected_uid: u32) -> Result<Token, SecurityError> {
     harden_process()?;
     let mut data = read_control_file_as(path, TOKEN_READ_CAP, expected_uid)?;
@@ -606,12 +606,12 @@ fn random_hex(byte_count: usize) -> Result<String, SecurityError> {
     Ok(text)
 }
 
-/// Create the token file (exclusive, mode 600) in a private directory.
+/// Crée le fichier du jeton (en exclusivité, mode 600) dans un répertoire privé.
 ///
-/// Refuses to replace an existing token unless `rotate` is true.
+/// Refuse de remplacer un jeton existant sauf si `rotate` est vrai.
 ///
-/// # Errors
-/// An existing token without `rotate`, an unsafe directory, or an I/O failure.
+/// # Erreurs
+/// Un jeton existant sans `rotate`, un répertoire peu sûr, ou un échec d'E/S.
 pub fn create_token(path: &Path, rotate: bool) -> Result<(), SecurityError> {
     harden_process()?;
     let parent = path.parent().ok_or_else(|| SecurityError::InvalidPath {
@@ -645,7 +645,7 @@ pub fn create_token(path: &Path, rotate: bool) -> Result<(), SecurityError> {
         .and_then(|()| fs::rename(&staging, path));
     drop(file);
     if let Err(e) = outcome {
-        // Best effort: a staging file left behind is private and holds no live token.
+        // Au mieux : un fichier intermédiaire laissé derrière est privé et ne contient aucun jeton vivant.
         let _ = fs::remove_file(&staging);
         return Err(io_error("write the token file", path, e));
     }
@@ -653,7 +653,7 @@ pub fn create_token(path: &Path, rotate: bool) -> Result<(), SecurityError> {
 }
 
 // --------------------------------------------------------------------------
-// Paths, targets, sizes
+// Chemins, cibles, tailles
 // --------------------------------------------------------------------------
 
 fn realpath(path: &Path) -> Result<PathBuf, SecurityError> {
@@ -701,13 +701,13 @@ fn realpath(path: &Path) -> Result<PathBuf, SecurityError> {
     Ok(resolved)
 }
 
-/// Resolve symbolic links and require the result to stay inside `root`.
+/// Résout les liens symboliques et exige que le résultat reste dans `root`.
 ///
-/// Components that do not exist yet are kept as they are, so the check also works
-/// for a file that is about to be created.
+/// Les composants qui n'existent pas encore sont gardés tels quels, si bien que le contrôle
+/// fonctionne aussi pour un fichier sur le point d'être créé.
 ///
-/// # Errors
-/// [`SecurityError::PathEscapes`] when the resolved path leaves `root`.
+/// # Erreurs
+/// [`SecurityError::PathEscapes`] quand le chemin résolu sort de `root`.
 pub fn resolve_under(root: &Path, candidate: &Path) -> Result<PathBuf, SecurityError> {
     if !root.is_absolute() {
         return Err(SecurityError::InvalidPath {
@@ -731,10 +731,10 @@ pub fn resolve_under(root: &Path, candidate: &Path) -> Result<PathBuf, SecurityE
     }
 }
 
-/// Accept only an exact, case-sensitive match with an active application name.
+/// N'accepte qu'une correspondance exacte, sensible à la casse, avec le nom d'une application active.
 ///
-/// # Errors
-/// [`SecurityError::UnknownTarget`], which lists the active applications.
+/// # Erreurs
+/// [`SecurityError::UnknownTarget`], qui liste les applications actives.
 pub fn check_target<'a>(
     name: &str,
     active: impl IntoIterator<Item = &'a str>,
@@ -748,9 +748,9 @@ pub fn check_target<'a>(
     Err(SecurityError::UnknownTarget { active: listing })
 }
 
-/// Return the script size in bytes, or refuse when it exceeds the limit.
+/// Rend la taille du script en octets, ou refuse quand elle dépasse la limite.
 ///
-/// # Errors
+/// # Erreurs
 /// [`SecurityError::ScriptTooLarge`].
 pub fn check_script_size(script: &str, max_script_bytes: usize) -> Result<usize, SecurityError> {
     let size = script.len();
@@ -763,12 +763,12 @@ pub fn check_script_size(script: &str, max_script_bytes: usize) -> Result<usize,
     Ok(size)
 }
 
-/// Cut `text` to at most `limit` UTF-8 bytes, ending with the truncation marker.
+/// Coupe `text` à au plus `limit` octets UTF-8, terminé par le marqueur de troncature.
 ///
-/// A character is never split. Returns the text and whether it was cut.
+/// Un caractère n'est jamais coupé en deux. Rend le texte et dit s'il a été coupé.
 ///
-/// # Errors
-/// [`SecurityError::LimitTooSmall`] when the limit cannot even hold the marker.
+/// # Erreurs
+/// [`SecurityError::LimitTooSmall`] quand la limite ne peut même pas contenir le marqueur.
 pub fn bounded(text: &str, limit: usize) -> Result<(String, bool), SecurityError> {
     if text.len() <= limit {
         return Ok((text.to_owned(), false));
@@ -788,19 +788,18 @@ pub fn bounded(text: &str, limit: usize) -> Result<(String, bool), SecurityError
 // Captures
 // --------------------------------------------------------------------------
 
-/// A capture larger than this is refused and deleted.
+/// Une capture plus grande que cela est refusée et supprimée.
 pub const MAX_CAPTURE_BYTES: u64 = 20 * 1024 * 1024;
-/// At most this many captures are kept; the oldest go first.
+/// Au plus ce nombre de captures est gardé ; les plus anciennes partent d'abord.
 pub const MAX_CAPTURES: usize = 50;
-/// A capture older than this is deleted.
+/// Une capture plus ancienne que cela est supprimée.
 pub const MAX_CAPTURE_AGE: Duration = Duration::from_secs(3600);
 
-/// The path the Hub asks a bridge to write a capture to: `<app>-<timestamp>.png`
-/// directly inside the captures directory. `stamp` must only hold characters
-/// that are safe in a file name.
+/// Le chemin où le Hub demande à un pont d'écrire une capture : `<app>-<timestamp>.png` directement
+/// dans le répertoire des captures. `stamp` ne doit contenir que des caractères sûrs dans un nom de fichier.
 ///
-/// # Errors
-/// [`SecurityError::InvalidPath`] when the name would not stay a single component.
+/// # Erreurs
+/// [`SecurityError::InvalidPath`] quand le nom ne resterait pas un composant unique.
 pub fn capture_path_for(
     captures_dir: &Path,
     app: &str,
@@ -820,12 +819,12 @@ pub fn capture_path_for(
     Ok(captures_dir.join(name))
 }
 
-/// Accept a capture reported by a bridge: a regular file of the current user,
-/// directly reached without a symbolic link, inside the captures directory once
-/// resolved, at most [`MAX_CAPTURE_BYTES`] long. Its mode is reduced to 600.
+/// Accepte une capture signalée par un pont : un fichier ordinaire de l'utilisateur courant, atteint
+/// directement sans lien symbolique, dans le répertoire des captures une fois résolu, d'au plus
+/// [`MAX_CAPTURE_BYTES`]. Son mode est ramené à 600.
 ///
-/// # Errors
-/// Anything else; the caller then discards it with [`discard_capture`].
+/// # Erreurs
+/// Tout le reste ; l'appelant l'écarte alors avec [`discard_capture`].
 pub fn accept_capture(captures_dir: &Path, reported: &Path) -> Result<PathBuf, SecurityError> {
     if !reported.is_absolute() {
         return Err(SecurityError::InvalidPath {
@@ -849,18 +848,18 @@ pub fn accept_capture(captures_dir: &Path, reported: &Path) -> Result<PathBuf, S
         });
     }
     if info.mode() & GROUP_AND_OTHER_BITS != 0 {
-        // Changed through the open descriptor, so a swapped path cannot redirect it.
+        // Modifié par le descripteur ouvert, pour qu'un chemin échangé ne puisse pas le rediriger.
         file.set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE))
             .map_err(|e| io_error("restrict", reported, e))?;
     }
     Ok(resolved)
 }
 
-/// Delete a refused capture, but only when it is a direct entry of the captures
-/// directory: a bridge must never be able to make the Hub delete a file anywhere
-/// else. A symbolic link is removed itself, never its target.
+/// Supprime une capture refusée, mais seulement quand c'est une entrée directe du répertoire des
+/// captures : un pont ne doit jamais pouvoir faire supprimer au Hub un fichier ailleurs. Un lien
+/// symbolique est supprimé lui-même, jamais sa cible.
 ///
-/// Returns whether something was deleted.
+/// Rend si quelque chose a été supprimé.
 #[must_use]
 pub fn discard_capture(captures_dir: &Path, reported: &Path) -> bool {
     let direct_child = reported.parent() == Some(captures_dir)
@@ -877,15 +876,14 @@ pub fn discard_capture(captures_dir: &Path, reported: &Path) -> bool {
     }
 }
 
-/// Delete captures older than [`MAX_CAPTURE_AGE`] at `now`, then the oldest ones
-/// beyond [`MAX_CAPTURES`]. Directories inside are left alone. An absent
-/// directory has nothing to purge.
+/// Supprime les captures plus anciennes que [`MAX_CAPTURE_AGE`] à l'instant `now`, puis les plus
+/// anciennes au-delà de [`MAX_CAPTURES`]. Les répertoires qu'il contient sont laissés. Un répertoire
+/// absent n'a rien à purger.
 ///
-/// Returns how many entries were deleted.
+/// Rend le nombre d'entrées supprimées.
 ///
-/// # Errors
-/// The directory exists but is not a private directory of the current user, or
-/// cannot be listed.
+/// # Erreurs
+/// Le répertoire existe mais n'est pas un répertoire privé de l'utilisateur courant, ou ne peut pas être listé.
 pub fn purge_captures(captures_dir: &Path, now: SystemTime) -> Result<usize, SecurityError> {
     match fs::symlink_metadata(captures_dir) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
@@ -926,11 +924,11 @@ pub fn purge_captures(captures_dir: &Path, now: SystemTime) -> Result<usize, Sec
 }
 
 // --------------------------------------------------------------------------
-// Script guard
+// Garde-fou de script
 // --------------------------------------------------------------------------
 
-/// The kind of danger a finding belongs to. The identifier is a value of the
-/// product: it appears in refusal messages and in the audit journal.
+/// La sorte de danger à laquelle appartient un constat. L'identifiant est une valeur du produit :
+/// il apparaît dans les messages de refus et dans le journal d'audit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Category {
     FileDeletion,
@@ -941,7 +939,7 @@ pub enum Category {
 }
 
 impl Category {
-    /// The identifier shown to the model and written to the audit journal.
+    /// L'identifiant montré au modèle et écrit dans le journal d'audit.
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
@@ -971,7 +969,7 @@ impl fmt::Display for Category {
     }
 }
 
-/// One dangerous construct found in a script. Line 0 means the whole script.
+/// Une construction dangereuse trouvée dans un script. La ligne 0 désigne le script entier.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
     pub category: Category,
@@ -979,7 +977,7 @@ pub struct Finding {
     pub line: usize,
 }
 
-/// The outcome of analysing a script: a refusal when there are findings.
+/// Le résultat de l'analyse d'un script : un refus quand il y a des constats.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GuardReport {
     pub findings: Vec<Finding>,
@@ -992,7 +990,7 @@ impl GuardReport {
         !self.findings.is_empty()
     }
 
-    /// The distinct categories found, in identifier order.
+    /// Les catégories distinctes trouvées, dans l'ordre des identifiants.
     #[must_use]
     pub fn categories(&self) -> Vec<Category> {
         let unique: BTreeSet<Category> = self.findings.iter().map(|f| f.category).collect();
@@ -1011,26 +1009,26 @@ impl GuardReport {
     }
 }
 
-/// What the guard needs to know about where a script may write.
+/// Ce que le garde-fou doit savoir de l'endroit où un script peut écrire.
 #[derive(Debug, Clone, Copy)]
 pub struct GuardPolicy<'a> {
-    /// The per-application work directory, also available to scripts as `LMM_WORK_DIR`.
+    /// Le répertoire de travail par application, aussi disponible pour les scripts sous `LMM_WORK_DIR`.
     pub work_dir: &'a str,
-    /// Further absolute directories scripts may write to.
+    /// D'autres répertoires absolus où les scripts peuvent écrire.
     pub extra_write_roots: &'a [String],
-    /// The home directory used to expand a leading `~`, when known.
+    /// Le répertoire personnel qui sert à développer un `~` initial, quand il est connu.
     pub home_dir: Option<&'a str>,
 }
 
 const MAX_NAME_DEPTH: usize = 12;
 const MAX_REFUSAL_LINES: usize = 10;
-/// CPython itself refuses more than this many nested brackets, so no valid
-/// script is refused by this bound.
+/// CPython lui-même refuse plus que ce nombre de crochets imbriqués : aucun script valide n'est
+/// donc refusé par cette borne.
 const MAX_BRACKET_NESTING: usize = 200;
 const ANALYSIS_BUDGET: u64 = 2_000_000;
-/// Stack for the analysis thread: a floor, plus what the deepest possible
-/// syntax tree needs. Nesting cannot exceed one level per source byte, and
-/// measured use stays below 128 bytes per level, so this keeps a wide margin.
+/// Pile du fil d'analyse : un plancher, plus ce que l'arbre syntaxique le plus profond possible exige.
+/// L'imbrication ne peut pas dépasser un niveau par octet de source, et l'usage mesuré reste sous
+/// 128 octets par niveau : cela garde une large marge.
 const GUARD_STACK_BASE: usize = 16 << 20;
 const GUARD_STACK_PER_BYTE: usize = 512;
 const GUARD_STACK_MAX: usize = 1 << 30;
@@ -1065,7 +1063,7 @@ fn is_path_class(name: &str) -> bool {
         .is_some_and(|class| PATH_CLASS_NAMES.contains(&class))
 }
 
-/// For `pathlib.Path.write_text` returns `write_text`.
+/// Pour `pathlib.Path.write_text`, rend `write_text`.
 fn path_class_member(name: &str) -> Option<&str> {
     let rest = name.strip_prefix("pathlib.")?;
     let (class, member) = rest.split_once('.')?;
@@ -1081,7 +1079,7 @@ fn in_modules(name: &str, modules: &[&str]) -> bool {
     })
 }
 
-/// The guard category of a fully qualified name, if it has one.
+/// La catégorie du garde-fou d'un nom pleinement qualifié, s'il en a une.
 fn classify(name: &str) -> Option<Category> {
     if matches!(
         name,
@@ -1135,7 +1133,7 @@ fn normalize(name: String) -> String {
     name
 }
 
-// -- posix path arithmetic on literal strings ---------------------------------
+// -- arithmétique des chemins POSIX sur des chaînes littérales ---------------
 
 fn posix_join(parts: &[String]) -> String {
     let mut joined = String::new();
@@ -1191,7 +1189,7 @@ fn posix_normpath(path: &str) -> String {
     }
 }
 
-// -- syntax tree walking --------------------------------------------------------
+// -- parcours de l'arbre syntaxique ------------------------------------------
 
 struct ChildCollector<'a> {
     children: Vec<AnyNodeRef<'a>>,
@@ -1204,8 +1202,8 @@ impl<'a> SourceOrderVisitor<'a> for ChildCollector<'a> {
     }
 }
 
-/// Every node under `root`, root included, without recursion: the walk keeps its
-/// own stack, so a deeply nested script cannot exhaust the thread's stack here.
+/// Chaque nœud sous `root`, racine comprise, sans récursion : le parcours tient sa propre pile, si
+/// bien qu'un script très imbriqué ne peut pas épuiser la pile du fil ici.
 fn collect_nodes(root: AnyNodeRef<'_>) -> Vec<AnyNodeRef<'_>> {
     let mut all = Vec::new();
     let mut pending = vec![root];
@@ -1321,15 +1319,15 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    // -- bookkeeping ------------------------------------------------------------
+    // -- comptabilité ------------------------------------------------------------
 
     fn line(&self, offset: TextSize) -> usize {
         let offset = usize::from(offset);
         self.line_starts.partition_point(|start| *start <= offset)
     }
 
-    /// Spend one unit of the work budget. A script that makes name resolution
-    /// explode runs out of it and is refused rather than analysed forever.
+    /// Dépense une unité du budget de travail. Un script qui fait exploser la résolution des noms
+    /// l'épuise et est refusé plutôt qu'analysé sans fin.
     fn tick(&self) -> bool {
         let left = self.budget.get();
         if left == 0 {
@@ -1358,8 +1356,8 @@ impl<'a> Analyzer<'a> {
         *self.bindings.entry(name).or_insert(0) += 1;
     }
 
-    /// Expand a leading `~` with the home directory, keeping the rest of the text
-    /// as it is. `~user` forms are left alone: they need the user database.
+    /// Développe un `~` initial avec le répertoire personnel, en gardant le reste du texte tel quel.
+    /// Les formes `~user` sont laissées : elles exigent la base des utilisateurs.
     fn expand_user(&self, text: &str) -> String {
         let rest = text
             .strip_prefix('~')
@@ -1377,7 +1375,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    // -- symbol collection --------------------------------------------------------
+    // -- collecte des symboles ---------------------------------------------------
 
     fn collect(&mut self, nodes: &[AnyNodeRef<'a>]) {
         for node in nodes {
@@ -1471,7 +1469,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    // -- name resolution ------------------------------------------------------------
+    // -- résolution des noms -----------------------------------------------------
 
     fn qualify(&self, expr: &'a Expr, depth: usize, seen: &[&'a str]) -> Vec<String> {
         match expr {
@@ -1483,8 +1481,8 @@ impl<'a> Analyzer<'a> {
     }
 
     fn qualify_name(&self, name: &'a str, depth: usize, seen: &[&'a str]) -> Vec<String> {
-        // A name met on its own always resolves the same way, so it is resolved
-        // once: a script that reassigns one name thousands of times stays cheap.
+        // Un nom rencontré seul se résout toujours de la même façon : il est donc résolu une seule fois,
+        // et un script qui réaffecte un nom des milliers de fois reste peu coûteux.
         let cacheable = seen.is_empty();
         if cacheable && let Some(hit) = self.name_cache.borrow().get(&(name, depth)) {
             return hit.clone();
@@ -1591,9 +1589,9 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    // -- literal paths ---------------------------------------------------------------
+    // -- chemins littéraux -------------------------------------------------------
 
-    /// The path an expression always evaluates to, when it can be known statically.
+    /// Le chemin auquel une expression s'évalue toujours, quand on peut le savoir statiquement.
     fn literal_path(&self, expr: &'a Expr, depth: usize) -> Option<String> {
         if depth > MAX_NAME_DEPTH || !self.tick() {
             return None;
@@ -1716,7 +1714,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    /// Whether the expression is, as far as can be told, a pathlib path object.
+    /// Dit si l'expression est, pour autant qu'on puisse le dire, un objet chemin de pathlib.
     fn is_path_expr(&self, expr: &'a Expr, depth: usize) -> bool {
         if depth > MAX_NAME_DEPTH || !self.tick() {
             return false;
@@ -1770,7 +1768,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    // -- write checks ---------------------------------------------------------------
+    // -- contrôles d'écriture ----------------------------------------------------
 
     fn check_write_path(&self, expr: &'a Expr, line: usize, construct: &str) {
         let Some(literal) = self.literal_path(expr, 0) else {
@@ -1909,7 +1907,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    // -- visitors -------------------------------------------------------------------
+    // -- visiteurs ---------------------------------------------------------------
 
     fn check_module(&self, module: &str, construct: String, line: usize) {
         if let Some(category) = classify(module) {
@@ -1987,8 +1985,8 @@ impl<'a> Analyzer<'a> {
         self.check_call(call);
     }
 
-    /// Visit every node. The inner parts of a plain dotted chain are skipped: the
-    /// outermost one is classified once, with its fully qualified name.
+    /// Visite chaque nœud. Les parties internes d'une chaîne pointée simple sont sautées : la plus
+    /// externe est classée une seule fois, avec son nom pleinement qualifié.
     fn run(&self, nodes: &[AnyNodeRef<'a>]) {
         let mut purity: HashMap<usize, bool> = HashMap::new();
         let mut inner: BTreeSet<usize> = BTreeSet::new();
@@ -2021,8 +2019,8 @@ impl<'a> Analyzer<'a> {
     }
 }
 
-/// Whether an attribute chain ends in a plain name (`a.b.c`), memoised so that a
-/// very long chain costs one pass instead of one pass per link.
+/// Dit si une chaîne d'attributs se termine par un nom simple (`a.b.c`), mémoïsé pour qu'une très
+/// longue chaîne coûte un passage au lieu d'un passage par maillon.
 fn is_pure_chain(
     attribute: &ruff_python_ast::ExprAttribute,
     memo: &mut HashMap<usize, bool>,
@@ -2049,9 +2047,9 @@ fn is_pure_chain(
     result
 }
 
-/// Deepest bracket nesting of a script, from the tokens, without recursion.
-/// `None` when the lexer does not finish within a bound that every token stream
-/// of this length respects.
+/// Plus grande imbrication de crochets d'un script, d'après les jetons, sans récursion.
+/// `None` quand l'analyseur lexical ne termine pas dans une borne que respecte tout flux de jetons
+/// de cette longueur.
 fn bracket_depth(script: &str) -> Option<usize> {
     let mut lexer = lex(script, Mode::Module);
     let mut depth = 0_usize;
@@ -2113,12 +2111,12 @@ fn guard_stack_size(script_len: usize) -> Option<usize> {
         .filter(|size| *size <= GUARD_STACK_MAX)
 }
 
-/// Run `analysis` on its own thread, with a stack sized for a script of
-/// `script_len` bytes, and turn every way it can fail into a refusal.
+/// Exécute `analysis` dans son propre fil, avec une pile dimensionnée pour un script de
+/// `script_len` octets, et transforme chacune de ses façons d'échouer en refus.
 ///
-/// A panic is caught, a stack that cannot be allocated is a refusal, and a script
-/// too large for any safe stack is refused without being attempted. Taking the
-/// analysis as a parameter lets tests prove that a panic never escapes.
+/// Une panique est attrapée, une pile qui ne peut pas être allouée est un refus, et un script trop
+/// grand pour toute pile sûre est refusé sans être tenté. Prendre l'analyse en paramètre permet aux
+/// tests de prouver qu'une panique ne s'échappe jamais.
 #[must_use]
 pub fn run_isolated<F>(script_len: usize, analysis: F) -> GuardReport
 where
@@ -2141,17 +2139,16 @@ where
     }
 }
 
-/// Statically analyse a Python script; nothing is executed.
+/// Analyse statiquement un script Python ; rien n'est exécuté.
 ///
-/// Whatever goes wrong while analysing, the answer is a refusal. A script that
-/// does not parse is not refused: the application will report its own syntax
-/// error.
+/// Quoi qu'il arrive pendant l'analyse, la réponse est un refus. Un script qui ne s'analyse pas
+/// n'est pas refusé : l'application signalera sa propre erreur de syntaxe.
 #[must_use]
 pub fn guard_script(script: &str, policy: &GuardPolicy<'_>) -> GuardReport {
     run_isolated(script.len(), || analyse(script, policy))
 }
 
-/// Message for a refused script: category, construct, line, and how to allow it.
+/// Message pour un script refusé : catégorie, construction, ligne, et comment l'autoriser.
 #[must_use]
 pub fn format_refusal(report: &GuardReport) -> String {
     let mut lines =

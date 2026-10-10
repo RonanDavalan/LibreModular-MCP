@@ -1,7 +1,7 @@
-//! Audit journal tests.
+//! Tests du journal d'audit.
 //!
-//! Why this module exists
-//! The journal must be private, bounded and free of script text and token.
+//! Pourquoi ce module existe
+//! Le journal doit être privé, borné et exempt de texte de script et de jeton.
 
 #[macro_use]
 mod common;
@@ -188,7 +188,7 @@ fn the_token_is_removed_from_entries() {
 #[test]
 fn an_entry_has_no_field_that_could_carry_output_or_documents() {
     let value = AuditEntry::default();
-    // Every field of the entry is listed here: adding one makes this test stop compiling.
+    // Chaque champ de l'entrée est listé ici : en ajouter un fait que ce test cesse de compiler.
     let AuditEntry {
         ts,
         tool,
@@ -242,8 +242,8 @@ fn rotation_keeps_five_generations() {
         .expect("list")
         .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
         .collect();
-    // The journal is rotated right after a write, so the current file may be
-    // absent until the next record: it is allowed, the five generations are not optional.
+    // Le journal fait sa rotation juste après une écriture, donc le fichier courant peut être absent
+    // jusqu'à l'enregistrement suivant : c'est permis, les cinq générations ne sont pas facultatives.
     let generations: std::collections::BTreeSet<String> =
         (1..=5).map(|i| format!("audit.jsonl.{i}")).collect();
     let allowed: std::collections::BTreeSet<String> = generations

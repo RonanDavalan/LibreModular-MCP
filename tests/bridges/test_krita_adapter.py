@@ -1,10 +1,10 @@
-"""Tests of bridges/adapters/krita.py with a fake Krita and a fake PyQt, and without them.
+"""Tests de bridges/adapters/krita.py avec un faux Krita et un faux PyQt, et sans eux.
 
-Why this module exists
-Krita is not installed where these tests run. A fake `krita` module shows that the
-adapter reads the documented state and saves a copy of the image, never the user's
-document; a fake QtCore shows that work reaches the interface thread only when a Qt
-application runs, and that a machine with PyQt but no Krita gets direct calls.
+Pourquoi ce module existe
+Krita n'est pas installé là où ces tests s'exécutent. Un faux module `krita` montre que l'adaptateur lit
+l'état documenté et enregistre une copie de l'image, jamais le document de l'utilisateur ; un faux
+QtCore montre que le travail n'atteint le fil de l'interface que quand une application Qt tourne, et
+qu'une machine avec PyQt mais sans Krita reçoit des appels directs.
 """
 
 import contextlib
@@ -30,11 +30,11 @@ KRITA = load_adapter("krita")
 CORE = load_core()
 
 
-# --- a fake QtCore ------------------------------------------------------------
+# --- un faux QtCore ----------------------------------------------------------
 
 
 class FakeLoop:
-    """The event loop of an interface thread: runs what signals queue to it."""
+    """La boucle d'événements d'un fil d'interface : exécute ce que les signaux lui mettent en file."""
 
     def __init__(self):
         self.pending = queue.Queue()
@@ -62,7 +62,7 @@ class BoundSignal:
         self.slots.append(slot)
 
     def emit(self, value):
-        # Without a loop the signal is queued for an event loop that never runs.
+        # Sans boucle, le signal est mis en file pour une boucle d'événements qui ne tourne jamais.
         if self.loop is not None:
             for slot in self.slots:
                 self.loop.pending.put((slot, value))
@@ -104,7 +104,7 @@ def fake_qtcore(application=True, loop=None):
     return qtcore
 
 
-# --- a fake Krita -------------------------------------------------------------
+# --- un faux Krita ------------------------------------------------------------
 
 
 class FakeUuid:
@@ -192,7 +192,7 @@ class FakeDocument:
         return FakeImage(self.log)
 
     def __getattr__(self, name):
-        # Any other call (save, export, close, setters) would change the document.
+        # Tout autre appel (enregistrer, exporter, fermer, mutateurs) changerait le document.
         def forbidden(*arguments):
             self.log.append(("changed", name))
 
@@ -216,7 +216,7 @@ def fake_krita(document=True):
 
 @contextlib.contextmanager
 def krita_modules(krita=None, qtcore=None):
-    """Install fake `krita` and `PyQt5.QtCore`; a missing one fails to import."""
+    """Installe de faux `krita` et `PyQt5.QtCore` ; un module manquant échoue à l'import."""
     names = ("krita", "PyQt5", "PyQt5.QtCore", "PyQt6", "PyQt6.QtCore")
     saved = {name: sys.modules[name] for name in names if name in sys.modules}
     for name in names:
@@ -260,9 +260,8 @@ EXPECTED_STATE = {
 
 
 def check_direct_without_a_qt_application(adapter_module):
-    """PyQt installed, Krita's module present, but no Qt application: a signal
-    would be queued for a loop that never runs. A call from another thread must
-    come back, run in that thread."""
+    """PyQt installé, module de Krita présent, mais aucune application Qt : un signal serait mis en file
+    pour une boucle qui ne tourne jamais. Un appel depuis un autre fil doit revenir, exécuté dans ce fil."""
     with krita_modules(krita=fake_krita(), qtcore=fake_qtcore(application=False)):
         adapter = adapter_module.KritaAdapter()
         returned, outcome = returns_in_time(

@@ -1,11 +1,11 @@
-"""LibreOffice adapter: Writer, Calc and Impress through UNO, from a stand-alone process.
+"""Adaptateur LibreOffice : Writer, Calc et Impress par UNO, depuis un processus autonome.
 
-Why this module exists
-LibreOffice listens for UNO on a local port and runs no script of ours inside it, so
-this bridge is a process of its own that connects to that port for each request.
-This file is the only place that knows UNO, so the core stays the same for every
-application. Written from the public UNO API and from measurements on LibreOffice
-in a headless run; not tried against the operator's own installation.
+Pourquoi ce module existe
+LibreOffice écoute UNO sur un port local et n'exécute aucun script de nous en son sein : ce pont
+est donc un processus à part qui se connecte à ce port pour chaque requête. Ce fichier est le seul
+endroit qui connaît UNO, pour que le cœur reste le même pour toutes les applications. Écrit
+d'après l'API publique d'UNO et des mesures sur LibreOffice en exécution sans interface ; pas
+essayé contre l'installation de l'opérateur.
 """
 
 import os
@@ -13,13 +13,13 @@ import time
 
 DEFAULT_PORT = 9304
 
-# The only address this adapter connects to, written as a number on purpose: a
-# host name can resolve to an IPv6 address LibreOffice does not listen on.
+# La seule adresse à laquelle cet adaptateur se connecte, écrite comme un nombre exprès : un nom
+# d'hôte peut se résoudre en une adresse IPv6 sur laquelle LibreOffice n'écoute pas.
 UNO_HOST = "127.0.0.1"
 DEFAULT_UNO_PORT = 2002
 UNO_PORT_VARIABLE = "LIBREMODULAR_UNO_PORT"
-# How long a request waits for LibreOffice to accept the connection, and how long
-# it pauses between two attempts. Past the total, the answer is "unavailable".
+# Combien de temps une requête attend que LibreOffice accepte la connexion, et combien de temps
+# elle fait pause entre deux tentatives. Passé le total, la réponse est « unavailable ».
 CONNECT_TOTAL_S = 5.0
 CONNECT_STEP_S = 0.25
 
@@ -28,13 +28,13 @@ VERSION_NODE = "/org.openoffice.Setup/Product"
 VERSION_KEY = "ooSetupVersionAboutBox"
 PARAGRAPH_SERVICE = "com.sun.star.text.Paragraph"
 
-# The service that identifies each family of document: a document has only one.
+# Le service qui identifie chaque famille de document : un document n'en a qu'un.
 FAMILY_SERVICES = {
     "writer": "com.sun.star.text.TextDocument",
     "calc": "com.sun.star.sheet.SpreadsheetDocument",
     "impress": "com.sun.star.presentation.PresentationDocument",
 }
-# The export filter that makes a PNG of each family.
+# Le filtre d'export qui fait un PNG de chaque famille.
 PNG_FILTERS = {
     "writer": "writer_png_Export",
     "calc": "calc_png_Export",
@@ -43,15 +43,15 @@ PNG_FILTERS = {
 
 
 class LibreOfficeUnavailable(Exception):
-    """The `uno` module cannot be imported, or LibreOffice does not accept the connection."""
+    """Le module `uno` ne peut pas être importé, ou LibreOffice n'accepte pas la connexion."""
 
 
 class WrongDocumentType(Exception):
-    """The current document is not of the family the request names."""
+    """Le document courant n'est pas de la famille que la requête nomme."""
 
 
 def _uno():
-    """The `uno` module, or None when this interpreter cannot import it."""
+    """Le module `uno`, ou None quand cet interpréteur ne peut pas l'importer."""
     try:
         import uno
     except Exception:
@@ -60,7 +60,7 @@ def _uno():
 
 
 def _property_value():
-    """A new PropertyValue, or None when `com.sun.star.beans` cannot be imported."""
+    """Un nouveau PropertyValue, ou None quand `com.sun.star.beans` ne peut pas être importé."""
     try:
         from com.sun.star.beans import PropertyValue
     except Exception:
@@ -90,8 +90,7 @@ def _uno_port():
 
 
 def _resolve(uno, port):
-    """One attempt: the remote context and the desktop of the LibreOffice that
-    listens on `port`."""
+    """Une tentative : le contexte distant et le bureau du LibreOffice qui écoute sur `port`."""
     local = uno.getComponentContext()
     resolver = local.ServiceManager.createInstanceWithContext(
         "com.sun.star.bridge.UnoUrlResolver", local
@@ -105,9 +104,9 @@ def _resolve(uno, port):
 
 
 def _connect(total_s=None):
-    """The remote context and the desktop. LibreOffice does not listen until it
-    has finished starting, so a refused connection is tried again, until `total_s`
-    seconds have passed: never longer, and a single attempt when it is zero."""
+    """Le contexte distant et le bureau. LibreOffice n'écoute pas avant d'avoir fini de démarrer : une
+    connexion refusée est donc retentée, jusqu'à ce que `total_s` secondes se soient écoulées : jamais
+    plus longtemps, et une seule tentative quand il vaut zéro."""
     uno = _uno()
     if uno is None:
         raise LibreOfficeUnavailable(
@@ -132,8 +131,8 @@ def _connect(total_s=None):
 
 
 def _family_of(component):
-    """The family of a document, or None for anything else (a drawing, a
-    database, a component that is not a document)."""
+    """La famille d'un document, ou None pour tout le reste (un dessin, une base de données, un composant
+    qui n'est pas un document)."""
     for family, service in FAMILY_SERVICES.items():
         try:
             if component.supportsService(service):
@@ -152,7 +151,7 @@ def _title(component):
 
 
 def _documents(desktop):
-    """Every open document of the three families, in the order LibreOffice lists them."""
+    """Chaque document ouvert des trois familles, dans l'ordre où LibreOffice les liste."""
     found = []
     enumeration = desktop.getComponents().createEnumeration()
     while enumeration.hasMoreElements():
@@ -164,8 +163,8 @@ def _documents(desktop):
 
 
 def _current_document(desktop, family):
-    """The current document, which must be of `family`; None when LibreOffice has
-    no current document, so that a script can create the first one."""
+    """Le document courant, qui doit être de `family` ; None quand LibreOffice n'a aucun document
+    courant, pour qu'un script puisse créer le premier."""
     component = desktop.getCurrentComponent()
     if component is None:
         return None
@@ -179,7 +178,7 @@ def _current_document(desktop, family):
 
 
 def _count_paragraphs(document):
-    # A table is listed next to the paragraphs, and is not one of them.
+    # Un tableau est listé à côté des paragraphes, sans être l'un d'eux.
     count = 0
     enumeration = document.Text.createEnumeration()
     while enumeration.hasMoreElements():
@@ -218,16 +217,16 @@ _DESCRIBE = {
 
 
 class UnoAdapter:
-    """What the core needs from LibreOffice. Every call into UNO happens in a
-    method, so this file loads without it."""
+    """Ce dont le cœur a besoin de LibreOffice. Chaque appel dans UNO se fait dans une méthode, pour que
+    ce fichier se charge sans lui."""
 
     app = "libreoffice"
     families = tuple(FAMILY_SERVICES)
 
     def app_version(self):
-        # One attempt, never a wait: the core asks again at each hello and each
-        # state while the answer is "unknown", and the Hub stops waiting for a
-        # hello after a few seconds, which is the length of the wait of _connect.
+        # Une tentative, jamais une attente : le cœur redemande à chaque hello et à chaque état tant que la
+        # réponse est « unknown », et le Hub cesse d'attendre un hello au bout de quelques secondes, ce qui
+        # est la durée de l'attente de _connect.
         try:
             context, _ = _connect(0)
             provider = context.ServiceManager.createInstanceWithContext(
@@ -243,16 +242,16 @@ class UnoAdapter:
         return version if isinstance(version, str) and version else UNKNOWN
 
     def namespace(self, family):
-        """The names a script receives: the uno module, the remote context, the
-        desktop and the current document of `family`, which is None when there is
-        no current document. A current document of another family stops the request
-        before any line of the script runs: documents are never converted."""
+        """Les noms qu'un script reçoit : le module uno, le contexte distant, le bureau et le document courant
+        de `family`, qui vaut None quand il n'y a aucun document courant. Un document courant d'une autre
+        famille arrête la requête avant qu'aucune ligne du script ne s'exécute : les documents ne sont
+        jamais convertis."""
         context, desktop = _connect()
         document = _current_document(desktop, family)
         return {"uno": _uno(), "ctx": context, "desktop": desktop, "doc": document}
 
     def run_on_main(self, function):
-        """This process is not LibreOffice: nothing to hand work over to."""
+        """Ce processus n'est pas LibreOffice : rien à qui confier le travail."""
         return function()
 
     def state(self, family):
@@ -266,9 +265,8 @@ class UnoAdapter:
         return {"documents": _documents(desktop), "active": active}
 
     def screenshot(self, path, family):
-        """Export the active document of `family` as PNG with LibreOffice's own
-        filter. The document is neither saved nor closed: an export leaves it
-        unsaved."""
+        """Exporte le document actif de `family` en PNG avec le filtre propre de LibreOffice. Le document
+        n'est ni enregistré ni fermé : un export le laisse non enregistré."""
         uno = _uno()
         if uno is None or not os.path.isabs(path):
             return False

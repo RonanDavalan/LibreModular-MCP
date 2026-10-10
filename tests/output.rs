@@ -1,7 +1,7 @@
-//! Tests of the single output point.
+//! Tests du point de sortie unique.
 //!
-//! Why this module exists
-//! Whatever the Hub returns must never carry the token and must stay bounded.
+//! Pourquoi ce module existe
+//! Tout ce que le Hub rend ne doit jamais porter le jeton et doit rester borné.
 
 #[macro_use]
 mod common;
@@ -188,8 +188,8 @@ fn finalize_reports_a_limit_that_cannot_hold_the_marker() {
     ));
 }
 
-/// `depth` objects nested in each other, built by moving the value up one level
-/// at a time: the `json!` macro would copy the whole inner value at each level.
+/// `depth` objets imbriqués les uns dans les autres, construits en montant la valeur d'un niveau à la
+/// fois : la macro `json!` copierait toute la valeur interne à chaque niveau.
 fn wrap(mut value: Value, depth: usize) -> Value {
     for _ in 0..depth {
         let mut level = serde_json::Map::new();

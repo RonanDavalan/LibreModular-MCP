@@ -1,9 +1,9 @@
-//! The applications the Hub can route to, built from the configuration.
+//! Les applications vers lesquelles le Hub peut router, construites depuis la configuration.
 //!
-//! Why this module exists
-//! The model names a target as text; only an exact name of an application the
-//! operator enabled may reach a module. Keeping the table of known applications
-//! here means adding one never touches the server or the protocol.
+//! Pourquoi ce module existe
+//! Le modèle désigne une cible par un texte ; seul le nom exact d'une application que
+//! l'opérateur a activée peut atteindre un module. Garder ici la table des applications
+//! connues fait qu'en ajouter une ne touche jamais le serveur ni le protocole.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,16 +19,16 @@ use crate::modules::{
 use crate::protocol::BridgeConnector;
 use crate::security::{self, Token};
 
-/// The connections that several targets of one bridge share, made once per
-/// registry: a bridge accepts a single connection, so the targets it serves must
-/// not each open their own.
+/// Les connexions que plusieurs cibles d'un même pont partagent, créées une fois par
+/// registre : un pont n'accepte qu'une connexion, donc les cibles qu'il sert ne doivent
+/// pas en ouvrir chacune une.
 #[derive(Default)]
 struct SharedLinks {
     by_port: Vec<(u16, SharedConnection)>,
 }
 
 impl SharedLinks {
-    /// The connection to the bridge on `port`, created by the first target that asks.
+    /// La connexion au pont sur `port`, créée par la première cible qui la demande.
     fn for_port(&mut self, port: u16) -> SharedConnection {
         if let Some((_, slot)) = self.by_port.iter().find(|(known, _)| *known == port) {
             return Arc::clone(slot);
@@ -39,14 +39,14 @@ impl SharedLinks {
     }
 }
 
-/// How a known application is reached and how its module is built.
+/// Comment une application connue est jointe et comment son module est construit.
 pub struct KnownApp {
     pub name: &'static str,
     pub mode: Mode,
     build: fn(&'static str, &AppSettings, &Token, &Limits, &mut SharedLinks) -> Arc<dyn Module>,
 }
 
-/// `app` is the name of [`KNOWN_APPS`]: the only name its bridge may announce.
+/// `app` est le nom de [`KNOWN_APPS`] : le seul nom que son pont peut annoncer.
 fn build_tcp(
     app: &'static str,
     settings: &AppSettings,
@@ -66,8 +66,8 @@ fn build_tcp(
     }
 }
 
-/// The Hub's side of the files the Inkscape module works with: every check is
-/// the security module's, the module only names the paths.
+/// Le côté du Hub des fichiers avec lesquels travaille le module Inkscape : chaque
+/// contrôle est celui du module de sécurité, le module ne fait que nommer les chemins.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct HubWorkFiles;
 
@@ -81,8 +81,8 @@ impl WorkFiles for HubWorkFiles {
     }
 }
 
-/// Inkscape runs one process per script, with fixed program paths and the
-/// Hub's file checks; it never receives the token.
+/// Inkscape exécute un processus par script, avec des chemins de programme fixes et les
+/// contrôles de fichiers du Hub ; il ne reçoit jamais le jeton.
 fn build_inkscape(
     _app: &'static str,
     _settings: &AppSettings,
@@ -98,8 +98,8 @@ fn build_inkscape(
     ))
 }
 
-/// The three targets of LibreOffice reach one bridge, which the Hub names by
-/// `bridge_port`: it never speaks UNO itself, the bridge does.
+/// Les trois cibles de LibreOffice atteignent un seul pont, que le Hub désigne par
+/// `bridge_port` : il ne parle jamais UNO lui-même, c'est le pont qui le fait.
 fn build_libreoffice(
     app: &'static str,
     settings: &AppSettings,
@@ -124,7 +124,7 @@ fn build_libreoffice(
     ))
 }
 
-/// The applications that have a module in this build.
+/// Les applications qui ont un module dans cette construction.
 pub const KNOWN_APPS: [KnownApp; 7] = [
     KnownApp {
         name: "gimp",
@@ -169,21 +169,21 @@ struct Entry {
     module: Arc<dyn Module>,
 }
 
-/// The enabled applications and their modules. Nothing else can be reached.
+/// Les applications activées et leurs modules. Rien d'autre ne peut être atteint.
 pub struct Registry {
     entries: Vec<Entry>,
 }
 
 impl Registry {
-    /// The production registry: one module per enabled application.
+    /// Le registre de production : un module par application activée.
     #[must_use]
     pub fn from_config(config: &Config, token: &Token) -> Registry {
         Registry::with_modules(config, token, Vec::new())
     }
 
-    /// Like [`Registry::from_config`], with some modules supplied by the caller.
-    /// An injected module is only used when the configuration enables its
-    /// application; it can never make a disabled one reachable.
+    /// Comme [`Registry::from_config`], avec certains modules fournis par l'appelant.
+    /// Un module injecté n'est utilisé que si la configuration active son application ;
+    /// il ne peut jamais rendre atteignable une application désactivée.
     #[must_use]
     pub fn with_modules(
         config: &Config,
@@ -208,13 +208,13 @@ impl Registry {
         Registry { entries }
     }
 
-    /// The names of the enabled applications, in configuration order.
+    /// Les noms des applications activées, dans l'ordre de la configuration.
     #[must_use]
     pub fn names(&self) -> Vec<&'static str> {
         self.entries.iter().map(|entry| entry.name).collect()
     }
 
-    /// The module of an enabled application, by exact name.
+    /// Le module d'une application activée, par son nom exact.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<Arc<dyn Module>> {
         self.entries
@@ -223,14 +223,14 @@ impl Registry {
             .map(|entry| Arc::clone(&entry.module))
     }
 
-    /// The enabled applications with their mode and module.
+    /// Les applications activées avec leur mode et leur module.
     pub fn iter(&self) -> impl Iterator<Item = (&'static str, Mode, Arc<dyn Module>)> + '_ {
         self.entries
             .iter()
             .map(|entry| (entry.name, entry.mode, Arc::clone(&entry.module)))
     }
 
-    /// Release every connection. No application is closed.
+    /// Libère chaque connexion. Aucune application n'est fermée.
     pub fn close_all(&self) {
         for entry in &self.entries {
             entry.module.close();

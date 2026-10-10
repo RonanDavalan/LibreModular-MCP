@@ -1,7 +1,7 @@
-//! Token, private file and path confinement tests.
+//! Tests du jeton, des fichiers privés et du confinement des chemins.
 //!
-//! Why this module exists
-//! A weak permission check would silently expose the bridge token.
+//! Pourquoi ce module existe
+//! Un contrôle de permissions faible exposerait le jeton du pont sans bruit.
 
 #[macro_use]
 mod common;
@@ -147,7 +147,7 @@ fn the_token_type_never_shows_its_value() {
     assert!(libremodular_mcp::security::Token::new("").is_err());
 }
 
-// --- create_token --------------------------------------------------------------
+// --- create_token -------------------------------------------------------------------
 
 type Creator<'c> = &'c dyn Fn(&Path, bool) -> Result<(), String>;
 
@@ -262,7 +262,7 @@ fn create_token_refuses_a_directory_that_is_not_private() {
     assert!(!wide.join("token").exists());
 }
 
-// --- private directories and file opening ----------------------------------------
+// --- répertoires privés et ouverture de fichiers ------------------------------------
 
 #[test]
 fn ensure_private_dir_refuses_wide_permissions() {
@@ -385,7 +385,7 @@ fn read_control_file_refuses_what_cannot_be_trusted() {
     );
 }
 
-// --- resolve_under ---------------------------------------------------------------
+// --- resolve_under ------------------------------------------------------------------
 
 type Resolver<'r> = &'r dyn Fn(&Path, &str) -> Result<PathBuf, String>;
 
@@ -455,7 +455,7 @@ fn resolve_under_needs_an_absolute_root() {
     assert!(resolve_under(Path::new("relative"), Path::new("x")).is_err());
 }
 
-// --- targets, sizes, bounds -----------------------------------------------------------
+// --- cibles, tailles, bornes --------------------------------------------------------
 
 #[test]
 fn check_target_is_exact() {
@@ -514,12 +514,12 @@ fn bounded_never_splits_a_character_whatever_the_limit() {
     }
 }
 
-// --- private work files ------------------------------------------------------------
+// --- fichiers de travail privés -----------------------------------------------------
 
 type Replacer<'a> = &'a dyn Fn(&Path, &[u8]) -> Result<(), String>;
 
-/// Writing over a symbolic link must replace the link with a private regular
-/// file and leave the link's target untouched.
+/// Écrire sur un lien symbolique doit remplacer le lien par un fichier ordinaire privé et laisser
+/// la cible du lien intacte.
 fn check_replace_never_writes_through_a_link(replace: Replacer<'_>, base: &Path) -> Verdict {
     let dir = fresh(base);
     let outside = dir.join("outside.txt");
@@ -574,7 +574,7 @@ fn ensuring_a_private_file_creates_it_once_and_refuses_links_and_loose_modes() {
     assert!(ensure_private_file(&link, b"<svg/>").is_err());
 }
 
-// --- a file handed to another program to run ----------------------------------------
+// --- un fichier remis à un autre programme pour exécution ---------------------------
 
 type Trust<'t> = &'t dyn Fn(&Path, u32) -> Result<(), String>;
 
@@ -582,7 +582,7 @@ fn real_trust(path: &Path, uid: u32) -> Result<(), String> {
     check_trusted_file_as(path, uid).map_err(|error| error.to_string())
 }
 
-/// Defective on purpose: it only looks that the file exists.
+/// Défectueux exprès : il regarde seulement que le fichier existe.
 fn existence_only(path: &Path, _uid: u32) -> Result<(), String> {
     fs::metadata(path)
         .map(drop)
@@ -591,7 +591,7 @@ fn existence_only(path: &Path, _uid: u32) -> Result<(), String> {
 
 fn check_a_trusted_file_is_accepted(trust: Trust<'_>, base: &Path) -> Verdict {
     let base = fresh(base);
-    // Readable by everyone is fine: it is code, not a secret.
+    // Lisible par tous convient : c'est du code, pas un secret.
     for mode in [0o600, 0o644, 0o755, 0o700, 0o444] {
         let path = base.join(format!("bridge-{mode:o}.py"));
         write_file(&path, mode, "pass\n");
@@ -687,7 +687,7 @@ fn the_error_for_a_writable_file_names_the_file_and_its_mode_only() {
     assert!(!text.contains("secret-looking"), "{text}");
 }
 
-// --- a file the system provides ---------------------------------------------------------
+// --- un fichier que le système fournit ----------------------------------------------
 
 type Reader<'r> = &'r dyn Fn(&Path, u64) -> Result<Vec<u8>, String>;
 
@@ -695,7 +695,7 @@ fn real_system_read(path: &Path, max: u64) -> Result<Vec<u8>, String> {
     read_system_file(path, max).map_err(|error| error.to_string())
 }
 
-/// Defective on purpose: it follows links and has no bound.
+/// Défectueux exprès : il suit les liens et n'a aucune borne.
 fn unbounded_read(path: &Path, _max: u64) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|error| error.to_string())
 }

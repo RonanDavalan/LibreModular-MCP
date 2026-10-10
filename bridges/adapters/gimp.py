@@ -1,10 +1,10 @@
-"""GIMP 3 adapter: the names a script receives, and how GIMP's state and captures are read.
+"""Adaptateur GIMP 3 : les noms qu'un script reçoit, et comment l'état et les captures de GIMP sont lus.
 
-Why this module exists
-GIMP is reached through GObject Introspection and only accepts calls from its main
-thread. This file is the only place that knows either, so the core stays the same
-for every application. Written from the public GIMP 3.0 API; tried in GIMP 3.0.4 without its interface, not in the
-interactive console.
+Pourquoi ce module existe
+GIMP s'atteint par GObject Introspection et n'accepte les appels que depuis son fil principal. Ce
+fichier est le seul endroit qui connaît l'un ou l'autre, pour que le cœur reste le même pour toutes
+les applications. Écrit d'après l'API publique de GIMP 3.0 ; essayé dans GIMP 3.0.4 sans son
+interface, pas dans la console interactive.
 """
 
 import threading
@@ -13,7 +13,7 @@ DEFAULT_PORT = 9301
 
 
 def _gimp():
-    """The Gimp module, or None when this process cannot load it."""
+    """Le module Gimp, ou None quand ce processus ne peut pas le charger."""
     try:
         import gi
 
@@ -41,8 +41,8 @@ def _glib():
 
 
 def _inside_gimp():
-    """Whether this process is one GIMP started: elsewhere, even with `gi` installed,
-    `Gimp.version()` is None and no main loop will ever run a queued call."""
+    """Dit si ce processus est un processus que GIMP a démarré : ailleurs, même avec `gi` installé,
+    `Gimp.version()` vaut None et aucune boucle principale n'exécutera jamais un appel mis en file."""
     Gimp = _gimp()
     if Gimp is None:
         return False
@@ -57,14 +57,13 @@ def _open_images(Gimp):
 
 
 def images():
-    """The images open in GIMP; the first one is the one the bridge describes
-    as active."""
+    """Les images ouvertes dans GIMP ; la première est celle que le pont décrit comme active."""
     Gimp = _gimp()
     return _open_images(Gimp) if Gimp is not None and _inside_gimp() else []
 
 
 def _nick(value):
-    """The short name of a GObject enumeration value, such as "rgb" or "normal"."""
+    """Le nom court d'une valeur d'énumération GObject, comme « rgb » ou « normal »."""
     nick = getattr(value, "value_nick", None)
     return nick if isinstance(nick, str) else str(value)
 
@@ -90,8 +89,8 @@ def _describe_layer(layer):
 
 
 def _selection(Gimp, image):
-    # Introspection returns (success, non_empty, x1, y1, x2, y2); the last five
-    # values are read so that a binding without the leading flag reads the same.
+    # L'introspection rend (success, non_empty, x1, y1, x2, y2) ; les cinq dernières valeurs sont lues
+    # pour qu'une liaison sans l'indicateur de tête se lise de la même façon.
     non_empty, x1, y1, x2, y2 = tuple(Gimp.Selection.bounds(image))[-5:]
     if not non_empty:
         return None
@@ -110,8 +109,8 @@ def _describe_active(Gimp, image):
 
 
 class GimpAdapter:
-    """What the core needs from GIMP. Every call into GIMP happens in a method,
-    so this file loads without GIMP."""
+    """Ce dont le cœur a besoin de GIMP. Chaque appel dans GIMP se fait dans une méthode, pour que ce
+    fichier se charge sans GIMP."""
 
     app = "gimp"
 
@@ -134,9 +133,9 @@ class GimpAdapter:
         return names
 
     def run_on_main(self, function):
-        """Run `function` in GIMP's main thread and hand back its value or its
-        exception. Without GLib, outside GIMP, or from the main thread itself, it is a
-        direct call: a call queued where no loop runs would wait forever."""
+        """Exécute `function` dans le fil principal de GIMP et rend sa valeur ou son exception. Sans GLib,
+        hors de GIMP, ou depuis le fil principal lui-même, c'est un appel direct : un appel mis en file là
+        où aucune boucle ne tourne attendrait indéfiniment."""
         GLib = _glib()
         if (
             GLib is None
@@ -150,11 +149,11 @@ class GimpAdapter:
         def call():
             try:
                 outcome["value"] = function()
-            except BaseException as error:  # raised again in the waiting thread
+            except BaseException as error:  # relevée dans le fil qui attend
                 outcome["error"] = error
             finally:
                 done.set()
-            return False  # run once
+            return False  # exécuté une seule fois
 
         GLib.idle_add(call)
         done.wait()
@@ -173,8 +172,8 @@ class GimpAdapter:
         }
 
     def screenshot(self, path):
-        """Export a flattened copy of the active image as PNG. The copy keeps the
-        user's image untouched: exporting it would change its export file name."""
+        """Exporte une copie aplatie de l'image active en PNG. La copie laisse intacte l'image de
+        l'utilisateur : l'exporter changerait le nom de son fichier d'export."""
         Gimp, Gio = _gimp(), _gio()
         if Gimp is None or Gio is None or not _inside_gimp():
             return False

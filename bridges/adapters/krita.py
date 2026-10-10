@@ -1,10 +1,10 @@
-"""Krita adapter: the names a script receives, and how Krita's state and captures are read.
+"""Adaptateur Krita : les noms qu'un script reçoit, et comment l'état et les captures de Krita sont lus.
 
-Why this module exists
-Krita's Python API must be used from the thread of its interface, which another
-thread reaches through a queued Qt signal. This file is the only place that knows
-it, so the core stays the same for every application. Written from the public
-Krita 5 Python API; not tried in a real Krita.
+Pourquoi ce module existe
+L'API Python de Krita doit être utilisée depuis le fil de son interface, qu'un autre fil atteint par
+un signal Qt mis en file. Ce fichier est le seul endroit qui le sait, pour que le cœur reste le
+même pour toutes les applications. Écrit d'après l'API Python publique de Krita 5 ; pas essayé
+dans un vrai Krita.
 """
 
 import threading
@@ -13,7 +13,7 @@ DEFAULT_PORT = 9302
 
 
 def _krita_class():
-    """The Krita class of Krita's Python API, or None outside Krita."""
+    """La classe Krita de l'API Python de Krita, ou None hors de Krita."""
     try:
         from krita import Krita
     except Exception:
@@ -32,7 +32,7 @@ def _instance():
 
 
 def _qt_core():
-    """QtCore from the PyQt that Krita embeds, or None."""
+    """QtCore du PyQt que Krita embarque, ou None."""
     try:
         from PyQt5 import QtCore
     except Exception:
@@ -44,9 +44,8 @@ def _qt_core():
 
 
 def _inside_krita(QtCore):
-    """Whether this process is Krita's: the Krita instance exists and a Qt
-    application runs its event loop. Elsewhere, even with PyQt installed, a
-    queued call would wait forever."""
+    """Dit si ce processus est celui de Krita : l'instance Krita existe et une application Qt exécute sa
+    boucle d'événements. Ailleurs, même avec PyQt installé, un appel mis en file attendrait indéfiniment."""
     if QtCore is None or _instance() is None:
         return False
     try:
@@ -56,8 +55,8 @@ def _inside_krita(QtCore):
 
 
 def _dispatcher(QtCore):
-    """An object living in the thread of Krita's interface: a signal emitted to
-    it from another thread is queued there, and its slot runs the task."""
+    """Un objet qui vit dans le fil de l'interface de Krita : un signal qui lui est émis depuis un autre
+    fil y est mis en file, et son créneau exécute la tâche."""
 
     class Dispatcher(QtCore.QObject):
         submitted = QtCore.pyqtSignal(object)
@@ -94,8 +93,8 @@ def _describe_node(node):
 
 
 class KritaAdapter:
-    """What the core needs from Krita. Every call into Krita happens in a method,
-    so this file loads without Krita."""
+    """Ce dont le cœur a besoin de Krita. Chaque appel dans Krita se fait dans une méthode, pour que ce
+    fichier se charge sans Krita."""
 
     app = "krita"
 
@@ -118,9 +117,8 @@ class KritaAdapter:
         return {"Krita": Krita} if Krita is not None else {}
 
     def run_on_main(self, function):
-        """Run `function` in the thread of Krita's interface and hand back its
-        value or its exception. Outside Krita, or from that thread itself, it is a
-        direct call."""
+        """Exécute `function` dans le fil de l'interface de Krita et rend sa valeur ou son exception. Hors
+        de Krita, ou depuis ce fil lui-même, c'est un appel direct."""
         if self._dispatcher is None or threading.current_thread() is threading.main_thread():
             return function()
         done = threading.Event()
@@ -129,7 +127,7 @@ class KritaAdapter:
         def task():
             try:
                 outcome["value"] = function()
-            except BaseException as error:  # raised again in the waiting thread
+            except BaseException as error:  # relevée dans le fil qui attend
                 outcome["error"] = error
             finally:
                 done.set()
@@ -162,8 +160,8 @@ class KritaAdapter:
         }
 
     def screenshot(self, path):
-        """Save the projection of the active document, the merged image Krita
-        shows, as PNG. The projection is a copy: the document is never changed."""
+        """Enregistre la projection du document actif, l'image fusionnée que Krita montre, en PNG. La
+        projection est une copie : le document n'est jamais changé."""
         application = _instance()
         if application is None:
             return False

@@ -1,10 +1,9 @@
-"""Tests of bridges/adapters/gimp.py with a fake GIMP, and without any.
+"""Tests de bridges/adapters/gimp.py avec un faux GIMP, et sans aucun.
 
-Why this module exists
-GIMP is not installed where these tests run. A fake `gi` package shows that the
-adapter reads the documented state, exports a copy rather than the user's image
-and hands work to the main thread; removing `gi` shows that the bridge still
-loads and says the API is missing.
+Pourquoi ce module existe
+GIMP n'est pas installé là où ces tests s'exécutent. Un faux paquet `gi` montre que l'adaptateur lit
+l'état documenté, exporte une copie plutôt que l'image de l'utilisateur et confie du travail au fil
+principal ; retirer `gi` montre que le pont se charge toujours et dit que l'API manque.
 """
 
 import contextlib
@@ -120,7 +119,7 @@ def fake_gio():
 
 
 class FakeGLib(types.ModuleType):
-    """A main loop in its own thread, fed by idle_add."""
+    """Une boucle principale dans son propre fil, alimentée par idle_add."""
 
     def __init__(self):
         super().__init__("GLib")
@@ -146,7 +145,7 @@ class FakeGLib(types.ModuleType):
 
 @contextlib.contextmanager
 def gi_modules(gimp=None, gio=None, glib=None, absent=False):
-    """Install a fake `gi` package, or make `import gi` fail when `absent`."""
+    """Installe un faux paquet `gi`, ou fait échouer `import gi` quand `absent`."""
     names = ("gi", "gi.repository")
     saved = {name: sys.modules[name] for name in names if name in sys.modules}
     if absent:
@@ -272,8 +271,8 @@ class WithGimpTests(unittest.TestCase):
         self.assertIs(direct, threading.main_thread(), "from the main thread the call is direct")
 
     def test_run_on_main_is_direct_when_gi_loads_but_the_process_is_not_gimp(self):
-        # `gi` installed on a machine with GIMP: Gimp imports, its version is None, and
-        # nothing runs a main loop. Queuing the call would wait forever.
+        # `gi` installé sur une machine avec GIMP : Gimp s'importe, sa version est None, et rien ne tourne
+        # comme boucle principale. Mettre l'appel en file attendrait indéfiniment.
         glib = FakeGLib()
         gimp = fake_gimp()
         gimp.version = lambda: None

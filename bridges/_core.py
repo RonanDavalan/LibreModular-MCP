@@ -1,9 +1,9 @@
-"""Common core of the LibreModular-MCP bridges: protocol, token and script execution.
+"""Cœur commun des ponts de LibreModular-MCP : protocole, jeton et exécution des scripts.
 
-Why this module exists
-A bridge runs scripts with the user's rights inside an application. Who may talk
-to it, how much it reads and how a script runs are decided once, here, so that an
-application only adds an adapter and no adapter can weaken a check.
+Pourquoi ce module existe
+Un pont exécute des scripts avec les droits de l'utilisateur dans une application. Qui peut lui
+parler, combien il lit et comment un script s'exécute sont décidés une seule fois, ici, pour
+qu'une application n'ajoute qu'un adaptateur et qu'aucun adaptateur ne puisse affaiblir un contrôle.
 """
 
 import errno
@@ -18,20 +18,20 @@ import threading
 import time
 import traceback
 
-# The only address a bridge listens on. It is a constant on purpose: no
-# parameter, environment variable or configuration key can change it.
+# La seule adresse sur laquelle un pont écoute. C'est une constante exprès : aucun paramètre,
+# variable d'environnement ou clé de configuration ne peut la changer.
 LISTEN_ADDRESS = "127.0.0.1"
 PROTOCOL_VERSION = 1
 BRIDGE_VERSION = "1"
-# A line longer than this, in bytes and without its newline, closes the connection.
+# Une ligne plus longue que cela, en octets et sans son saut de ligne, ferme la connexion.
 MAX_LINE_BYTES = 8 * 1024 * 1024
-# How long a new connection may stay silent before its first line.
+# Combien de temps une nouvelle connexion peut rester silencieuse avant sa première ligne.
 HELLO_TIMEOUT_S = 5.0
-# The file name scripts are compiled under, so that tracebacks point at their text.
+# Le nom de fichier sous lequel les scripts sont compilés, pour que les traces d'appels pointent vers leur texte.
 SCRIPT_FILENAME = "<libremodular>"
-# What an adapter reports as its version when the application's API cannot be imported.
+# Ce qu'un adaptateur rapporte comme version quand l'API de l'application ne peut pas être importée.
 UNKNOWN_VERSION = "unknown"
-# Files created while a script or a capture runs are private to the user.
+# Les fichiers créés pendant qu'un script ou une capture s'exécute sont privés à l'utilisateur.
 PRIVATE_UMASK = 0o077
 TOKEN_HEX_LENGTH = 64
 TOKEN_READ_CAP = 4096
@@ -39,9 +39,9 @@ TOKEN_READ_CAP = 4096
 _READ_CHUNK = 64 * 1024
 _ACCEPT_POLL_S = 0.2
 _LISTEN_BACKLOG = 8
-# What a script may print, per stream, before the rest is dropped.
+# Ce qu'un script peut afficher, par flux, avant que le reste soit jeté.
 _CAPTURE_LIMIT = MAX_LINE_BYTES // 16
-# Each text of an answer that would not fit in one line is cut to this length.
+# Chaque texte d'une réponse qui ne tiendrait pas dans une ligne est coupé à cette longueur.
 _FALLBACK_TEXT = 64 * 1024
 _TRUNCATED = "\n[truncated by the bridge]"
 _WARNING = "libremodular bridge warning: "
@@ -49,16 +49,16 @@ _HEX_DIGITS = b"0123456789abcdefABCDEF"
 
 
 class BridgeError(Exception):
-    """The bridge cannot start. The message never contains the token."""
+    """Le pont ne peut pas démarrer. Le message ne contient jamais le jeton."""
 
 
 # --------------------------------------------------------------------------
-# The token
+# Le jeton
 # --------------------------------------------------------------------------
 
 
 def _read_token(token_path):
-    """Read the token from a private regular file of the current user."""
+    """Lit le jeton dans un fichier ordinaire privé de l'utilisateur courant."""
     path = os.fspath(token_path)
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK | os.O_NOCTTY
     try:
@@ -98,20 +98,20 @@ def _read_token(token_path):
 
 
 # --------------------------------------------------------------------------
-# Lines and answers
+# Lignes et réponses
 # --------------------------------------------------------------------------
 
 
 class _LineReader:
-    """Reads lines from a socket without ever holding much more than one line."""
+    """Lit des lignes sur une socket sans jamais tenir beaucoup plus d'une ligne."""
 
     def __init__(self, connection):
         self._connection = connection
         self._buffer = bytearray()
 
     def read_line(self, deadline):
-        """One line without its newline; None when the connection ends, the
-        monotonic `deadline` passes, or the line exceeds MAX_LINE_BYTES."""
+        """Une ligne sans son saut de ligne ; None quand la connexion se termine, que l'échéance
+        monotone `deadline` passe, ou que la ligne dépasse MAX_LINE_BYTES."""
         while True:
             end = self._buffer.find(b"\n")
             if end >= 0:
@@ -142,7 +142,7 @@ class _LineReader:
 
 
 def _parse_object(line):
-    """The JSON object a line holds, or None for anything else."""
+    """L'objet JSON qu'une ligne contient, ou None pour tout autre contenu."""
     try:
         value = json.loads(line.decode("utf-8"))
     except Exception:
@@ -151,13 +151,13 @@ def _parse_object(line):
 
 
 def _dump(value):
-    # A lone surrogate cannot travel as UTF-8: it becomes a replacement character.
+    # Un substitut isolé ne peut pas voyager en UTF-8 : il devient un caractère de remplacement.
     text = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     return text.encode("utf-8", "replace")
 
 
 def _json_copy(value):
-    """A plain JSON copy of `value`, or raise when it is not serialisable."""
+    """Une copie JSON simple de `value`, ou une exception quand elle n'est pas sérialisable."""
     return json.loads(json.dumps(value, allow_nan=False))
 
 
@@ -168,7 +168,7 @@ def _cut(text):
 
 
 def _encode(answer):
-    """The answer as one line that fits in MAX_LINE_BYTES."""
+    """La réponse en une seule ligne qui tient dans MAX_LINE_BYTES."""
     try:
         line = _dump(answer)
     except (TypeError, ValueError):
@@ -232,13 +232,13 @@ def _peer_allowed(peer):
 
 
 # --------------------------------------------------------------------------
-# Running a script
+# Exécuter un script
 # --------------------------------------------------------------------------
 
 
 class _Capture(io.TextIOBase):
-    """Collects what a script prints, up to a bound, so that a runaway loop of
-    prints cannot exhaust the memory of the application."""
+    """Recueille ce qu'un script affiche, jusqu'à une borne, pour qu'une boucle d'affichages sans fin
+    ne puisse pas épuiser la mémoire de l'application."""
 
     encoding = "utf-8"
     errors = "strict"
@@ -270,8 +270,7 @@ class _Capture(io.TextIOBase):
 
 
 def _with_private_umask(function, *arguments):
-    """Run `function` with the private creation mask, restored afterwards
-    whatever happens."""
+    """Exécute `function` avec le masque de création privé, rétabli ensuite quoi qu'il arrive."""
     previous = os.umask(PRIVATE_UMASK)
     try:
         return function(*arguments)
@@ -280,8 +279,8 @@ def _with_private_umask(function, *arguments):
 
 
 def _script_error(error):
-    """Type, message and the standard traceback of `error`, starting at the
-    script: the frames of the bridge itself are left out."""
+    """Le type, le message et la trace d'appels standard de `error`, à partir du script : les cadres
+    du pont lui-même sont laissés de côté."""
     frames = error.__traceback__
     while frames is not None and frames.tb_frame.f_code.co_filename != SCRIPT_FILENAME:
         frames = frames.tb_next
@@ -293,7 +292,7 @@ def _script_error(error):
 
 
 def _script_result(namespace):
-    """The `result` the script left, and a warning when it cannot be sent."""
+    """Le `result` que le script a laissé, et un avertissement quand il ne peut pas être envoyé."""
     if "result" not in namespace:
         return None, ""
     value = namespace["result"]
@@ -308,9 +307,9 @@ def _script_result(namespace):
 
 
 def _run_script(adapter, script, work_dir, extra=()):
-    """Compile and run one script in a fresh namespace; never raises for what
-    the script does, including SystemExit. `extra` holds the arguments an adapter
-    that serves several families takes after the usual ones."""
+    """Compile et exécute un script dans un espace de noms neuf ; ne lève jamais pour ce que fait
+    le script, SystemExit compris. `extra` contient les arguments qu'un adaptateur qui sert
+    plusieurs familles prend après les arguments habituels."""
     namespace = {"__name__": "__main__"}
     namespace.update(adapter.namespace(*extra))
     namespace["LMM_WORK_DIR"] = work_dir
@@ -323,7 +322,7 @@ def _run_script(adapter, script, work_dir, extra=()):
         try:
             code = compile(script, SCRIPT_FILENAME, "exec", dont_inherit=True)
             exec(code, namespace)
-        except BaseException as error:  # a script must never stop the bridge
+        except BaseException as error:  # un script ne doit jamais arrêter le pont
             outcome["error"] = _script_error(error)
         finally:
             sys.stdout, sys.stderr = saved
@@ -343,13 +342,13 @@ def _run_script(adapter, script, work_dir, extra=()):
 
 
 # --------------------------------------------------------------------------
-# The server
+# Le serveur
 # --------------------------------------------------------------------------
 
 
 def _version_of(adapter, on_main=False):
-    """The version the adapter reports, or UNKNOWN_VERSION. `on_main` asks it
-    where the adapter runs the application's calls instead of in this thread."""
+    """La version que l'adaptateur rapporte, ou UNKNOWN_VERSION. `on_main` la demande là où
+    l'adaptateur exécute les appels de l'application au lieu de ce fil."""
     try:
         version = adapter.run_on_main(adapter.app_version) if on_main else adapter.app_version()
     except Exception:
@@ -365,8 +364,8 @@ def _discard(connection):
 
 
 def _families_of(adapter):
-    """The families an adapter serves with one bridge, or None when it serves a
-    single application: its `families` attribute, a tuple of names."""
+    """Les familles qu'un adaptateur sert avec un seul pont, ou None quand il sert une seule
+    application : son attribut `families`, un n-uplet de noms."""
     families = getattr(adapter, "families", None)
     if families is None:
         return None
@@ -380,7 +379,7 @@ def _families_of(adapter):
 
 
 class _Bridge:
-    """One listening socket and at most one connection served at a time."""
+    """Une socket d'écoute et au plus une connexion servie à la fois."""
 
     def __init__(self, adapter, port, token, hello_timeout):
         app = getattr(adapter, "app", None)
@@ -389,8 +388,8 @@ class _Bridge:
         self._adapter = adapter
         self._app = app
         self._families = _families_of(adapter)
-        # Read here, in the thread that starts the bridge. While it is unknown the
-        # application may simply not be ready yet: _current_version asks again.
+        # Lu ici, dans le fil qui démarre le pont. Tant qu'elle est inconnue, l'application n'est peut-être
+        # tout simplement pas prête : _current_version redemande.
         self._app_version = _version_of(adapter)
         self._token = token
         self._hello_timeout = hello_timeout
@@ -471,11 +470,10 @@ class _Bridge:
                     self._active = None
 
     def _current_version(self):
-        """The application's version. Once it is known it is kept; until then each
-        call asks the adapter again, where the adapter runs the application's calls,
-        so that a bridge started before its application reports the version as soon
-        as the application is there. One connection is served at a time, so no two
-        threads ask at once."""
+        """La version de l'application. Une fois connue, elle est gardée ; jusque-là chaque appel redemande
+        à l'adaptateur, là où l'adaptateur exécute les appels de l'application, pour qu'un pont démarré
+        avant son application rapporte la version dès que l'application est là. Une connexion est servie
+        à la fois, donc deux fils ne demandent jamais en même temps."""
         if self._app_version == UNKNOWN_VERSION:
             self._app_version = _version_of(self._adapter, on_main=True)
         return self._app_version
@@ -535,8 +533,8 @@ class _Bridge:
         return _failure("UnknownRequest", "unknown request type")
 
     def _unknown_family(self, request):
-        """The failure to answer when this adapter serves families and the request
-        names none of them, before any line of the adapter runs; None otherwise."""
+        """L'échec à répondre quand cet adaptateur sert des familles et que la requête n'en nomme aucune,
+        avant qu'aucune ligne de l'adaptateur ne s'exécute ; None sinon."""
         if self._families is None:
             return None
         family = request.get("family")
@@ -549,9 +547,8 @@ class _Bridge:
         )
 
     def _family_arguments(self, request):
-        """What an adapter that serves families receives after its usual
-        arguments: the family of the request. Nothing for the others, which never
-        see the field."""
+        """Ce qu'un adaptateur qui sert des familles reçoit après ses arguments habituels : la famille de
+        la requête. Rien pour les autres, qui ne voient jamais le champ."""
         if self._families is None:
             return ()
         return (request["family"],)
@@ -602,9 +599,9 @@ class _Bridge:
                 raise TypeError("the adapter returned a %s" % type(reported).__name__)
             state = _json_copy(reported)
         except Exception as error:
-            # Type and message only: a traceback would describe the bridge, not the document.
+            # Le type et le message seulement : une trace d'appels décrirait le pont, pas le document.
             warnings.append("state unavailable: %s: %s" % (type(error).__name__, _text_of(error)))
-        # After the state, which may have waited for the application to be there.
+        # Après l'état, qui a pu attendre que l'application soit là.
         if self._current_version() == UNKNOWN_VERSION:
             warnings.insert(
                 0, "the %s scripting API cannot be imported in this process" % self._app
@@ -626,7 +623,7 @@ class _Bridge:
 
 
 # --------------------------------------------------------------------------
-# Starting and stopping
+# Démarrer et arrêter
 # --------------------------------------------------------------------------
 
 _registry_lock = threading.Lock()
@@ -634,8 +631,8 @@ _running = None
 
 
 def _say(line):
-    """Write one line on the error stream of the process, and on the current
-    error stream when an application redirected it to a console."""
+    """Écrit une ligne sur le flux d'erreur du processus, et sur le flux d'erreur courant quand une
+    application l'a redirigé vers une console."""
     streams = []
     for stream in (sys.__stderr__, sys.stderr):
         if stream is not None and all(stream is not seen for seen in streams):
@@ -655,10 +652,10 @@ def _check_port(port):
 
 
 def start(adapter, port, token_path, hello_timeout=HELLO_TIMEOUT_S):
-    """Start the bridge in a background thread and return the port it listens on.
+    """Démarre le pont dans un fil d'arrière-plan et rend le port sur lequel il écoute.
 
-    `port` 0 lets the system choose a free port. `hello_timeout` is the time a
-    new connection has to send its first line; only tests change it.
+    `port` 0 laisse le système choisir un port libre. `hello_timeout` est le temps dont dispose une
+    nouvelle connexion pour envoyer sa première ligne ; seuls les tests le changent.
     """
     global _running
     _check_port(port)
@@ -674,8 +671,8 @@ def start(adapter, port, token_path, hello_timeout=HELLO_TIMEOUT_S):
 
 
 def stop():
-    """Stop listening and close the connection. A script still running ends on
-    its own; the application itself is never touched."""
+    """Cesse d'écouter et ferme la connexion. Un script encore en cours se termine de lui-même ;
+    l'application elle-même n'est jamais touchée."""
     global _running
     with _registry_lock:
         bridge, _running = _running, None
@@ -704,8 +701,8 @@ def _default_token_path(environment):
 
 
 def _running_as_program():
-    """True when this file is the program Python was asked to run, false when
-    its text was executed inside an application's console."""
+    """Vrai quand ce fichier est le programme que Python a été prié d'exécuter, faux quand son texte
+    a été exécuté dans la console d'une application."""
     own = _running_as_program.__code__.co_filename
     program = sys.argv[0] if sys.argv else ""
     if not program or own.startswith("<"):
@@ -717,10 +714,10 @@ def _running_as_program():
 
 
 def launch(adapter, default_port):
-    """Start the bridge with the port and token path given by the environment.
+    """Démarre le pont avec le port et le chemin du jeton donnés par l'environnement.
 
-    Inside an application this returns at once and the bridge serves in the
-    background; run as a program, it serves until the process is stopped.
+    Dans une application cela rend aussitôt et le pont sert en arrière-plan ; exécuté comme
+    programme, il sert jusqu'à l'arrêt du processus.
     """
     environment = os.environ
     port = _port_from_environment(environment.get("LIBREMODULAR_BRIDGE_PORT"), default_port)

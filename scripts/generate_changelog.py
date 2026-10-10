@@ -1,11 +1,11 @@
-"""Write CHANGELOG.md from the titles of the commits.
+"""Écrit CHANGELOG.md à partir des titres des commits.
 
-Why this module exists
-A changelog written by hand drifts from what was done. This script builds it from
-the commit titles only, so that the history is the single source and the file can
-be checked against it before a publication.
+Pourquoi ce module existe
+Un journal des modifications écrit à la main s'écarte de ce qui a été fait. Ce script le construit
+à partir des seuls titres de commits, pour que l'historique soit la source unique et que le fichier
+puisse être contrôlé contre lui avant une publication.
 
-Usage: python3 scripts/generate_changelog.py [--check]
+Usage : python3 scripts/generate_changelog.py [--check]
 """
 
 import pathlib
@@ -21,8 +21,8 @@ HEADER = (
     "Do not edit by hand.\n"
 )
 
-# The first word of a commit title decides its section; a title that starts with
-# another word goes to the last one.
+# Le premier mot d'un titre de commit décide de sa section ; un titre qui commence par un autre
+# mot va dans la dernière.
 SECTIONS = (
     ("Added", ("Add", "Create", "Introduce", "Implement", "Write", "Port")),
     ("Fixed", ("Fix", "Correct", "Repair")),
@@ -42,8 +42,8 @@ def section_of(title):
 
 
 def render(titles):
-    """The text of the changelog for `titles`, newest first. Merge commits and
-    empty titles are left out; each section keeps the order of the history."""
+    """Le texte du journal des modifications pour `titles`, du plus récent au plus ancien. Les commits
+    de fusion et les titres vides sont laissés de côté ; chaque section garde l'ordre de l'historique."""
     kept = [
         title.strip()
         for title in titles
@@ -68,7 +68,7 @@ def render(titles):
 
 
 def git_titles(root):
-    """The title line of every commit reachable from HEAD, newest first."""
+    """La ligne de titre de chaque commit atteignable depuis HEAD, du plus récent au plus ancien."""
     completed = subprocess.run(
         ["git", "-C", str(root), "log", "--no-merges", "--format=%s"],
         capture_output=True,

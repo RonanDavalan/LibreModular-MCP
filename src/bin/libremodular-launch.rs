@@ -1,8 +1,8 @@
-//! Entry point of the `libremodular-launch` command.
+//! Point d'entrée de la commande `libremodular-launch`.
 //!
-//! Why this module exists
-//! The launcher is a separate binary so that its argument list is fixed by code and
-//! can never be built from text the model wrote.
+//! Pourquoi ce module existe
+//! Le lanceur est un binaire à part pour que sa liste d'arguments soit fixée par le code
+//! et ne puisse jamais être construite à partir d'un texte écrit par le modèle.
 
 #![forbid(unsafe_code)]
 

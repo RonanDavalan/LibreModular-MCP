@@ -1,9 +1,9 @@
-"""Tests of bridges/_core.py, each security check with its counter-proof.
+"""Tests de bridges/_core.py, chaque contrôle de sécurité avec sa contre-preuve.
 
-Why this module exists
-The core is the only thing between a local process and code running with the
-user's rights inside an application. Each check below runs on the real core and
-on a copy of its text broken on purpose, and must fail on the broken copy.
+Pourquoi ce module existe
+Le cœur est la seule chose entre un processus local et du code qui s'exécute avec les droits de
+l'utilisateur dans une application. Chaque contrôle ci-dessous s'exécute sur le vrai cœur et sur une
+copie de son texte cassée exprès, et doit échouer sur la copie cassée.
 """
 
 import inspect
@@ -42,8 +42,7 @@ CORE = load_core()
 
 
 class CheckCase(unittest.TestCase):
-    """A check returns the list of what is wrong: empty on the real core, not
-    empty on a defective one."""
+    """Un contrôle rend la liste de ce qui ne va pas : vide sur le vrai cœur, non vide sur un cœur défectueux."""
 
     def must_pass(self, problems):
         self.assertEqual(problems, [])
@@ -124,7 +123,7 @@ class HelloTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# a silent client, a second client
+# un client silencieux, un second client
 # --------------------------------------------------------------------------
 
 
@@ -208,7 +207,7 @@ class ConnectionTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# bounded lines
+# lignes bornées
 # --------------------------------------------------------------------------
 
 
@@ -216,7 +215,7 @@ def check_lines_are_bounded(core):
     problems = []
     limit = EXPECTED_MAX_LINE_BYTES
     with running(core) as bridge:
-        # A request of exactly the limit is still read.
+        # Une requête d'exactement la limite est encore lue.
         client = Client(bridge.port)
         client.hello()
         request = {"id": "r1", "type": "ping", "pad": ""}
@@ -226,14 +225,13 @@ def check_lines_are_bounded(core):
         client.send(line + b"\n")
         if client.read_json() != {"id": "r1", "ok": True}:
             problems.append("a line of exactly the limit was not answered")
-        # One byte more, and no end of line: the connection is closed.
+        # Un octet de plus, et pas de fin de ligne : la connexion est fermée.
         client.send(b"x" * (limit + 1))
         state, _ = client.outcome(wait=5.0)
         client.close()
         if state != "closed":
             problems.append("a line over the limit did not close the connection")
-        # Without reading the line whole: the bridge stops reading long before
-        # four times the limit has been sent.
+        # Sans lire la ligne entière : le pont cesse de lire bien avant que quatre fois la limite ait été envoyé.
         time.sleep(0.2)
         client = Client(bridge.port)
         client.hello()
@@ -283,12 +281,12 @@ class LineTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# the address
+# l'adresse
 # --------------------------------------------------------------------------
 
 
 def listening_addresses(port):
-    """Local addresses of the listening TCP sockets on `port`, read from the kernel."""
+    """Adresses locales des sockets TCP à l'écoute sur `port`, lues dans le noyau."""
     found = []
     with open("/proc/net/tcp") as table:
         for row in table.readlines()[1:]:
@@ -337,8 +335,7 @@ class AddressTests(CheckCase):
         self.must_pass(check_listens_on_loopback_only(CORE))
 
     def test_counter_proof_a_socket_not_bound_to_127_0_0_1_is_detected(self):
-        # Never bound and never listening: the defect is shown without opening
-        # any other address.
+        # Jamais lié et jamais à l'écoute : le défaut est montré sans ouvrir aucune autre adresse.
         defective = defective_core(
             "            listener.bind((LISTEN_ADDRESS, port))\n"
             "            listener.listen(_LISTEN_BACKLOG)\n",
@@ -357,12 +354,12 @@ class AddressTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# the token file
+# le fichier du jeton
 # --------------------------------------------------------------------------
 
 
 def check_start_refuses(core, make_path):
-    """`start` must raise BridgeError and leave nothing listening."""
+    """`start` doit lever BridgeError et ne rien laisser à l'écoute."""
     directory = PrivateDir()
     try:
         path = make_path(directory)
@@ -467,7 +464,7 @@ class TokenFileTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# scripts
+# les scripts
 # --------------------------------------------------------------------------
 
 
@@ -570,13 +567,13 @@ class ScriptTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# the creation mask
+# le masque de création
 # --------------------------------------------------------------------------
 
 
 def check_private_creation_mask(core):
-    """Files made by a script or a capture are 600 whatever the process mask,
-    and the mask is given back afterwards, also after an exception."""
+    """Les fichiers faits par un script ou une capture sont en 600 quel que soit le masque du processus,
+    et le masque est rendu ensuite, y compris après une exception."""
     problems = []
     directory = PrivateDir()
     previous = os.umask(0o022)
@@ -627,7 +624,7 @@ class MaskTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# state
+# l'état
 # --------------------------------------------------------------------------
 
 
@@ -677,14 +674,14 @@ class StateTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# the version of an application that is not ready when the bridge starts
+# la version d'une application qui n'est pas prête quand le pont démarre
 # --------------------------------------------------------------------------
 
 API_WARNING = "the gimp scripting API cannot be imported in this process"
 
 
 def _hello_version(port):
-    """The version a new connection is told, or None when the bridge never answered."""
+    """La version qu'une nouvelle connexion reçoit, ou None quand le pont n'a jamais répondu."""
     client, answer = hello_when_free(port)
     if client is not None:
         client.close()
@@ -692,9 +689,8 @@ def _hello_version(port):
 
 
 def check_the_version_is_read_again_at_the_next_connection(core):
-    """The application answers "unknown" at the start and at the first connection,
-    then is ready: the second connection announces the version, and once it is
-    announced the adapter is not asked again."""
+    """L'application répond « unknown » au démarrage et à la première connexion, puis est prête : la
+    seconde connexion annonce la version, et une fois annoncée l'adaptateur n'est plus interrogé."""
     problems = []
     adapter = LateVersionAdapter(unknown_reads=2)
     with running(core, adapter=adapter) as bridge:
@@ -710,9 +706,9 @@ def check_the_version_is_read_again_at_the_next_connection(core):
 
 
 def check_the_state_reads_the_version_again_and_drops_the_warning(core):
-    """The application is still not ready at the start and at the hello, then it is:
-    the first state finds the version and carries no warning about the missing
-    API, and the adapter is not asked again after that."""
+    """L'application n'est toujours pas prête au démarrage et au hello, puis elle l'est : le premier état
+    trouve la version et ne porte aucun avertissement sur l'API manquante, et l'adaptateur n'est plus
+    interrogé ensuite."""
     problems = []
     adapter = LateVersionAdapter(unknown_reads=2)
     with running(core, adapter=adapter) as bridge:
@@ -750,7 +746,7 @@ def check_a_state_keeps_the_warning_while_the_version_is_unknown(core):
 
 
 def check_a_stranger_does_not_make_the_bridge_ask_the_application(core):
-    """Only a valid hello may lead to a call into the application."""
+    """Seul un hello valide peut mener à un appel dans l'application."""
     problems = []
     adapter = LateVersionAdapter(unknown_reads=1000)
     with running(core, adapter=adapter) as bridge:
@@ -765,8 +761,8 @@ def check_a_stranger_does_not_make_the_bridge_ask_the_application(core):
 
 
 def check_the_version_is_read_where_the_application_runs_its_calls(core):
-    """After the start, the adapter is asked in its own main thread, never in the
-    connection thread that answers the hello."""
+    """Après le démarrage, l'adaptateur est interrogé dans son propre fil principal, jamais dans le fil de
+    connexion qui répond au hello."""
     problems = []
     main = MainThread()
     try:
@@ -847,7 +843,7 @@ class VersionTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# families: one bridge, several kinds of document
+# familles : un pont, plusieurs sortes de documents
 # --------------------------------------------------------------------------
 
 UNNAMED_FAMILIES = [
@@ -862,7 +858,7 @@ UNNAMED_FAMILIES = [
 
 
 def check_the_family_reaches_the_adapter(core):
-    """Each call carries the family of its request to the adapter, and only that."""
+    """Chaque appel porte à l'adaptateur la famille de sa requête, et seulement elle."""
     problems = []
     adapter = FamilyAdapter()
     directory = PrivateDir()
@@ -898,8 +894,8 @@ def check_the_family_reaches_the_adapter(core):
 
 
 def check_an_unknown_family_is_refused_before_the_adapter_runs(core):
-    """No family, a wrong type or an unserved name is answered `UnknownFamily`,
-    and not one line of the adapter runs: no namespace, no state, no main thread."""
+    """Aucune famille, un mauvais type ou un nom non servi reçoit `UnknownFamily`, et pas une ligne de
+    l'adaptateur ne s'exécute : ni espace de noms, ni état, ni fil principal."""
     problems = []
     adapter = FamilyAdapter()
     with running(core, adapter=adapter) as bridge:
@@ -934,8 +930,8 @@ def check_an_unknown_family_is_refused_before_the_adapter_runs(core):
 
 
 def check_an_adapter_without_families_never_sees_the_field(core):
-    """GIMP, Krita and Blender keep their calls: the family is not handed over,
-    whatever a request says, and is not even checked."""
+    """GIMP, Krita et Blender gardent leurs appels : la famille n'est pas transmise, quoi que dise une
+    requête, et n'est même pas contrôlée."""
     problems = []
     adapter = FakeAdapter()
     with running(core, adapter=adapter) as bridge:
@@ -989,7 +985,7 @@ class FamilyTests(CheckCase):
         self.must_fail(check_an_unknown_family_is_refused_before_the_adapter_runs(defective))
 
     def test_counter_proof_a_core_that_checks_after_the_adapter_ran_is_detected(self):
-        # The refusal comes too late: the adapter has already built its namespace.
+        # Le refus arrive trop tard : l'adaptateur a déjà construit son espace de noms.
         defective = defective_core(
             "        unknown = self._unknown_family(request)\n"
             "        if unknown is not None:\n"
@@ -1032,7 +1028,7 @@ class FamilyTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# importing the core
+# importer le cœur
 # --------------------------------------------------------------------------
 
 PROBE = r"""
@@ -1093,13 +1089,13 @@ class ImportTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# the token never leaves the bridge
+# le jeton ne quitte jamais le pont
 # --------------------------------------------------------------------------
 
 
 def check_token_never_sent(core):
-    """Every answer the bridge composes itself, and every line it writes,
-    must be free of the token. Scripts are user code and are not exercised."""
+    """Chaque réponse que le pont compose lui-même, et chaque ligne qu'il écrit, doit être exempte du jeton.
+    Les scripts sont du code d'utilisateur et ne sont pas exercés."""
     seen = []
     adapter = FakeAdapter(state_error=RuntimeError("no image"))
     with running(core, adapter=adapter) as bridge:
@@ -1147,7 +1143,7 @@ class SecrecyTests(CheckCase):
 
 
 # --------------------------------------------------------------------------
-# launching from the environment
+# lancement depuis l'environnement
 # --------------------------------------------------------------------------
 
 

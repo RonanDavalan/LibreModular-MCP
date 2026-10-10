@@ -1,8 +1,8 @@
-//! Entry point of the `libremodular-mcp` command.
+//! Point d'entrée de la commande `libremodular-mcp`.
 //!
-//! Why this module exists
-//! The binary stays a one-line shell around the library, so that every behaviour of
-//! the command can be tested without starting a process.
+//! Pourquoi ce module existe
+//! Le binaire reste une enveloppe d'une ligne autour de la bibliothèque, pour que chaque
+//! comportement de la commande se teste sans démarrer de processus.
 
 #![forbid(unsafe_code)]
 

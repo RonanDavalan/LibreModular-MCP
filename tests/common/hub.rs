@@ -1,9 +1,9 @@
-//! A Hub built in private temporary directories, and an MCP client to drive it.
+//! Un Hub construit dans des répertoires temporaires privés, et un client MCP pour le piloter.
 //!
-//! Why this module exists
-//! The server must be exercised through the protocol the model uses, with fake
-//! dependencies passed to its factory, never through a switch in the production
-//! code and never on the user's real configuration.
+//! Pourquoi ce module existe
+//! Le serveur doit être exercé par le protocole que le modèle emploie, avec de fausses dépendances
+//! passées à sa fabrique, jamais par un interrupteur dans le code de production et jamais sur la
+//! vraie configuration de l'utilisateur.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -23,12 +23,12 @@ use tokio::io::{
 
 use super::FAKE_TOKEN;
 
-/// The fixed starting time of the injected clock.
+/// L'heure de départ fixe de l'horloge injectée.
 pub fn epoch() -> SystemTime {
     SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000)
 }
 
-/// Everything a test needs to look at after building a Hub.
+/// Tout ce qu'un test doit regarder après avoir construit un Hub.
 pub struct TestHub {
     pub server: HubServer,
     pub audit_path: PathBuf,
@@ -62,14 +62,14 @@ pub fn config(text: &str) -> Config {
     Config::from_bytes(text.as_bytes()).expect("test configuration")
 }
 
-/// A configuration enabling `app` on `port`, plus `extra` TOML.
+/// Une configuration qui active `app` sur `port`, plus du TOML `extra`.
 pub fn config_for(app: &str, port: u16, extra: &str) -> Config {
     config(&format!(
         "{extra}\n[apps.{app}]\nenabled = true\nport = {port}\n"
     ))
 }
 
-/// Build a Hub under `base`, with injected modules if any.
+/// Construit un Hub sous `base`, avec des modules injectés s'il y en a.
 pub fn build(base: &Path, config: Config, injected: Vec<(String, Arc<dyn Module>)>) -> TestHub {
     build_with_token(
         base,
@@ -79,7 +79,7 @@ pub fn build(base: &Path, config: Config, injected: Vec<(String, Arc<dyn Module>
     )
 }
 
-/// Like [`build`], for a Hub that must hold the token a real bridge reads from its file.
+/// Comme [`build`], pour un Hub qui doit tenir le jeton qu'un vrai pont lit dans son fichier.
 pub fn build_with_token(
     base: &Path,
     config: Config,
@@ -110,7 +110,7 @@ pub fn build_with_token(
     }
 }
 
-/// An MCP client talking JSON-RPC lines to a server in memory.
+/// Un client MCP qui parle en lignes JSON-RPC à un serveur en mémoire.
 pub struct Session {
     runtime: tokio::runtime::Runtime,
     writer: WriteHalf<DuplexStream>,
@@ -163,7 +163,7 @@ impl Session {
         });
     }
 
-    /// Send a request and return the whole response object.
+    /// Envoie une requête et rend tout l'objet de réponse.
     pub fn request(&mut self, method: &str, params: Value) -> Value {
         let id = self.next_id;
         self.next_id += 1;
@@ -194,7 +194,7 @@ impl Session {
             .collect()
     }
 
-    /// Call a tool and return the raw text of its answer.
+    /// Appelle un outil et rend le texte brut de sa réponse.
     pub fn call_text(&mut self, tool: &str, arguments: Value) -> String {
         let answer = self.request("tools/call", json!({"name": tool, "arguments": arguments}));
         answer["result"]["content"][0]["text"]
@@ -203,7 +203,7 @@ impl Session {
             .to_owned()
     }
 
-    /// Call a tool and parse its answer as JSON.
+    /// Appelle un outil et analyse sa réponse comme du JSON.
     pub fn call(&mut self, tool: &str, arguments: Value) -> Value {
         serde_json::from_str(&self.call_text(tool, arguments)).expect("JSON answer")
     }

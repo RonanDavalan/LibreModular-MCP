@@ -1,22 +1,22 @@
-"""Blender adapter: the names a script receives, and how Blender's state is read.
+"""Adaptateur Blender : les noms qu'un script reçoit, et comment l'état de Blender est lu.
 
-Why this module exists
-Blender's `bpy` must be used from Blender's main thread, which only a timer can
-reach from another thread. This file is the only place that knows it, so the core
-stays the same for every application. Written from the public Blender Python API;
-not tried in a real Blender.
+Pourquoi ce module existe
+Le `bpy` de Blender doit être utilisé depuis le fil principal de Blender, qu'un autre fil ne peut
+atteindre que par un minuteur. Ce fichier est le seul endroit qui le sait, pour que le cœur reste
+le même pour toutes les applications. Écrit d'après l'API Python publique de Blender ; pas
+essayé dans un vrai Blender.
 """
 
 import queue
 import threading
 
 DEFAULT_PORT = 9303
-# How often, in seconds, the timer in Blender's main thread looks for work.
+# Combien de fois, en secondes, le minuteur du fil principal de Blender cherche du travail.
 _POLL_INTERVAL = 0.05
 
 
 def _bpy():
-    """The bpy module, or None when this process cannot load it."""
+    """Le module bpy, ou None quand ce processus ne peut pas le charger."""
     try:
         import bpy
     except Exception:
@@ -25,9 +25,9 @@ def _bpy():
 
 
 def _timers_run(bpy):
-    """Whether a timer registered here will ever run: only in Blender with its
-    interface. In background mode, and when `bpy` is the stand-alone package, no
-    event loop runs timers, and a queued call would wait forever."""
+    """Dit si un minuteur enregistré ici s'exécutera jamais : seulement dans Blender avec son
+    interface. En mode arrière-plan, et quand `bpy` est le paquet autonome, aucune boucle
+    d'événements n'exécute de minuteurs, et un appel mis en file attendrait indéfiniment."""
     app = getattr(bpy, "app", None)
     if app is None or getattr(app, "background", True) is not False:
         return False
@@ -43,8 +43,8 @@ def _selected(item):
 
 
 class BlenderAdapter:
-    """What the core needs from Blender. Every call into Blender happens in a
-    method, so this file loads without Blender."""
+    """Ce dont le cœur a besoin de Blender. Chaque appel dans Blender se fait dans une méthode, pour
+    que ce fichier se charge sans Blender."""
 
     app = "blender"
 
@@ -52,8 +52,8 @@ class BlenderAdapter:
         self._pending = queue.Queue()
         self._polling = False
         bpy = _bpy()
-        # Registered once, from the thread that builds the adapter: in Blender,
-        # the main thread that runs the bridge file. Other threads only use the queue.
+        # Enregistré une fois, depuis le fil qui construit l'adaptateur : dans Blender, le fil principal qui
+        # exécute le fichier du pont. Les autres fils n'utilisent que la file.
         if (
             bpy is not None
             and threading.current_thread() is threading.main_thread()
@@ -78,7 +78,7 @@ class BlenderAdapter:
             text = bpy.app.version_string
         except Exception:
             return "unknown"
-        # "4.2.3 LTS" reads as "4.2.3".
+        # « 4.2.3 LTS » se lit « 4.2.3 ».
         words = text.split() if isinstance(text, str) else []
         return words[0] if words else "unknown"
 
@@ -87,9 +87,8 @@ class BlenderAdapter:
         return {"bpy": bpy} if bpy is not None else {}
 
     def run_on_main(self, function):
-        """Run `function` in Blender's main thread and hand back its value or its
-        exception. Outside Blender's interface, or from the main thread itself, it
-        is a direct call."""
+        """Exécute `function` dans le fil principal de Blender et rend sa valeur ou son exception. Hors de
+        l'interface de Blender, ou depuis le fil principal lui-même, c'est un appel direct."""
         if not self._polling or threading.current_thread() is threading.main_thread():
             return function()
         done = threading.Event()
@@ -98,7 +97,7 @@ class BlenderAdapter:
         def task():
             try:
                 outcome["value"] = function()
-            except BaseException as error:  # raised again in the waiting thread
+            except BaseException as error:  # relevée dans le fil qui attend
                 outcome["error"] = error
             finally:
                 done.set()
@@ -132,8 +131,8 @@ class BlenderAdapter:
         }
 
     def screenshot(self, path):
-        """No capture: a render would have to be started implicitly, and a copy
-        of the 3D view is not safely available without the interface."""
+        """Pas de capture : un rendu devrait être lancé implicitement, et une copie de la vue 3D n'est pas
+        disponible en sécurité sans l'interface."""
         return False
 
 
