@@ -1,5 +1,7 @@
 # LibreModular-MCP
 
+**English** | [Français](docs/fr-FR/README.md) | [Deutsch](docs/de-DE/README.md) | [Español](docs/es-ES/README.md)
+
 ## Universal MCP server written in Rust, with a Hub that exposes only two tools
 
 An MCP server that lets a language model drive desktop applications by running scripts in them.
@@ -67,8 +69,10 @@ whether it is connected, without contacting any application.
 
 ## Applications
 
-Linux only. The versions are those the guides report as tried; the guide of each application says
-under which conditions, and what was not part of the run.
+Linux only: the target platform is Debian 13, and the Calc example below also ran on Ubuntu 24.04. No
+package is published yet; the Hub is built from the sources (Quick start). The versions are those the
+guides report as tried; the guide of each application says under which conditions, and what was not
+part of the run.
 
 | Target | Application | Mode | Version tried | Guide |
 |---|---|---|---|---|

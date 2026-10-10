@@ -1,0 +1,184 @@
+# LibreModular-MCP
+
+[English](../../README.md) | [Français](../fr-FR/README.md) | [Deutsch](../de-DE/README.md) | **Español**
+
+## Servidor MCP universal escrito en Rust, con un Hub que expone solo dos herramientas
+
+Un servidor MCP que permite a un modelo de lenguaje manejar aplicaciones de escritorio ejecutando scripts en ellas.
+
+## Inicio rápido
+
+Compila el Hub, deja que cree su configuración y su token, y declara después el Hub en tu cliente MCP.
+
+```sh
+cd /home/alice/LibreModular-MCP
+cargo build --release --locked
+target/release/libremodular-mcp init
+```
+
+La entrada para el cliente MCP ejecuta el binario compilado con el argumento `serve`:
+
+```json
+{
+  "mcpServers": {
+    "libremodular": {
+      "command": "/home/alice/LibreModular-MCP/target/release/libremodular-mcp",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+Qué adaptar: `/home/alice/LibreModular-MCP/` es la ruta absoluta de tu clon. En qué archivo va esta entrada y cómo
+se llaman sus claves depende de tu cliente: la forma de arriba es habitual, y el Hub se probó con un cliente
+escrito para sus pruebas (líneas JSON-RPC por su entrada y su salida estándar), no con un cliente MCP con nombre.
+El Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a arrancar.
+
+`init` crea `~/.config/libremodular-mcp/config.toml` y el archivo de token a su lado, ambos con modo 600. Nunca
+sobrescribe la configuración y solo sustituye el token con `init --rotate`. Después no queda nada activado: pon
+`enabled = true` en la aplicación que quieras dentro de `config.toml` y arranca su puente como dice su guía
+(véase la tabla de abajo).
+
+## Qué es
+
+El Hub es un único binario que da al modelo exactamente dos herramientas, `execute_script` y `get_state`. El modelo
+escribe un script completo; el Hub lo envía a un puente que lo ejecuta dentro de la aplicación, junto a ella o como
+un proceso por script, y el modelo recibe lo que el script imprimió, su resultado o la traza de error propia de la
+aplicación, para corregirla. El Hub no conoce la interfaz de ninguna aplicación: cada aplicación tiene un módulo
+del lado del Hub y un puente del lado de la aplicación, y los puentes son archivos de Python cuyas únicas
+dependencias son la biblioteca estándar y la interfaz de Python de la propia aplicación.
+
+## Las dos herramientas
+
+`execute_script(target_app: str, script_content: str) -> str` ejecuta un script de Python completo en la
+aplicación que nombra `target_app`. Devuelve el texto de un objeto JSON con `status` (`ok`, `error`, `timeout`,
+`busy`, `refused` o `unavailable`), `app`, `duration_ms`, `stdout`, `stderr`, `result`, `error` (`null`, o `type`,
+`message` y `traceback`, los de la aplicación), `truncated` y `reason` cuando el propio Hub rechazó el script o no
+pudo ejecutarlo.
+
+`get_state(target_app: str) -> dict` devuelve `app`, `connected`, `app_version`, `bridge_version`, `captured_at`,
+`state` (lo propio de la aplicación), `content_origin`, `screenshot` (la ruta de un archivo PNG, o `null`) y
+`warnings`; la respuesta llega al cliente como el texto de un objeto JSON. El destino `hub` devuelve la lista de
+aplicaciones configuradas, cómo se llega a cada una y si está conectada, sin contactar con ninguna aplicación.
+
+`target_app` debe ser el nombre exacto de una aplicación activada. Ninguna de las dos herramientas acepta otra cosa.
+
+## Aplicaciones
+
+Solo Linux: la plataforma prevista es Debian 13, y el ejemplo de Calc de abajo también se ejecutó en Ubuntu 24.04.
+Todavía no se publica ningún paquete; el Hub se compila desde las fuentes (Inicio rápido). Las versiones son las
+que las guías dan como probadas; la guía de cada aplicación dice en qué condiciones y qué no formó parte de la
+prueba.
+
+| Destino | Aplicación | Modo | Versión probada | Guía |
+|---|---|---|---|---|
+| `gimp` | GIMP | `tcp` | 3.0.4, iniciado sin su interfaz | [docs/modules/gimp.md](../modules/gimp.md) |
+| `krita` | Krita | `tcp` | 5.2.9, no iniciado desde Scripter | [docs/modules/krita.md](../modules/krita.md) |
+| `blender` | Blender | `tcp` | 4.3.2 | [docs/modules/blender.md](../modules/blender.md) |
+| `inkscape` | Inkscape | `cli` | 1.4 | [docs/modules/inkscape.md](../modules/inkscape.md) |
+| `libreoffice-writer`, `libreoffice-calc`, `libreoffice-impress` | LibreOffice | `uno` | 24.2.7.2 y 25.2.3.2 | [docs/modules/libreoffice.md](../modules/libreoffice.md) |
+
+Los modos: `tcp`, un puente cargado en la aplicación escucha en un puerto local; `uno`, un puente independiente se
+conecta al puerto UNO en el que escucha LibreOffice; `cli`, un proceso ejecuta cada script.
+
+En los modos `tcp` y `uno`, el Hub nunca inicia, cierra ni detiene una aplicación a petición del modelo: los
+puentes y las aplicaciones arrancan con un gesto explícito del operador, descrito en cada guía, y
+`libremodular-launch libreoffice` inicia LibreOffice y su puente (las demás aplicaciones se inician a mano). En el
+modo `cli`, el Hub inicia un proceso de Python por script y ejecuta `inkscape` una vez para exportar una captura;
+nunca toca una ventana de Inkscape que el operador haya abierto.
+
+## Ejemplo
+
+Un script de Calc que crea el documento cuando no hay ninguno abierto, escribe dos celdas y devuelve lo que
+escribió, y la respuesta del Hub. Se ejecutó tal cual, sin documento abierto, en LibreOffice 24.2.7.2 (los paquetes
+de Ubuntu 24.04, con una ventana en una pantalla X virtual), a través del verdadero `libremodular-mcp`. El mismo
+ejemplo está en [docs/modules/libreoffice.md](../modules/libreoffice.md).
+
+```python
+if doc is None:
+    doc = desktop.loadComponentFromURL('private:factory/scalc', '_blank', 0, ())
+sheet = doc.Sheets.getByIndex(0)
+sheet.getCellByPosition(0, 0).setValue(42)
+sheet.getCellByPosition(1, 1).setString('hello')
+print('wrote A1 and B2')
+result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), 'b2': sheet.getCellByPosition(1, 1).getString()}
+```
+
+```json
+{
+  "app": "libreoffice-calc",
+  "duration_ms": 170,
+  "error": null,
+  "result": {
+    "a1": 42.0,
+    "b2": "hello",
+    "sheet": "Sheet1"
+  },
+  "status": "ok",
+  "stderr": "",
+  "stdout": "wrote A1 and B2\n",
+  "truncated": false
+}
+```
+
+## Lo que sale de la máquina
+
+Todo lo que devuelve el Hub va al modelo de lenguaje, y por tanto a quien lo ejecuta.
+
+| Qué | Sale de la máquina |
+|---|---|
+| El script que escribió el modelo | Sí: el modelo es su autor |
+| `stdout`, `stderr` y `result` de un script | Sí: pueden contener el contenido de un documento |
+| La traza de error | Sí: contiene rutas de la máquina |
+| `state` | Sí: contiene contenido tomado de los documentos abiertos |
+| Una captura | Solo si el modelo lee el archivo |
+| El diario de auditoría, el token y la configuración | Nunca |
+
+Un usuario que abre un documento confidencial en una aplicación conectada sabe que el modelo puede leer su
+contenido.
+
+El Hub no abre ninguna conexión distinta de las de los puentes en `127.0.0.1`: una prueba lee el código fuente en
+busca de cualquier otra (`cargo test --locked --test invariants`).
+
+## Límites
+
+- El Hub no es un entorno aislado. Un script se ejecuta con los derechos del usuario, dentro de una aplicación cuyo
+  Python puede hacer todo lo que puede el usuario.
+- La compuerta de scripts detiene un script torpe, no uno decidido. Lee el texto de un script antes de enviarlo; no
+  ve `runpy`, `pickle`, `http.server`, las funciones de guardado de las aplicaciones ni una ruta pasada como
+  parámetro a una función.
+- El puerto UNO de LibreOffice no tiene autenticación: cualquier proceso que pueda alcanzarlo en esta máquina maneja
+  LibreOffice sin el token, la compuerta ni el diario de auditoría.
+- Otro proceso del mismo usuario puede leer el archivo del token.
+- En los modos `tcp` y `uno`, un script que entra en bucle mantiene ocupada la aplicación (en LibreOffice, su
+  puente) hasta que se cierra: el Hub responde `timeout`, después `busy`, y no lo detiene. Solo el modo `cli` mata
+  un script que supera su tiempo.
+- `libremodular-launch` rechaza un archivo de puente en el que el grupo u otros puedan escribir. Un clon hecho con
+  una `umask` de `002` da el modo 664: ejecuta `chmod 600` en el archivo del puente una vez. Los modos 600 y 644 se
+  aceptan.
+
+## Pruebas
+
+```sh
+cargo test --locked
+python3 -m unittest discover -s tests/bridges
+python3 scripts/build_bridges.py --check
+```
+
+Las pruebas que necesitan una aplicación real están marcadas con `#[ignore]` y su motivo, y se ejecutan a propósito,
+por ejemplo `cargo test --locked --test libreoffice_real -- --ignored --nocapture`.
+
+## Créditos
+
+LibreModular-MCP se construye en una colaboración asimétrica entre humano y LLM. Los roles están escritos tal como
+se desempeñaron realmente; la lista completa está en [CONTRIBUTORS.md](../../CONTRIBUTORS.md).
+
+- **Ronan Davalan**: arquitecto y árbitro. Iniciativa, prioridades, requisitos de seguridad, validación y pruebas.
+- **Claude Code (Anthropic)**: ingeniero de sistemas y desarrollador principal. Marco de trabajo, revisión e integración del código, documentación.
+- **Claude Cloud (Anthropic)**: escribió el código en ramas a partir de instrucciones, revisado antes de cada fusión.
+- **Gemini (Google)**: asesor de arquitectura y sintetizador; escribió la nota fundacional y propuso el nombre del proyecto.
+
+## Seguridad y licencia
+
+Informa de una vulnerabilidad como dice [SECURITY.md](../../SECURITY.md). El código tiene licencia MIT, véase
+[LICENSE](../../LICENSE).
