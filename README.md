@@ -169,6 +169,16 @@ python3 scripts/build_bridges.py --check
 Tests that need a real application are marked `#[ignore]` with their reason and are run on
 purpose, for example `cargo test --locked --test libreoffice_real -- --ignored --nocapture`.
 
+## Credits
+
+LibreModular-MCP is built in an asymmetric human–LLM collaboration. The roles are written down as they
+were actually played; the full list is in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
+- **Ronan Davalan**: architect and arbiter. Initiative, priorities, security requirements, validation and testing.
+- **Claude Code (Anthropic)**: systems engineer and lead developer. Working framework, review and integration of the code, documentation.
+- **Claude Cloud (Anthropic)**: wrote the code on branches from prompts, reviewed before every merge.
+- **Gemini (Google)**: architectural advisor and synthesizer; wrote the founding note and proposed the project's name.
+
 ## Security and licence
 
 Report a vulnerability as [SECURITY.md](SECURITY.md) says. The code is under the MIT licence, see
