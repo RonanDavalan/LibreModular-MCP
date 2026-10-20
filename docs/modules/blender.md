@@ -176,14 +176,15 @@ the 3D view without the interface. Rendering from a script is described below.
 
 `bpy.ops.render.render(write_still=True)` works through the bridge when the main thread
 runs the script: with the interface (the timer), and in `blender -b` when the boot file
-calls `serve_main_thread()` (see "Starting the bridge"). In Blender 4.3.2 on a session
-without a display, a 128 x 128 render of a cube in the default engine (`BLENDER_EEVEE_NEXT`)
-came back `ok` in 0.7 s, and `get_state("blender")` answered afterwards. A boot file that
-sleeps instead keeps the script in the bridge's network thread, and the same script never
-returned: the Hub answered `timeout` after 30 seconds, then `busy`. In that session the
-same render ran from the network thread when the display variables were set, so the
-hang depends on the session; calling `serve_main_thread()` does not. Set `filepath` under
-`LMM_WORK_DIR`.
+calls `serve_main_thread()` (see "Starting the bridge"). In Blender 4.3.2 a 128 x 128
+render of a cube in the default engine (`BLENDER_EEVEE_NEXT`) came back `ok` in 0.6 to
+0.9 s every time it was tried that way (11 runs, with and without a display variable, and
+under CPU load), and `get_state("blender")` answered afterwards. A boot file that sleeps
+instead keeps the script in the bridge's network thread. There the same render came back in
+0.6 to 0.9 s in 22 runs out of 23, and once never returned: the Hub answered `timeout`
+after 30 seconds, then `busy`. Blender does not support `bpy.ops` outside its main thread,
+so that thread can hang at any render; running the script in the main thread removes the
+cause. Set `filepath` under `LMM_WORK_DIR`.
 
 For a render driven by `bpy` and judged by pixel, in the Workbench engine (measured in
 Blender 4.3.2, each point a render that came out wrong without an error):
