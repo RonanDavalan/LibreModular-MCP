@@ -415,9 +415,16 @@ pub fn read_control_file_as(
     Ok(data)
 }
 
+/// Le propriétaire des fichiers qu'un gestionnaire de paquets installe.
+const ROOT_UID: u32 = 0;
+
 /// Contrôle un fichier que le Hub s'apprête à confier à un autre programme pour exécution : un
-/// chemin absolu vers un fichier ordinaire, pas un lien, appartenant à l'utilisateur courant et
-/// non inscriptible par le groupe ni par les autres. Son contenu n'est pas lu.
+/// chemin absolu vers un fichier ordinaire, pas un lien, appartenant à l'utilisateur courant ou à
+/// `root` et non inscriptible par le groupe ni par les autres. Son contenu n'est pas lu.
+///
+/// `root` est admis parce que le pont installé par le paquet lui appartient : le fichier d'un
+/// autre utilisateur reste refusé, et un fichier de `root` que ni le groupe ni les autres ne
+/// peuvent écrire n'est remplaçable que par `root`.
 ///
 /// Sa lecture reste permise à tous : un tel fichier est du code, pas un secret.
 ///
@@ -425,7 +432,7 @@ pub fn read_control_file_as(
 /// Un chemin relatif, un lien, un fichier non ordinaire, un propriétaire étranger, ou un mode qui
 /// permet au groupe ou aux autres de modifier le fichier.
 pub fn check_trusted_file(path: &Path) -> Result<(), SecurityError> {
-    check_trusted_file_as(path, current_uid())
+    check_trusted_file_among(path, &[current_uid(), ROOT_UID])
 }
 
 /// Comme [`check_trusted_file`] avec un propriétaire attendu explicite.
@@ -433,6 +440,14 @@ pub fn check_trusted_file(path: &Path) -> Result<(), SecurityError> {
 /// # Erreurs
 /// Voir [`check_trusted_file`].
 pub fn check_trusted_file_as(path: &Path, expected_uid: u32) -> Result<(), SecurityError> {
+    check_trusted_file_among(path, &[expected_uid])
+}
+
+/// Comme [`check_trusted_file`] avec la liste des propriétaires admis.
+///
+/// # Erreurs
+/// Voir [`check_trusted_file`].
+pub fn check_trusted_file_among(path: &Path, owners: &[u32]) -> Result<(), SecurityError> {
     if !path.is_absolute() {
         return Err(SecurityError::InvalidPath {
             path: path.to_path_buf(),
@@ -440,7 +455,7 @@ pub fn check_trusted_file_as(path: &Path, expected_uid: u32) -> Result<(), Secur
     }
     let file = open_regular_nofollow(path, ControlAccess::Read)?;
     let info = file.metadata().map_err(|e| io_error("inspect", path, e))?;
-    if info.uid() != expected_uid {
+    if !owners.contains(&info.uid()) {
         return Err(SecurityError::ForeignOwner {
             path: path.to_path_buf(),
         });

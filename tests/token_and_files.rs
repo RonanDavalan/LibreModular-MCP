@@ -7,15 +7,16 @@
 mod common;
 
 use std::fs;
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{MetadataExt, symlink};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use common::{FILE_TOKEN, Verdict, current_uid, fresh, mode_of, must_fail, must_pass, write_file};
 use libremodular_mcp::security::{
     ControlAccess, SecurityError, TRUNCATION_MARKER, bounded, check_script_size, check_target,
-    check_trusted_file, check_trusted_file_as, create_token, ensure_private_dir, load_token_as,
-    open_control_file, open_regular_nofollow, read_control_file, read_system_file, resolve_under,
+    check_trusted_file, check_trusted_file_among, check_trusted_file_as, create_token,
+    ensure_private_dir, load_token_as, open_control_file, open_regular_nofollow, read_control_file,
+    read_system_file, resolve_under,
 };
 
 type Loader<'l> = &'l dyn Fn(&Path, u32) -> Result<String, String>;
@@ -670,6 +671,80 @@ fn counter_proof_a_check_of_existence_only_is_detected() {
             base.path(),
         ),
     );
+}
+
+type Among<'t> = &'t dyn Fn(&Path, &[u32]) -> Result<(), String>;
+
+fn real_among(path: &Path, owners: &[u32]) -> Result<(), String> {
+    check_trusted_file_among(path, owners).map_err(|error| error.to_string())
+}
+
+/// Défectueux exprès : il refuse un fichier inscriptible par d'autres mais ne regarde pas son
+/// propriétaire.
+fn any_owner(path: &Path, _owners: &[u32]) -> Result<(), String> {
+    real_trust(path, current_uid())
+}
+
+fn check_only_the_listed_owners_are_admitted(among: Among<'_>, base: &Path) -> Verdict {
+    let base = fresh(base);
+    let path = base.join("bridge.py");
+    write_file(&path, 0o644, "pass\n");
+    let mine = current_uid();
+    ensure!(
+        among(&path, &[mine + 1000, mine]).is_ok(),
+        "an owner of the list was refused"
+    );
+    ensure!(
+        among(&path, &[mine]).is_ok(),
+        "the current user was refused"
+    );
+    ensure!(
+        among(&path, &[mine + 1]).is_err(),
+        "an owner outside the list was accepted"
+    );
+    ensure!(
+        among(&path, &[]).is_err(),
+        "an empty list admitted an owner"
+    );
+    let open = base.join("open.py");
+    write_file(&open, 0o664, "pass\n");
+    ensure!(
+        among(&open, &[mine]).is_err(),
+        "a file the group can write was accepted for an owner of the list"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_trusted_file_may_belong_to_any_listed_owner_and_to_no_other() {
+    let base = tempfile::tempdir().expect("temporary directory");
+    must_pass(check_only_the_listed_owners_are_admitted(
+        &real_among,
+        base.path(),
+    ));
+}
+
+#[test]
+fn counter_proof_a_check_that_ignores_the_owner_is_detected() {
+    let base = tempfile::tempdir().expect("temporary directory");
+    must_fail(check_only_the_listed_owners_are_admitted(
+        &any_owner,
+        base.path(),
+    ));
+}
+
+#[test]
+fn a_file_installed_by_the_system_is_trusted_by_a_user_but_not_through_check_as() {
+    let installed = Path::new("/etc/passwd");
+    let Ok(info) = fs::symlink_metadata(installed) else {
+        return;
+    };
+    if !info.file_type().is_file() || info.uid() != 0 || current_uid() == 0 {
+        return;
+    }
+    check_trusted_file(installed).expect("a file of root that nobody else can write");
+    let error = check_trusted_file_as(installed, current_uid()).expect_err("not ours");
+    assert!(matches!(error, SecurityError::ForeignOwner { .. }));
 }
 
 #[test]

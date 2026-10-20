@@ -340,7 +340,7 @@ fn hardening_and_private_modes_hold_in_a_fresh_process() {
 
 // --- la logique de sécurité ne vit que dans security.rs -----------------------------
 
-const SECURITY_ONLY_DEFINITIONS: [&str; 14] = [
+const SECURITY_ONLY_DEFINITIONS: [&str; 15] = [
     "guard_script",
     "resolve_under",
     "check_target",
@@ -354,6 +354,7 @@ const SECURITY_ONLY_DEFINITIONS: [&str; 14] = [
     "open_regular_nofollow",
     "ensure_private_dir",
     "check_trusted_file",
+    "check_trusted_file_among",
     "read_system_file",
 ];
 
