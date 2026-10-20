@@ -808,7 +808,10 @@ fn a_bridge_file_that_cannot_be_trusted_is_refused_and_nothing_starts() {
         .expect_err(label);
         assert_eq!(error.exit_code(), 2, "{label}: {error}");
         assert!(
-            error.to_string().contains("--bridge-file"),
+            error.to_string().contains("--bridge-file")
+                && error
+                    .to_string()
+                    .contains("/usr/share/libremodular-mcp/bridges/uno_bridge.py"),
             "{label}: {error}"
         );
     }
