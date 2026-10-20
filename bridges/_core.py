@@ -680,6 +680,30 @@ def stop():
         bridge.close()
 
 
+def serve_main_thread(seconds=None):
+    """Cède le fil appelant à l'application tant que le pont tourne. Un fichier de démarrage sans
+    interface l'appelle à la place de sa boucle d'attente : seul le fil principal peut exécuter
+    certains appels de l'application, un opérateur de rendu par exemple. Rend la main à l'arrêt du
+    pont, après `seconds` s'il est donné, ou sur Ctrl+C."""
+    bridge = _running
+    if bridge is None:
+        raise BridgeError("no bridge is running in this process; start it first")
+    deadline = None if seconds is None else time.monotonic() + seconds
+
+    def finished():
+        return bridge._stop.is_set() or (deadline is not None and time.monotonic() >= deadline)
+
+    serve = getattr(bridge._adapter, "serve_main_thread", None)
+    try:
+        if serve is not None:
+            serve(finished)
+        else:
+            while not finished():
+                time.sleep(_ACCEPT_POLL_S)
+    except KeyboardInterrupt:
+        pass
+
+
 def _port_from_environment(text, default_port):
     if text is None or text == "":
         return default_port

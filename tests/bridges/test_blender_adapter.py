@@ -18,6 +18,7 @@ import unittest
 from bridge_support import (
     Client,
     defective_adapter,
+    execute,
     load_adapter,
     load_core,
     returns_in_time,
@@ -119,6 +120,34 @@ EXPECTED_STATE = {
 }
 
 
+def check_background_calls_run_in_the_serving_thread(adapter_module):
+    """Mode arrière-plan : le fil principal cède la main par `serve_main_thread`. Un appel venu du fil du
+    pont doit s'y exécuter, pas dans le fil du pont."""
+    with bpy_module(fake_bpy(background=True)):
+        adapter = adapter_module.BlenderAdapter()
+        stop, serving = threading.Event(), threading.Event()
+        ran_in = {}
+
+        def call():
+            serving.wait(timeout=3.0)
+            ran_in["thread"] = adapter.run_on_main(lambda: threading.current_thread())
+            stop.set()
+
+        caller = threading.Thread(target=call, name="bridge-side", daemon=True)
+        caller.start()
+        deadline = time.monotonic() + 3.0
+
+        def finished():
+            serving.set()
+            return stop.is_set() or time.monotonic() > deadline
+
+        adapter.serve_main_thread(finished)
+        caller.join(timeout=1.0)
+    if ran_in.get("thread") is not threading.current_thread():
+        return ["the call did not run in the thread that serves: %r" % ran_in.get("thread")]
+    return []
+
+
 def check_direct_without_a_running_loop(adapter_module):
     """`bpy` installé comme paquet : mode arrière-plan, minuteurs qui ne tournent jamais. Un appel
     depuis un autre fil doit revenir, exécuté dans ce fil."""
@@ -195,6 +224,52 @@ class WithBlenderTests(unittest.TestCase):
 
     def test_without_a_running_loop_calls_are_direct(self):
         self.assertEqual(check_direct_without_a_running_loop(BLENDER), [])
+
+    def test_in_background_the_serving_thread_runs_the_calls(self):
+        self.assertEqual(check_background_calls_run_in_the_serving_thread(BLENDER), [])
+
+    def test_counter_proof_an_adapter_that_ignores_the_serving_thread_runs_in_the_caller(self):
+        defective = defective_adapter(
+            "blender",
+            "queued = self._polling or serving is not None\n",
+            "queued = self._polling\n",
+        )
+        self.assertNotEqual(check_background_calls_run_in_the_serving_thread(defective), [])
+
+    def test_calls_after_the_service_ends_are_direct_and_do_not_wait(self):
+        with bpy_module(fake_bpy(background=True)):
+            adapter = BLENDER.BlenderAdapter()
+            adapter.serve_main_thread(lambda: True)
+            returned, outcome = returns_in_time(lambda: adapter.run_on_main(lambda: 7))
+        self.assertTrue(returned)
+        self.assertEqual(outcome["value"], 7)
+
+    def test_the_core_hands_the_main_thread_to_the_adapter_until_the_bridge_stops(self):
+        with bpy_module(fake_bpy(background=True)):
+            adapter = BLENDER.BlenderAdapter()
+            with running(CORE, adapter=adapter) as bridge:
+                answers = {}
+
+                def ask():
+                    while adapter._serving is None:
+                        time.sleep(0.01)
+                    client = Client(bridge.port)
+                    client.hello()
+                    script = "import threading\nresult = threading.current_thread().name"
+                    answers["execute"] = client.request(execute(script))
+                    client.close()
+                    CORE.stop()
+
+                asker = threading.Thread(target=ask, daemon=True)
+                asker.start()
+                CORE.serve_main_thread(seconds=10)
+                asker.join(timeout=2.0)
+        self.assertTrue(answers["execute"]["ok"], answers)
+        self.assertEqual(answers["execute"]["result"], threading.current_thread().name)
+
+    def test_serve_main_thread_without_a_bridge_says_so(self):
+        with self.assertRaises(CORE.BridgeError):
+            CORE.serve_main_thread(seconds=0.1)
 
     def test_counter_proof_an_adapter_that_always_queues_waits_forever(self):
         defective = defective_adapter(

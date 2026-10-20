@@ -3,16 +3,19 @@
 **Status: tried in Blender 4.3.2 (Debian 13 package), in both ways of starting it.** The
 bridge was written from the public Blender Python API (`bpy`). It ran in Blender 4.3.2
 started without its interface (`blender --background --python <boot file>`, the boot file
-running the bridge and then sleeping so that Blender stayed up) and with its interface on a
-virtual X display (`xvfb-run blender --python <bridge file>`), driven by the Hub over MCP on
-stdio. In both, `get_state("hub")` listed `blender` as connected with version `4.3.2`;
-`get_state("blender")` returned the default scene (`Cube`, `Light`, `Camera`, frames 1 to
-250, engine `BLENDER_EEVEE_NEXT`, `Cube` selected); the example below returned
-`{"object": "Generated triangle", "objects": 4}`, after which the object list had four
-entries; a script that raised returned its traceback with the right line. A call took 1 ms
-without the interface and about 70 ms with it (the timer looks every 50 ms). Not part of
-those runs: a bridge started from the *Scripting* workspace console of an interface the
-operator opened, and `bpy.ops` operators.
+running the bridge and then handing the main thread to it, see "Starting the bridge") and
+with its interface on a virtual X display (`xvfb-run blender --python <bridge file>`),
+driven by the Hub over MCP on stdio. In both, `get_state("hub")` listed `blender` as
+connected with version `4.3.2`; `get_state("blender")` returned the default scene (`Cube`,
+`Light`, `Camera`, frames 1 to 250, engine `BLENDER_EEVEE_NEXT`, `Cube` selected); the
+example below returned `{"object": "Generated triangle", "objects": 4}`, after which the
+object list had four entries; a script that raised returned its traceback with the right
+line; a script that built a cube and rendered it at 128 x 128 with `bpy.ops.render.render`
+returned `ok` and wrote the PNG (0.7 s without the interface, 27 s with it on a virtual
+display, where EEVEE renders in software). A call that only reads or edits the scene took
+1 ms without the interface and about 70 ms with it (the timer looks every 50 ms). Not part
+of those runs: a bridge started from the *Scripting* workspace console of an interface the
+operator opened, and a display-less session with the interface.
 
 ## What it does
 
@@ -88,9 +91,22 @@ The bridge never starts on its own: the operator starts it by hand, each time.
 
 Started without the interface (`blender --background --python ...`), Blender quits as soon
 as the file has run, which ends the bridge with it. To keep it up, run the bridge file from
-a boot file that then keeps the main thread busy (for example `time.sleep(100)`): the bridge
-serves meanwhile. In that mode no timer runs, so the bridge calls `bpy` directly from its
-own thread.
+a boot file that then gives the main thread to the bridge by calling `serve_main_thread()`:
+
+```python
+import runpy
+
+runpy.run_path("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py")[
+    "serve_main_thread"
+]()
+```
+
+`serve_main_thread()` returns when the bridge stops (`stop()`), after `seconds` if you pass
+`serve_main_thread(seconds=600)`, or on Ctrl+C; Blender then quits. In that mode no timer
+runs, so this call is what runs the scripts, in the main thread, as Blender's own command
+line does. A boot file that sleeps instead of calling it keeps the bridge up but runs
+scripts in the bridge's network thread, where `bpy.ops.render.render` can hang (see
+"Rendering").
 
 To check the connection from the model's side, call `get_state` with the target `hub`:
 Blender is listed with `connected: true` and the version Blender reported.
@@ -113,15 +129,19 @@ Each script runs in a fresh namespace that holds:
 - `bpy` must be used from Blender's main thread. When the bridge file runs in Blender's
   main thread with the interface, the adapter registers one persistent timer there
   (`bpy.app.timers.register`), which looks for queued scripts every 50 milliseconds and
-  runs them; the connection thread waits for the outcome. Outside Blender's interface (the
-  stand-alone `bpy` package, background mode, or a bridge started from another thread), no
-  timer would ever run, so scripts are called directly. Both paths ran in Blender 4.3.2
-  (see the status above).
+  runs them; the connection thread waits for the outcome. In background mode, scripts run
+  in the main thread while it is inside `serve_main_thread()` (see "Starting the bridge").
+  Otherwise (the stand-alone `bpy` package, a bridge started from another thread, or a
+  boot file that never calls `serve_main_thread()`), nothing would ever run a queued
+  script, so scripts are called directly in the bridge's thread. Both paths ran in
+  Blender 4.3.2 (see the status above).
 - A script that never returns blocks Blender's main thread; the Hub answers `timeout`, then
   `busy` until the script ends, and never sends a second script meanwhile.
 - Operators (`bpy.ops`) depend on the context they run in; from a timer there is no active
-  area. Whether a given operator works from the bridge is unconfirmed: the data API
-  (`bpy.data`) does not depend on it.
+  area. `bpy.ops.mesh.primitive_cube_add` and `bpy.ops.render.render` ran in background
+  mode (see "Rendering"); `bpy.ops.render.render` also ran with the interface on a virtual
+  display. Any other operator is untried: the data API (`bpy.data`) does not depend on
+  the context.
 
 ## Version
 
@@ -150,16 +170,20 @@ When `bpy` cannot be imported (the file was run outside Blender), `state` is `{}
 
 `screenshot` is always `null` for Blender. Producing an image would mean starting a render
 implicitly, which a request to read the state must never do, and there is no safe copy of
-the 3D view without the interface. Rendering from a script has its own limit, below.
+the 3D view without the interface. Rendering from a script is described below.
 
 ## Rendering
 
-In `blender -b` (background mode) the bridge runs a script in its network thread, not in
-Blender's main thread. `bpy.ops.render.render` called that way never returns: in Blender
-4.3.2 the Hub answered `timeout` after 30 seconds and the bridge connection was closed.
-Reading and changing the scene by the data API works. Render with Blender's own command
-line (`blender -b file.blend -o <path> -f 1`, or `--python` with a script). Rendering
-through the bridge with the interface open has not been tried.
+`bpy.ops.render.render(write_still=True)` works through the bridge when the main thread
+runs the script: with the interface (the timer), and in `blender -b` when the boot file
+calls `serve_main_thread()` (see "Starting the bridge"). In Blender 4.3.2 on a session
+without a display, a 128 x 128 render of a cube in the default engine (`BLENDER_EEVEE_NEXT`)
+came back `ok` in 0.7 s, and `get_state("blender")` answered afterwards. A boot file that
+sleeps instead keeps the script in the bridge's network thread, and the same script never
+returned: the Hub answered `timeout` after 30 seconds, then `busy`. In that session the
+same render ran from the network thread when the display variables were set, so the
+hang depends on the session; calling `serve_main_thread()` does not. Set `filepath` under
+`LMM_WORK_DIR`.
 
 For a render driven by `bpy` and judged by pixel, in the Workbench engine (measured in
 Blender 4.3.2, each point a render that came out wrong without an error):
