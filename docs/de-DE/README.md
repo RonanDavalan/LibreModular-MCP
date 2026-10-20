@@ -181,6 +181,7 @@ festgehalten, wie sie tatsächlich ausgeübt wurden; die vollständige Liste ste
 - **Claude Code (Anthropic)**: Systemingenieur und Hauptentwickler. Arbeitsrahmen, Durchsicht und Integration des Codes, Dokumentation.
 - **Claude Cloud (Anthropic)**: schrieb den Code auf Branches nach Vorgaben, vor jeder Zusammenführung geprüft.
 - **Gemini (Google)**: Architekturberater und Synthetisierer; schrieb die Gründungsnotiz und schlug den Namen des Projekts vor.
+- **Muse Spark 1.3 (Meta)**: Grafikdesigner; zeichnete das Logo und die Favicons.
 
 ## Sicherheit und Lizenz
 

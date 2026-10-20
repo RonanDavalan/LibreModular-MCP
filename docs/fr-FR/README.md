@@ -179,6 +179,7 @@ ont été réellement tenus ; la liste complète est dans [CONTRIBUTORS.md](../.
 - **Claude Code (Anthropic)** : ingénieur systèmes et développeur principal. Cadre de travail, relecture et intégration du code, documentation.
 - **Claude Cloud (Anthropic)** : a écrit le code sur des branches à partir de consignes, relu avant chaque fusion.
 - **Gemini (Google)** : conseiller d'architecture et synthétiseur ; a écrit la note fondatrice et proposé le nom du projet.
+- **Muse Spark 1.3 (Meta)** : graphiste ; a dessiné le logo et les favicons.
 
 ## Sécurité et licence
 
