@@ -190,6 +190,31 @@ fn help_option_prints_help() {
 }
 
 #[test]
+fn the_help_of_every_command_is_in_english() {
+    let base = common::private_tempdir();
+    let paths = paths_in(base.path());
+    for (args, expected) in [
+        (
+            vec!["libremodular-mcp", "--help"],
+            "Create the configuration directory",
+        ),
+        (
+            vec!["libremodular-mcp", "serve", "--help"],
+            "Serve MCP on standard input and output",
+        ),
+        (
+            vec!["libremodular-mcp", "init", "--help"],
+            "Replace the existing token",
+        ),
+    ] {
+        let (code, out, _) = run_cli(&args, &paths);
+        assert_eq!(code, 0, "{args:?}");
+        assert!(out.contains(expected), "{args:?}: {out}");
+        assert!(out.is_ascii(), "{args:?}: {out}");
+    }
+}
+
+#[test]
 fn main_without_command_serves_and_refuses_to_start_without_a_token() {
     let base = common::private_tempdir();
     let paths = paths_in(base.path());

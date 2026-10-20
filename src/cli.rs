@@ -46,12 +46,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Sert MCP sur l'entrée et la sortie standard (c'est aussi la valeur par défaut)
+    #[command(about = "Serve MCP on standard input and output (the default)")]
     Serve,
-    /// Crée le répertoire de configuration, une configuration d'exemple et le jeton
+    #[command(about = "Create the configuration directory, an example configuration and the token")]
     Init {
-        /// Remplace le jeton existant
-        #[arg(long)]
+        #[arg(long, help = "Replace the existing token")]
         rotate: bool,
     },
 }
