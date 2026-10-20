@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img">
+  <title>LibreModular-MCP — favicon orbit</title>
+  <desc>Anneau cuivre, disque hub bleu, deux pastilles-outils ambre et cyan</desc>
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#c25438" stroke-width="7"/>
+  <circle cx="32" cy="32" r="14" fill="#1c385c"/>
+  <circle cx="26" cy="26" r="5" fill="#f2b342"/>
+  <circle cx="38" cy="38" r="5" fill="#29a196"/>
+</svg>
