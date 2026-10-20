@@ -8,7 +8,7 @@ Un servidor MCP que permite a un modelo de lenguaje manejar aplicaciones de escr
 
 ## Inicio rápido
 
-Compila el Hub, deja que cree su configuración y su token, y declara después el Hub en tu cliente MCP.
+Compile el Hub, deje que cree su configuración y su token, y declare después el Hub en su cliente MCP.
 
 ```sh
 cd /home/alice/LibreModular-MCP
@@ -29,14 +29,14 @@ La entrada para el cliente MCP ejecuta el binario compilado con el argumento `se
 }
 ```
 
-Qué adaptar: `/home/alice/LibreModular-MCP/` es la ruta absoluta de tu clon. En qué archivo va esta entrada y cómo
-se llaman sus claves depende de tu cliente: la forma de arriba es habitual, y el Hub se probó con un cliente
+Qué adaptar: `/home/alice/LibreModular-MCP/` es la ruta absoluta de su clon. En qué archivo va esta entrada y cómo
+se llaman sus claves depende de su cliente: la forma de arriba es habitual, y el Hub se probó con un cliente
 escrito para sus pruebas (líneas JSON-RPC por su entrada y su salida estándar), no con un cliente MCP con nombre.
-El Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a arrancar.
+El Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a iniciarse.
 
 `init` crea `~/.config/libremodular-mcp/config.toml` y el archivo de token a su lado, ambos con modo 600. Nunca
-sobrescribe la configuración y solo sustituye el token con `init --rotate`. Después no queda nada activado: pon
-`enabled = true` en la aplicación que quieras dentro de `config.toml` y arranca su puente como dice su guía
+sobrescribe la configuración y solo sustituye el token con `init --rotate`. Después no queda nada activado: ponga
+`enabled = true` en la aplicación que quiera dentro de `config.toml` e inicie su puente como dice su guía
 (véase la tabla de abajo).
 
 ## Qué es
@@ -72,17 +72,17 @@ prueba.
 
 | Destino | Aplicación | Modo | Versión probada | Guía |
 |---|---|---|---|---|
-| `gimp` | GIMP | `tcp` | 3.0.4, iniciado sin su interfaz | [docs/modules/gimp.md](../modules/gimp.md) |
-| `krita` | Krita | `tcp` | 5.2.9, no iniciado desde Scripter | [docs/modules/krita.md](../modules/krita.md) |
-| `blender` | Blender | `tcp` | 4.3.2 | [docs/modules/blender.md](../modules/blender.md) |
-| `inkscape` | Inkscape | `cli` | 1.4 | [docs/modules/inkscape.md](../modules/inkscape.md) |
-| `libreoffice-writer`, `libreoffice-calc`, `libreoffice-impress` | LibreOffice | `uno` | 24.2.7.2 y 25.2.3.2 | [docs/modules/libreoffice.md](../modules/libreoffice.md) |
+| `gimp` | GIMP | `tcp` | 3.0.4, iniciado sin su interfaz | [docs/es-ES/modules/gimp.md](modules/gimp.md) |
+| `krita` | Krita | `tcp` | 5.2.9, no iniciado desde Scripter | [docs/es-ES/modules/krita.md](modules/krita.md) |
+| `blender` | Blender | `tcp` | 4.3.2 | [docs/es-ES/modules/blender.md](modules/blender.md) |
+| `inkscape` | Inkscape | `cli` | 1.4 | [docs/es-ES/modules/inkscape.md](modules/inkscape.md) |
+| `libreoffice-writer`, `libreoffice-calc`, `libreoffice-impress` | LibreOffice | `uno` | 24.2.7.2 y 25.2.3.2 | [docs/es-ES/modules/libreoffice.md](modules/libreoffice.md) |
 
 Los modos: `tcp`, un puente cargado en la aplicación escucha en un puerto local; `uno`, un puente independiente se
 conecta al puerto UNO en el que escucha LibreOffice; `cli`, un proceso ejecuta cada script.
 
 En los modos `tcp` y `uno`, el Hub nunca inicia, cierra ni detiene una aplicación a petición del modelo: los
-puentes y las aplicaciones arrancan con un gesto explícito del operador, descrito en cada guía, y
+puentes y las aplicaciones se inician con un gesto explícito del operador, descrito en cada guía, y
 `libremodular-launch libreoffice` inicia LibreOffice y su puente (las demás aplicaciones se inician a mano). En el
 modo `cli`, el Hub inicia un proceso de Python por script y ejecuta `inkscape` una vez para exportar una captura;
 nunca toca una ventana de Inkscape que el operador haya abierto.
@@ -92,7 +92,7 @@ nunca toca una ventana de Inkscape que el operador haya abierto.
 Un script de Calc que crea el documento cuando no hay ninguno abierto, escribe dos celdas y devuelve lo que
 escribió, y la respuesta del Hub. Se ejecutó tal cual, sin documento abierto, en LibreOffice 24.2.7.2 (los paquetes
 de Ubuntu 24.04, con una ventana en una pantalla X virtual), a través del verdadero `libremodular-mcp`. El mismo
-ejemplo está en [docs/modules/libreoffice.md](../modules/libreoffice.md).
+ejemplo está en [docs/es-ES/modules/libreoffice.md](modules/libreoffice.md).
 
 ```python
 if doc is None:
@@ -144,7 +144,7 @@ busca de cualquier otra (`cargo test --locked --test invariants`).
 
 - El Hub no es un entorno aislado. Un script se ejecuta con los derechos del usuario, dentro de una aplicación cuyo
   Python puede hacer todo lo que puede el usuario.
-- La compuerta de scripts detiene un script torpe, no uno decidido. Lee el texto de un script antes de enviarlo; no
+- La compuerta de scripts detiene un script torpe, no uno decidido. Lea el texto de un script antes de enviarlo; no
   ve `runpy`, `pickle`, `http.server`, las funciones de guardado de las aplicaciones ni una ruta pasada como
   parámetro a una función.
 - El puerto UNO de LibreOffice no tiene autenticación: cualquier proceso que pueda alcanzarlo en esta máquina maneja
@@ -154,7 +154,7 @@ busca de cualquier otra (`cargo test --locked --test invariants`).
   puente) hasta que se cierra: el Hub responde `timeout`, después `busy`, y no lo detiene. Solo el modo `cli` mata
   un script que supera su tiempo.
 - `libremodular-launch` rechaza un archivo de puente en el que el grupo u otros puedan escribir. Un clon hecho con
-  una `umask` de `002` da el modo 664: ejecuta `chmod 600` en el archivo del puente una vez. Los modos 600 y 644 se
+  una `umask` de `002` da el modo 664: ejecute `chmod 600` en el archivo del puente una vez. Los modos 600 y 644 se
   aceptan.
 
 ## Pruebas
@@ -181,5 +181,5 @@ se desempeñaron realmente; la lista completa está en [CONTRIBUTORS.md](../../C
 
 ## Seguridad y licencia
 
-Informa de una vulnerabilidad como dice [SECURITY.md](../../SECURITY.md). El código tiene licencia MIT, véase
+Informe de una vulnerabilidad como dice [SECURITY.md](../../SECURITY.md). El código tiene licencia MIT, véase
 [LICENSE](../../LICENSE).
