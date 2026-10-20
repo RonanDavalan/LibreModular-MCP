@@ -32,8 +32,13 @@ The other applications have no launcher: start their bridge by hand, as their gu
 # OPTIONS
 
 **--bridge-file** *path*
-:   The absolute path of *uno_bridge.py*. The file must be a regular file, not a link, owned by the current user or by root, and not writable by the group or by others. With the Debian package it is
-    */usr/share/libremodular-mcp/bridges/uno_bridge.py*; in a clone of the sources it is *bridges/generated/uno_bridge.py*, and a mode of 664 must first be changed, for example with **chmod 600**.
+:   The absolute path of *uno_bridge.py*. The file must be a regular file, not a link, owned by the current user or by root, and not writable by the group or by others.
+
+    With the Debian package:
+
+    */usr/share/libremodular-mcp/bridges/uno_bridge.py*
+
+    In a clone of the sources it is *bridges/generated/uno_bridge.py*, and a mode of 664 must first be changed, for example with **chmod 600**.
 
 **--stop**
 :   End the bridge started by an earlier launch, after checking that the recorded process still is that bridge. LibreOffice is left running: closing it is up to you.

@@ -33,9 +33,13 @@ enden mit dem Exit-Code 2.
 # OPTIONEN
 
 **--bridge-file** *Pfad*
-:   Der absolute Pfad von *uno_bridge.py*. Die Datei muss eine gewöhnliche Datei sein, kein Link, dem aktuellen Benutzer oder root gehören und weder für die Gruppe noch für andere schreibbar sein. Beim
-    Debian-Paket ist es */usr/share/libremodular-mcp/bridges/uno_bridge.py*; in einem Klon der Quellen ist es *bridges/generated/uno_bridge.py*, dessen Modus 664 zuerst geändert werden muss, zum Beispiel mit
-    **chmod 600**.
+:   Der absolute Pfad von *uno_bridge.py*. Die Datei muss eine gewöhnliche Datei sein, kein Link, dem aktuellen Benutzer oder root gehören und weder für die Gruppe noch für andere schreibbar sein.
+
+    Beim Debian-Paket:
+
+    */usr/share/libremodular-mcp/bridges/uno_bridge.py*
+
+    In einem Klon der Quellen ist es *bridges/generated/uno_bridge.py*, dessen Modus 664 zuerst geändert werden muss, zum Beispiel mit **chmod 600**.
 
 **--stop**
 :   Beendet die Brücke, die ein früherer Start gestartet hat, nachdem geprüft wurde, dass der aufgezeichnete Prozess noch diese Brücke ist. LibreOffice läuft weiter: Es zu schließen ist Ihre Sache.

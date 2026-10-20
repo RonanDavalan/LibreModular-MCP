@@ -33,8 +33,13 @@ salida 2.
 # OPCIONES
 
 **--bridge-file** *ruta*
-:   La ruta absoluta de *uno_bridge.py*. El archivo debe ser un archivo ordinario, no un enlace, pertenecer al usuario actual o a root, y no poder ser escrito por el grupo ni por otros. Con el paquete Debian
-    es */usr/share/libremodular-mcp/bridges/uno_bridge.py*; en un clon de las fuentes es *bridges/generated/uno_bridge.py*, cuyo modo 664 hay que cambiar antes, por ejemplo con **chmod 600**.
+:   La ruta absoluta de *uno_bridge.py*. El archivo debe ser un archivo ordinario, no un enlace, pertenecer al usuario actual o a root, y no poder ser escrito por el grupo ni por otros.
+
+    Con el paquete Debian:
+
+    */usr/share/libremodular-mcp/bridges/uno_bridge.py*
+
+    En un clon de las fuentes es *bridges/generated/uno_bridge.py*, cuyo modo 664 hay que cambiar antes, por ejemplo con **chmod 600**.
 
 **--stop**
 :   Termina el puente iniciado por un inicio anterior, tras comprobar que el proceso registrado sigue siendo ese puente. LibreOffice sigue abierto: cerrarlo le corresponde a usted.
