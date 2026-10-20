@@ -181,6 +181,33 @@ Gimp.displays_flush()
 result = {"layer": layer.get_id(), "layers": [item.get_name() for item in image.get_layers()]}
 ```
 
+## GIMP 3.0 API: renamed calls and silent failures
+
+Observed in GIMP 3.0.4. A script written from memory of GIMP 2.10 fails with an
+`AttributeError` or a `TypeError`; read `dir()` in the running GIMP rather than conclude
+that the API is broken.
+
+| To do | GIMP 2.10 | GIMP 3.0 |
+|---|---|---|
+| Create an image | `Gimp.Image.new(w, h, Gimp.ImageType.RGBA_IMAGE)` | `Gimp.Image.new(w, h, Gimp.ImageBaseType.RGB)`: the third argument is a base type |
+| Make a colour | `Gimp.RGBA(r, g, b, a)` | `Gimp.color_parse_hex("#14181c")`, which returns a `Gegl.Color`; `Gimp.RGBA` and `Gimp.RGB` do not exist |
+| Select a rectangle | `Gimp.image_select_rectangle(image, Gimp.ChannelOp.REPLACE, ...)` | `image.select_rectangle(Gimp.ChannelOps.REPLACE, ...)`: an instance method, and `ChannelOp` became `ChannelOps` |
+| Fill with the foreground | `Gimp.edit_bucket_fill(image, layer, Gimp.BucketFillType.FG, ...)` | `layer.fill(Gimp.FillType.FOREGROUND)`; `BucketFillType` became `FillType` |
+| Load a file | `Gimp.File.load(gfile)` | `Gimp.file_load(Gimp.RunMode.NONINTERACTIVE, gfile)` |
+| Set the active layer | `Gimp.image_set_active_layer(image, layer)` | does not exist |
+
+Three calls fail without raising an error:
+
+- `image.insert_layer(layer, None, 0)` with a layer that belongs to another image does
+  nothing: `image.get_layers()` stays empty. Copy it first with
+  `Gimp.Layer.new_from_drawable(layer, image)`, then insert the copy.
+- `layer.edit_bucket_fill(...)` left a layer of an `Gimp.ImageBaseType.RGB` image fully
+  transparent (the flattened image read `srgba(0,0,0,0)`), whereas
+  `layer.fill(Gimp.FillType.FOREGROUND)` filled it. The bridge does not guarantee an
+  active layer, which the bucket fill seems to need.
+- `layer.scale(width, height, local_origin)` with a negative height (`-1`, "keep the
+  ratio") does nothing; with two positive dimensions it resizes the layer.
+
 ## Limits
 
 - The Hub's script guard does not see GIMP's own save and export functions: a script can

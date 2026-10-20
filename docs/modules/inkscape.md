@@ -152,6 +152,21 @@ labels = [node.label for node in svg.descendants().filter(inkex.Layer)]
 print("LMM_RESULT: " + json.dumps({"layers": labels}))
 ```
 
+## `inkex` 1.4: traps that raise no error
+
+Observed in Inkscape 1.4.
+
+- `inkex.Circle.new(a, b)` and `inkex.Ellipse.new(a, b)` take two arguments, and the
+  second is not the centre: `inkex.Circle.new(64, 64)` gives `cx="64.0" cy="0.0" r="64.0"`,
+  a circle stuck to the top edge of the document. A third argument raises a `TypeError`.
+  Create the element, then set `cx` and `cy` explicitly.
+- `inkex.Path` has no segment methods (`M`, `L`, `C`, `Z`, `moveTo`, `lineTo`). Set the
+  `d` attribute of a `path` element instead, for example with `lxml.etree.SubElement`
+  and `.set("d", ...)`.
+- The document is kept between two scripts: what a script added is still there for the
+  next one. A script that rebuilds the whole drawing removes the children of the root
+  first (`for child in list(svg): svg.remove(child)`).
+
 ## Limits of the protection
 
 - The Hub's script guard does not see `inkex`'s own ways to write or run things. The

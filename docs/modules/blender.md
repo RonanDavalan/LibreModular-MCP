@@ -150,8 +150,33 @@ When `bpy` cannot be imported (the file was run outside Blender), `state` is `{}
 
 `screenshot` is always `null` for Blender. Producing an image would mean starting a render
 implicitly, which a request to read the state must never do, and there is no safe copy of
-the 3D view without the interface. A script can still render on purpose, into
-`LMM_WORK_DIR`.
+the 3D view without the interface. Rendering from a script has its own limit, below.
+
+## Rendering
+
+In `blender -b` (background mode) the bridge runs a script in its network thread, not in
+Blender's main thread. `bpy.ops.render.render` called that way never returns: in Blender
+4.3.2 the Hub answered `timeout` after 30 seconds and the bridge connection was closed.
+Reading and changing the scene by the data API works. Render with Blender's own command
+line (`blender -b file.blend -o <path> -f 1`, or `--python` with a script). Rendering
+through the bridge with the interface open has not been tried.
+
+For a render driven by `bpy` and judged by pixel, in the Workbench engine (measured in
+Blender 4.3.2, each point a render that came out wrong without an error):
+
+- `scene.display.shading.color_type = "OBJECT"` reads `object.color`, white by default:
+  everything renders white. Use `"MATERIAL"`.
+- `material.diffuse_color` is linear. Writing the sRGB value of `#c4553a` renders
+  `#E39C83`. Convert each channel from sRGB to linear before assigning.
+- The background of a Workbench render stays the theme grey (`srgba(64,64,64,1)`) even
+  with a world colour assigned; `background_type = "WORLD"` changes nothing, and
+  `"CUSTOM"` fails in background mode. Render on a transparent film and compose the
+  background afterwards (`magick render.png -background "#f4efe8" -alpha remove -alpha off`).
+- A bevel set after `obj.scale` is overridden by the scale. Apply the scale to the mesh
+  first (`bpy.ops.object.transform_apply(scale=True)`), then add the bevel.
+- A transparent PNG reads as blank in a viewer that composes on white: judge the render
+  on the composed image, and read the real colours with a histogram
+  (`magick render.png +dither -colors 6 -format %c histogram:info:`).
 
 ## Example
 
