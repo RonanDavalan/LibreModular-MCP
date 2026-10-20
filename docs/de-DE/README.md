@@ -75,11 +75,11 @@ des Laufs war.
 
 | Ziel | Anwendung | Modus | Ausprobierte Version | Leitfaden |
 |---|---|---|---|---|
-| `gimp` | GIMP | `tcp` | 3.0.4, ohne Oberfläche gestartet | [docs/modules/gimp.md](../modules/gimp.md) |
-| `krita` | Krita | `tcp` | 5.2.9, nicht aus Scripter gestartet | [docs/modules/krita.md](../modules/krita.md) |
-| `blender` | Blender | `tcp` | 4.3.2 | [docs/modules/blender.md](../modules/blender.md) |
-| `inkscape` | Inkscape | `cli` | 1.4 | [docs/modules/inkscape.md](../modules/inkscape.md) |
-| `libreoffice-writer`, `libreoffice-calc`, `libreoffice-impress` | LibreOffice | `uno` | 24.2.7.2 und 25.2.3.2 | [docs/modules/libreoffice.md](../modules/libreoffice.md) |
+| `gimp` | GIMP | `tcp` | 3.0.4, ohne Oberfläche gestartet | [docs/de-DE/modules/gimp.md](modules/gimp.md) |
+| `krita` | Krita | `tcp` | 5.2.9, nicht aus Scripter gestartet | [docs/de-DE/modules/krita.md](modules/krita.md) |
+| `blender` | Blender | `tcp` | 4.3.2 | [docs/de-DE/modules/blender.md](modules/blender.md) |
+| `inkscape` | Inkscape | `cli` | 1.4 | [docs/de-DE/modules/inkscape.md](modules/inkscape.md) |
+| `libreoffice-writer`, `libreoffice-calc`, `libreoffice-impress` | LibreOffice | `uno` | 24.2.7.2 und 25.2.3.2 | [docs/de-DE/modules/libreoffice.md](modules/libreoffice.md) |
 
 Die Modi: `tcp`, eine in die Anwendung geladene Brücke lauscht an einem lokalen Port; `uno`, eine eigenständige
 Brücke verbindet sich mit dem UNO-Port, an dem LibreOffice lauscht; `cli`, ein Prozess führt jedes Skript aus.
@@ -95,7 +95,7 @@ eine Aufnahme zu exportieren; ein vom Bediener geöffnetes Inkscape-Fenster ber�
 Ein Calc-Skript, das das Dokument anlegt, wenn keines offen ist, zwei Zellen schreibt und zurückgibt, was es
 geschrieben hat, und die Antwort des Hubs. Es lief wie geschrieben, ohne offenes Dokument, in LibreOffice 24.2.7.2
 (die Pakete von Ubuntu 24.04, mit einem Fenster auf einem virtuellen X-Display), über das echte `libremodular-mcp`.
-Dasselbe Beispiel steht in [docs/modules/libreoffice.md](../modules/libreoffice.md).
+Dasselbe Beispiel steht in [docs/de-DE/modules/libreoffice.md](modules/libreoffice.md).
 
 ```python
 if doc is None:
