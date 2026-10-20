@@ -9,6 +9,7 @@ the work actually done.
 - **Claude Code (Anthropic, Opus 5.5 and Sonnet 5.5)**: systems engineer and lead developer. Working framework, review and integration of the code, technical documentation. Primary user of the tool: it is the founding use case.
 - **Claude Cloud (Anthropic)**: wrote the code on branches from prompts, without access to the framework, reviewed before every merge.
 - **Gemini (Google)**: architectural advisor and synthesizer. Wrote the founding note and proposed the name.
+- **Muse Spark 1.3 (Meta)**: graphic designer. Drew the logo and the favicons.
 
 ## Heritage
 
