@@ -27,6 +27,8 @@ l'adaptateur GIMP (`bridges/adapters/gimp.py`), assemblés par `python3 scripts/
 bibliothèque standard de Python et se charge avec Python 3.9 ou plus récent. Il ne détient aucun jeton : il lit le
 fichier de jeton au démarrage.
 
+Le paquet Debian installe le même fichier sous `/usr/share/libremodular-mcp/bridges/gimp_bridge.py`. Les commandes ci-dessous nomment le fichier du pont d'un clone, puis celui du paquet.
+
 ## Démarrage du pont
 
 Le pont ne démarre jamais seul. Il n'est placé dans aucun répertoire de greffons ni de chargement automatique :
@@ -81,6 +83,12 @@ lots d'un GIMP démarré sans interface (voir « Démarrage sans interface »)
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
    ```
 
+   Depuis le paquet Debian :
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
+   ```
+
    Le pont démarre dans un fil d'exécution d'arrière-plan et la console reste utilisable. Il écrit une ligne sur le flux
    d'erreur du processus (visible quand GIMP a été lancé depuis un terminal) et, quand la console redirige ce flux, dans la
    console (non confirmé) :
@@ -109,6 +117,15 @@ LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
   -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
+```
+
+Depuis le paquet Debian :
+
+```sh
+LIBREMODULAR_BRIDGE_PORT=9301 \
+LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
+  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py').read()); serve_main_thread()"
 ```
 
 `--batch-interpreter python-fu-eval` est obligatoire : `python-eval` n'est pas un interpréteur de GIMP 3.0.4, et

@@ -17,6 +17,8 @@ El puente es el archivo generado `bridges/generated/krita_bridge.py`: el núcleo
 ensamblado por `python3 scripts/build_bridges.py`. Usa solo la biblioteca estándar de Python
 y se carga en Python 3.9 o posterior. No contiene ningún token: lee el archivo de token al iniciarse.
 
+El paquete Debian instala el mismo archivo como `/usr/share/libremodular-mcp/bridges/krita_bridge.py`. Los comandos siguientes nombran el archivo del puente de un clon y, a continuación, el del paquete.
+
 ## Iniciar el puente
 
 El puente nunca se inicia solo. No se instala nada en el directorio de complementos de Python de Krita, que puede contener extensiones del propio usuario: ni el código de este proyecto ni este procedimiento escriben allí. El operador ejecuta el archivo generado a mano, cada vez, desde el Scripter de Krita.
@@ -58,6 +60,12 @@ El puente nunca se inicia solo. No se instala nada en el directorio de complemen
 
    ```python
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
+   ```
+
+   Con el paquete Debian:
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())
    ```
 
    El puente se inicia en un hilo en segundo plano y Krita sigue siendo utilizable. Escribe una línea en el flujo de error del proceso y, cuando Scripter redirige ese flujo, en la salida de Scripter:

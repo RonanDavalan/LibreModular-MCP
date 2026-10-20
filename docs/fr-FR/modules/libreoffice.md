@@ -51,6 +51,8 @@ l'adaptateur (`bridges/adapters/uno.py`), assemblés par `python3 scripts/build_
 bibliothèque standard de Python, hormis `uno`, qu'il importe quand une requête en a besoin ; il se charge avec Python 3.9
 ou plus récent, avec ou sans `uno`. Il ne détient aucun jeton.
 
+Le paquet Debian installe le même fichier sous `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. Les commandes ci-dessous nomment le fichier du pont d'un clone, puis celui du paquet.
+
 ## La limite à connaître d'abord
 
 **Le port UNO de LibreOffice n'a aucune authentification.** Quiconque peut s'y connecter peut piloter LibreOffice : ouvrir,
@@ -101,6 +103,12 @@ Créez le jeton une fois, s'il n'existe pas encore (`libremodular-mcp init`), pu
 libremodular-launch libreoffice --bridge-file /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
+Depuis le paquet Debian :
+
+```sh
+libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py
+```
+
 Il démarre LibreOffice avec sa fenêtre, puis le pont, et rend la main. Sortie d'une exécution :
 
 ```text
@@ -122,10 +130,11 @@ Ce que le lanceur fait, et ne fait pas :
   le pont lit le fichier.
 - Les deux processus sont détachés, dans leurs propres groupes, leur entrée et leur sortie envoyées nulle part. Ils continuent
   quand le lanceur rend la main.
-- Le fichier du pont doit être un chemin absolu vers un fichier ordinaire, non un lien, vous appartenir et ne pas être
-  modifiable par le groupe ni par les autres. Un clone récent fait avec un `umask` de `002` (la valeur par défaut de
+- Le fichier du pont doit être un chemin absolu vers un fichier ordinaire, non un lien, vous appartenir ou appartenir à root, et ne
+  pas être modifiable par le groupe ni par les autres. Un clone récent fait avec un `umask` de `002` (la valeur par défaut de
   nombreux comptes Debian) donne le mode `664`, que le lanceur refuse : exécutez une fois
-  `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py`. Le répertoire qui contient le fichier n'est
+  `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py`. Le fichier installé par le paquet Debian
+  appartient à root avec le mode `644` : rien à changer. Le répertoire qui contient le fichier n'est
   pas vérifié.
 - **Il refuse de démarrer si un LibreOffice à vous tourne déjà** (un processus `soffice.bin` de votre utilisateur, lu dans
   `/proc`). Il ne se rattache jamais à une instance qui peut contenir du travail non enregistré, et ne ferme jamais une
@@ -173,6 +182,17 @@ LIBREMODULAR_UNO_PORT=2002 \
 LIBREMODULAR_BRIDGE_PORT=9304 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 /usr/bin/python3 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
+```
+
+Depuis le paquet Debian :
+
+```sh
+LD_LIBRARY_PATH=/usr/lib/libreoffice/program \
+PYTHONPATH=/usr/lib/python3/dist-packages \
+LIBREMODULAR_UNO_PORT=2002 \
+LIBREMODULAR_BRIDGE_PORT=9304 \
+LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+/usr/bin/python3 /usr/share/libremodular-mcp/bridges/uno_bridge.py
 ```
 
 Le pont écrit une ligne sur son flux d'erreur, `LMM bridge listening on 127.0.0.1:9304`, et tourne jusqu'à l'arrêt du

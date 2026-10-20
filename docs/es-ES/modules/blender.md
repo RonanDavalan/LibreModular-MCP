@@ -17,6 +17,8 @@ El puente es el archivo generado `bridges/generated/blender_bridge.py`: el núcl
 ensamblado por `python3 scripts/build_bridges.py`. Usa solo la biblioteca estándar de Python
 y se carga en Python 3.9 o posterior. No guarda ningún token: lee el archivo de token al iniciarse.
 
+El paquete Debian instala el mismo archivo como `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. Los comandos siguientes nombran el archivo del puente de un clon y, a continuación, el del paquete.
+
 ## Iniciar el puente
 
 El puente nunca se inicia solo: el operador lo inicia a mano, cada vez.
@@ -52,11 +54,25 @@ El puente nunca se inicia solo: el operador lo inicia a mano, cada vez.
    blender --python /home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
    ```
 
+   Con el paquete Debian:
+
+   ```sh
+   LIBREMODULAR_BRIDGE_PORT=9303 \
+   LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+   blender --python /usr/share/libremodular-mcp/bridges/blender_bridge.py
+   ```
+
    o, en un Blender que ya está abierto, ejecútelo desde la consola de Python del
    espacio de trabajo *Scripting*:
 
    ```python
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
+   ```
+
+   Con el paquete Debian:
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
    ```
 
    Las variables también pueden definirse en esa consola, antes de la línea anterior, mediante
@@ -82,6 +98,16 @@ un archivo de arranque que después ceda el hilo principal al puente llamando a 
 import runpy
 
 runpy.run_path("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py")[
+    "serve_main_thread"
+]()
+```
+
+Con el paquete Debian:
+
+```python
+import runpy
+
+runpy.run_path("/usr/share/libremodular-mcp/bridges/blender_bridge.py")[
     "serve_main_thread"
 ]()
 ```

@@ -8,7 +8,18 @@ Un servidor MCP que permite a un modelo de lenguaje manejar aplicaciones de escr
 
 ## Inicio rápido
 
-Compile el Hub, deje que cree su configuración y su token, y declare después el Hub en su cliente MCP.
+Instale el Hub, deje que cree su configuración y su token, y declare después el Hub en su cliente MCP.
+
+En Debian 12 o 13 y en Ubuntu 22.04, 24.04 o 26.04 (amd64), instale el paquete Debian; su instalación y su desinstalación se han validado en un contenedor. Descargue `libremodular-mcp_*_amd64.deb` de la [página de versiones](https://github.com/RonanDavalan/LibreModular-MCP/releases) y ejecute después:
+
+```sh
+sudo apt install ./libremodular-mcp_*_amd64.deb
+libremodular-mcp init
+```
+
+El paquete instala también las guías en `/usr/share/doc/libremodular-mcp/` y las páginas de manual (`man libremodular-mcp`, `man libremodular-launch`) en inglés, francés, alemán y español.
+
+Para compilar en su lugar el Hub desde las fuentes:
 
 ```sh
 cd /home/alice/LibreModular-MCP
@@ -16,7 +27,7 @@ cargo build --release --locked
 target/release/libremodular-mcp init
 ```
 
-La entrada para el cliente MCP ejecuta el binario compilado con el argumento `serve`:
+La entrada para el cliente MCP ejecuta el binario con el argumento `serve`:
 
 ```json
 {
@@ -29,7 +40,7 @@ La entrada para el cliente MCP ejecuta el binario compilado con el argumento `se
 }
 ```
 
-Qué adaptar: `/home/alice/LibreModular-MCP/` es la ruta absoluta de su clon. En qué archivo va esta entrada y cómo
+Qué adaptar: `/home/alice/LibreModular-MCP/` es la ruta absoluta de su clon; con el paquete Debian, el comando es `/usr/bin/libremodular-mcp`. En qué archivo va esta entrada y cómo
 se llaman sus claves depende de su cliente: la forma de arriba es habitual, y el Hub se probó con un cliente
 escrito para sus pruebas (líneas JSON-RPC por su entrada y su salida estándar), no con un cliente MCP con nombre.
 El Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a iniciarse.
@@ -65,8 +76,7 @@ aplicaciones configuradas, cómo se llega a cada una y si está conectada, sin c
 
 ## Aplicaciones
 
-Solo Linux: la plataforma prevista es Debian 13, y el ejemplo de Calc de abajo también se ejecutó en Ubuntu 24.04.
-Todavía no se publica ningún paquete; el Hub se compila desde las fuentes (Inicio rápido). Las versiones son las
+Solo Linux: la plataforma prevista es Debian 13, y el ejemplo de Calc de abajo también se ejecutó en Ubuntu 24.04. El Hub se instala desde el paquete Debian (Debian 12 y 13, Ubuntu 22.04, 24.04 y 26.04) o se compila desde las fuentes (Inicio rápido). Las versiones son las
 que las guías dan como probadas; la guía de cada aplicación dice en qué condiciones y qué no formó parte de la
 prueba.
 
@@ -153,9 +163,9 @@ busca de cualquier otra (`cargo test --locked --test invariants`).
 - En los modos `tcp` y `uno`, un script que entra en bucle mantiene ocupada la aplicación (en LibreOffice, su
   puente) hasta que se cierra: el Hub responde `timeout`, después `busy`, y no lo detiene. Solo el modo `cli` mata
   un script que supera su tiempo.
-- `libremodular-launch` rechaza un archivo de puente en el que el grupo u otros puedan escribir. Un clon hecho con
+- `libremodular-launch` rechaza un archivo de puente en el que el grupo u otros puedan escribir, o que pertenezca a otro usuario que no sea usted ni root. Un clon hecho con
   una `umask` de `002` da el modo 664: ejecute `chmod 600` en el archivo del puente una vez. Los modos 600 y 644 se
-  aceptan.
+  aceptan; los archivos de puente del paquete Debian pertenecen a root con el modo 644.
 
 ## Pruebas
 

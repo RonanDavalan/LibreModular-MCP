@@ -18,6 +18,8 @@ El puente es el archivo generado `bridges/generated/gimp_bridge.py`: el núcleo 
 por `python3 scripts/build_bridges.py`. Usa solo la biblioteca estándar de Python y
 se carga en Python 3.9 o posterior. No guarda ningún token: lee el archivo de token al iniciarse.
 
+El paquete Debian instala el mismo archivo como `/usr/share/libremodular-mcp/bridges/gimp_bridge.py`. Los comandos siguientes nombran el archivo del puente de un clon y, a continuación, el del paquete.
+
 ## Iniciar el puente
 
 El puente nunca se inicia por sí solo. No se coloca en un directorio de complemento ni de carga automática: el operador lo inicia a mano, cada vez, en la consola de Python de GIMP, o desde el comando por lotes de un GIMP iniciado sin su interfaz (véase «Inicio sin interfaz»).
@@ -66,6 +68,12 @@ El puente nunca se inicia por sí solo. No se coloca en un directorio de complem
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
    ```
 
+   Con el paquete Debian:
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
+   ```
+
    El puente se inicia en un hilo en segundo plano y la consola sigue siendo utilizable. Escribe una línea en el flujo de error del proceso (visible cuando GIMP se inició desde un terminal) y, cuando la consola redirige ese flujo, en la consola (no confirmado):
 
    ```text
@@ -85,6 +93,15 @@ LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
   -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
+```
+
+Con el paquete Debian:
+
+```sh
+LIBREMODULAR_BRIDGE_PORT=9301 \
+LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
+  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py').read()); serve_main_thread()"
 ```
 
 `--batch-interpreter python-fu-eval` es obligatorio: `python-eval` no es un intérprete de GIMP 3.0.4 y `--batch-interpreter-args` no existe. `serve_main_thread()` hace girar el bucle principal de GLib en el hilo que lo llamó, para que los scripts que el puente pone en cola se ejecuten allí. Vuelve cuando el puente se detiene (`stop()`), tras `seconds` si usted pasa `serve_main_thread(seconds=600)`, o con Ctrl+C; entonces termina el comando por lotes y con él el puente. Un comando por lotes que no lo llama, o que termina su propio bucle, cierra el puerto 9301 en cuanto vuelve. En las ejecuciones anteriores se pasó además `--no-data --no-fonts` y se usó un directorio de perfil propio, para no tocar el perfil del operador.

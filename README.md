@@ -8,7 +8,18 @@ An MCP server that lets a language model drive desktop applications by running s
 
 ## Quick start
 
-Build the Hub, let it create its configuration and its token, then declare it in your MCP client.
+Install the Hub, let it create its configuration and its token, then declare it in your MCP client.
+
+On Debian 12 or 13 and on Ubuntu 22.04, 24.04 or 26.04 (amd64), install the Debian package; its installation and its removal were validated in a container. Download `libremodular-mcp_*_amd64.deb` from the [releases page](https://github.com/RonanDavalan/LibreModular-MCP/releases), then:
+
+```sh
+sudo apt install ./libremodular-mcp_*_amd64.deb
+libremodular-mcp init
+```
+
+The package also installs the guides in `/usr/share/doc/libremodular-mcp/` and the manual pages (`man libremodular-mcp`, `man libremodular-launch`) in English, French, German and Spanish.
+
+To build the Hub from the sources instead:
 
 ```sh
 cd /home/alice/LibreModular-MCP
@@ -16,7 +27,7 @@ cargo build --release --locked
 target/release/libremodular-mcp init
 ```
 
-The entry for the MCP client runs the compiled binary with the argument `serve`:
+The entry for the MCP client runs the binary with the argument `serve`:
 
 ```json
 {
@@ -29,7 +40,7 @@ The entry for the MCP client runs the compiled binary with the argument `serve`:
 }
 ```
 
-What to adapt: `/home/alice/LibreModular-MCP/` is the absolute path of your clone. Which file this
+What to adapt: `/home/alice/LibreModular-MCP/` is the absolute path of your clone; with the Debian package, the command is `/usr/bin/libremodular-mcp`. Which file this
 entry goes into, and what its keys are called, depends on your client: the shape above is a common
 one, and the Hub was tried with a client written for its tests (JSON-RPC lines on its standard
 input and output), not with a named MCP client. The Hub needs the variable `XDG_RUNTIME_DIR`,
@@ -69,8 +80,7 @@ whether it is connected, without contacting any application.
 
 ## Applications
 
-Linux only: the target platform is Debian 13, and the Calc example below also ran on Ubuntu 24.04. No
-package is published yet; the Hub is built from the sources (Quick start). The versions are those the
+Linux only: the target platform is Debian 13, and the Calc example below also ran on Ubuntu 24.04. The Hub installs from the Debian package (Debian 12 and 13, Ubuntu 22.04, 24.04 and 26.04) or builds from the sources (Quick start). The versions are those the
 guides report as tried; the guide of each application says under which conditions, and what was not
 part of the run.
 
@@ -158,9 +168,9 @@ for any other (`cargo test --locked --test invariants`).
 - In the `tcp` and `uno` modes, a script that loops keeps the application (for LibreOffice, its
   bridge) busy until it is closed: the Hub answers `timeout`, then `busy`, and does not stop it.
   Only the `cli` mode kills a script that runs past its time.
-- `libremodular-launch` refuses a bridge file that the group or others can write. A clone made
+- `libremodular-launch` refuses a bridge file that the group or others can write, or that belongs to a user other than you and root. A clone made
   with a `umask` of `002` gives mode 664: run `chmod 600` on the bridge file once. Mode 600 and
-  mode 644 are accepted.
+  mode 644 are accepted; the bridge files of the Debian package belong to root with mode 644.
 
 ## Tests
 

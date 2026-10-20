@@ -28,6 +28,8 @@ gefolgt vom Krita-Adapter (`bridges/adapters/krita.py`), zusammengesetzt von `py
 nutzt nur die Standardbibliothek von Python und lässt sich ab Python 3.9 laden. Sie hält kein Token, sondern liest die
 Token-Datei beim Start.
 
+Das Debian-Paket installiert dieselbe Datei als `/usr/share/libremodular-mcp/bridges/krita_bridge.py`. Die folgenden Befehle nennen die Brückendatei eines Klons und danach die des Pakets.
+
 ## Die Brücke starten
 
 Die Brücke startet nie von selbst. Im Verzeichnis für Kritas Python-Plug-ins, das eigene Erweiterungen des Benutzers
@@ -73,6 +75,12 @@ Bediener führt die erzeugte Datei jedes Mal von Hand aus, in Kritas Scripter.
 
    ```python
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
+   ```
+
+   Mit dem Debian-Paket:
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())
    ```
 
    Die Brücke startet in einem Hintergrund-Thread, und Krita bleibt bedienbar. Sie schreibt eine Zeile in den

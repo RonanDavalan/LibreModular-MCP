@@ -30,6 +30,8 @@ The bridge is the generated file `bridges/generated/gimp_bridge.py`: the common 
 by `python3 scripts/build_bridges.py`. It uses the Python standard library only and
 loads on Python 3.9 or later. It holds no token: it reads the token file at start.
 
+The Debian package installs the same file as `/usr/share/libremodular-mcp/bridges/gimp_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
+
 ## Starting the bridge
 
 The bridge never starts on its own. It is not placed in a plug-in or auto-load
@@ -86,6 +88,12 @@ interface").
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
    ```
 
+   From the Debian package:
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
+   ```
+
    The bridge starts in a background thread and the console stays usable. It writes one
    line on the error stream of the process (visible when GIMP was started from a
    terminal) and, when the console redirects that stream, in the console (unconfirmed):
@@ -116,6 +124,15 @@ LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
   -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
+```
+
+From the Debian package:
+
+```sh
+LIBREMODULAR_BRIDGE_PORT=9301 \
+LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
+  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py').read()); serve_main_thread()"
 ```
 
 `--batch-interpreter python-fu-eval` is required: `python-eval` is not an interpreter of

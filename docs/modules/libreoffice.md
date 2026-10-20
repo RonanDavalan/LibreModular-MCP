@@ -60,6 +60,8 @@ The bridge is the generated file `bridges/generated/uno_bridge.py`: the common c
 `uno`, which it imports when a request needs it; it loads on Python 3.9 or later, with or
 without `uno`. It holds no token.
 
+The Debian package installs the same file as `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
+
 ## The limit to know first
 
 **LibreOffice's UNO port has no authentication.** Whoever can connect to it can drive
@@ -111,6 +113,12 @@ Create the token once, if it does not exist yet (`libremodular-mcp init`), then:
 libremodular-launch libreoffice --bridge-file /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
+From the Debian package:
+
+```sh
+libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py
+```
+
 It starts LibreOffice with its window, then the bridge, and returns. Output of a run:
 
 ```text
@@ -134,10 +142,11 @@ What the launcher does, and does not do:
   reads the file.
 - Both processes are detached, in groups of their own, with their input and output sent
   nowhere. They go on when the launcher returns.
-- The bridge file must be an absolute path to a regular file, not a link, owned by you and
-  not writable by the group or others. A fresh clone made with a `umask` of `002` (the default
+- The bridge file must be an absolute path to a regular file, not a link, owned by you or by
+  root and not writable by the group or others. A fresh clone made with a `umask` of `002` (the default
   of many Debian accounts) gives mode `664`, which the launcher refuses: run
-  `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py` once. The directory
+  `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py` once. The file the
+  Debian package installs belongs to root with mode `644`: nothing to change. The directory
   that holds the file is not checked.
 - **It refuses to start if a LibreOffice of yours is already running** (a `soffice.bin`
   process of your user, read from `/proc`). It never attaches to an instance that may hold
@@ -187,6 +196,17 @@ LIBREMODULAR_UNO_PORT=2002 \
 LIBREMODULAR_BRIDGE_PORT=9304 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 /usr/bin/python3 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
+```
+
+From the Debian package:
+
+```sh
+LD_LIBRARY_PATH=/usr/lib/libreoffice/program \
+PYTHONPATH=/usr/lib/python3/dist-packages \
+LIBREMODULAR_UNO_PORT=2002 \
+LIBREMODULAR_BRIDGE_PORT=9304 \
+LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+/usr/bin/python3 /usr/share/libremodular-mcp/bridges/uno_bridge.py
 ```
 
 The bridge writes one line on its error stream, `LMM bridge listening on 127.0.0.1:9304`,

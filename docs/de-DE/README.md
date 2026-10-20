@@ -8,7 +8,18 @@ Ein MCP-Server, mit dem ein Sprachmodell Desktop-Anwendungen steuern kann, indem
 
 ## Schnellstart
 
-Bauen Sie den Hub, lassen Sie ihn seine Konfiguration und sein Token anlegen und tragen Sie ihn dann in Ihrem MCP-Client ein.
+Installieren Sie den Hub, lassen Sie ihn seine Konfiguration und sein Token anlegen und tragen Sie ihn dann in Ihrem MCP-Client ein.
+
+Unter Debian 12 oder 13 und unter Ubuntu 22.04, 24.04 oder 26.04 (amd64) installieren Sie das Debian-Paket; seine Installation und seine Entfernung wurden in einem Container validiert. Laden Sie `libremodular-mcp_*_amd64.deb` von der [Seite der Releases](https://github.com/RonanDavalan/LibreModular-MCP/releases) herunter und führen Sie dann aus:
+
+```sh
+sudo apt install ./libremodular-mcp_*_amd64.deb
+libremodular-mcp init
+```
+
+Das Paket installiert außerdem die Leitfäden in `/usr/share/doc/libremodular-mcp/` und die Handbuchseiten (`man libremodular-mcp`, `man libremodular-launch`) auf Englisch, Französisch, Deutsch und Spanisch.
+
+Um den Hub stattdessen aus den Quellen zu bauen:
 
 ```sh
 cd /home/alice/LibreModular-MCP
@@ -16,7 +27,7 @@ cargo build --release --locked
 target/release/libremodular-mcp init
 ```
 
-Der Eintrag für den MCP-Client startet das gebaute Programm mit dem Argument `serve`:
+Der Eintrag für den MCP-Client startet das Programm mit dem Argument `serve`:
 
 ```json
 {
@@ -29,7 +40,7 @@ Der Eintrag für den MCP-Client startet das gebaute Programm mit dem Argument `s
 }
 ```
 
-Was anzupassen ist: `/home/alice/LibreModular-MCP/` ist der absolute Pfad Ihres Klons. In welche Datei dieser
+Was anzupassen ist: `/home/alice/LibreModular-MCP/` ist der absolute Pfad Ihres Klons; beim Debian-Paket lautet der Befehl `/usr/bin/libremodular-mcp`. In welche Datei dieser
 Eintrag gehört und wie seine Schlüssel heißen, hängt von Ihrem Client ab: Die obige Form ist verbreitet, und der
 Hub wurde mit einem für seine Tests geschriebenen Client (JSON-RPC-Zeilen auf Standardeingabe und
 Standardausgabe) ausprobiert, nicht mit einem benannten MCP-Client. Der Hub braucht die Variable
@@ -68,8 +79,7 @@ kontaktieren.
 
 ## Anwendungen
 
-Nur Linux: Die Zielplattform ist Debian 13, und das Calc-Beispiel unten lief auch unter Ubuntu 24.04. Noch ist kein
-Paket veröffentlicht; der Hub wird aus den Quellen gebaut (Schnellstart). Die Versionen sind die, die die
+Nur Linux: Die Zielplattform ist Debian 13, und das Calc-Beispiel unten lief auch unter Ubuntu 24.04. Der Hub wird aus dem Debian-Paket installiert (Debian 12 und 13, Ubuntu 22.04, 24.04 und 26.04) oder aus den Quellen gebaut (Schnellstart). Die Versionen sind die, die die
 Leitfäden als ausprobiert nennen; der Leitfaden jeder Anwendung sagt, unter welchen Bedingungen und was nicht Teil
 des Laufs war.
 
@@ -156,9 +166,9 @@ jeder anderen (`cargo test --locked --test invariants`).
 - In den Modi `tcp` und `uno` hält ein Skript, das in einer Schleife läuft, die Anwendung (bei LibreOffice ihre
   Brücke) beschäftigt, bis sie geschlossen wird: Der Hub antwortet `timeout`, dann `busy`, und hält es nicht an. Nur
   der Modus `cli` beendet ein Skript, das seine Zeit überschreitet.
-- `libremodular-launch` lehnt eine Brückendatei ab, die die Gruppe oder andere beschreiben können. Ein Klon mit
+- `libremodular-launch` lehnt eine Brückendatei ab, die die Gruppe oder andere beschreiben können oder die einem anderen Benutzer als Ihnen und root gehört. Ein Klon mit
   einer `umask` von `002` ergibt Modus 664: Führen Sie einmal `chmod 600` auf der Brückendatei aus. Modus 600 und
-  Modus 644 werden akzeptiert.
+  Modus 644 werden akzeptiert; die Brückendateien des Debian-Pakets gehören root mit dem Modus 644.
 
 ## Tests
 

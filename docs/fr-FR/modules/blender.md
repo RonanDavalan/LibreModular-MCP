@@ -30,6 +30,8 @@ l'adaptateur Blender (`bridges/adapters/blender.py`), assemblés par `python3 sc
 la bibliothèque standard de Python et se charge avec Python 3.9 ou plus récent. Il ne détient aucun jeton : il lit le
 fichier de jeton au démarrage.
 
+Le paquet Debian installe le même fichier sous `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. Les commandes ci-dessous nomment le fichier du pont d'un clone, puis celui du paquet.
+
 ## Démarrage du pont
 
 Le pont ne démarre jamais seul : l'opérateur le démarre à la main, à chaque fois.
@@ -65,10 +67,24 @@ Le pont ne démarre jamais seul : l'opérateur le démarre à la main, à chaqu
    blender --python /home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
    ```
 
+   Depuis le paquet Debian :
+
+   ```sh
+   LIBREMODULAR_BRIDGE_PORT=9303 \
+   LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+   blender --python /usr/share/libremodular-mcp/bridges/blender_bridge.py
+   ```
+
    ou, dans un Blender déjà ouvert, exécutez-le depuis la console Python de l'espace de travail *Scripting* :
 
    ```python
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
+   ```
+
+   Depuis le paquet Debian :
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
    ```
 
    Les variables peuvent aussi être définies dans cette console, avant la ligne ci-dessus, par `os.environ` : le pont les
@@ -94,6 +110,16 @@ fil principal au pont en appelant `serve_main_thread()` :
 import runpy
 
 runpy.run_path("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py")[
+    "serve_main_thread"
+]()
+```
+
+Depuis le paquet Debian :
+
+```python
+import runpy
+
+runpy.run_path("/usr/share/libremodular-mcp/bridges/blender_bridge.py")[
     "serve_main_thread"
 ]()
 ```

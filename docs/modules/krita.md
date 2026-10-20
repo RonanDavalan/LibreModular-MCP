@@ -29,6 +29,8 @@ The bridge is the generated file `bridges/generated/krita_bridge.py`: the common
 assembled by `python3 scripts/build_bridges.py`. It uses the Python standard library only
 and loads on Python 3.9 or later. It holds no token: it reads the token file at start.
 
+The Debian package installs the same file as `/usr/share/libremodular-mcp/bridges/krita_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
+
 ## Starting the bridge
 
 The bridge never starts on its own. Nothing is installed in Krita's Python plug-in
@@ -75,6 +77,12 @@ Krita's Scripter.
 
    ```python
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
+   ```
+
+   From the Debian package:
+
+   ```python
+   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())
    ```
 
    The bridge starts in a background thread and Krita stays usable. It writes one line on
