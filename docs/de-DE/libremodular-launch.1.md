@@ -52,7 +52,10 @@ enden mit dem Exit-Code 2.
 *$XDG_RUNTIME_DIR/libremodular-mcp/launch/libreoffice.pids*
 :   Die Prozesse des letzten Starts, Modus 600.
 
-*$XDG_CONFIG_HOME/libremodular-mcp/config.toml*, *$XDG_CONFIG_HOME/libremodular-mcp/token*
+*$XDG_CONFIG_HOME/libremodular-mcp/config.toml*
+:   Von **libremodular-mcp init**(1) angelegt.
+
+*$XDG_CONFIG_HOME/libremodular-mcp/token*
 :   Von **libremodular-mcp init**(1) angelegt.
 
 # EXIT-CODES

@@ -51,7 +51,10 @@ The other applications have no launcher: start their bridge by hand, as their gu
 *$XDG_RUNTIME_DIR/libremodular-mcp/launch/libreoffice.pids*
 :   The processes of the last launch, mode 600.
 
-*$XDG_CONFIG_HOME/libremodular-mcp/config.toml*, *$XDG_CONFIG_HOME/libremodular-mcp/token*
+*$XDG_CONFIG_HOME/libremodular-mcp/config.toml*
+:   Created by **libremodular-mcp init**(1).
+
+*$XDG_CONFIG_HOME/libremodular-mcp/token*
 :   Created by **libremodular-mcp init**(1).
 
 # EXIT STATUS

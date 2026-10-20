@@ -52,8 +52,11 @@ avec le code 2.
 *$XDG_RUNTIME_DIR/libremodular-mcp/launch/libreoffice.pids*
 :   Les processus du dernier lancement, mode 600.
 
-*$XDG_CONFIG_HOME/libremodular-mcp/config.toml*, *$XDG_CONFIG_HOME/libremodular-mcp/token*
-:   Créés par **libremodular-mcp init**(1).
+*$XDG_CONFIG_HOME/libremodular-mcp/config.toml*
+:   Créé par **libremodular-mcp init**(1).
+
+*$XDG_CONFIG_HOME/libremodular-mcp/token*
+:   Créé par **libremodular-mcp init**(1).
 
 # CODES DE SORTIE
 
