@@ -11,10 +11,20 @@ import json
 import queue
 import sys
 import threading
+import time
 import types
 import unittest
 
-from bridge_support import TINY_PNG, Client, PrivateDir, load_adapter, load_core, running
+from bridge_support import (
+    TINY_PNG,
+    Client,
+    PrivateDir,
+    defective_adapter,
+    execute,
+    load_adapter,
+    load_core,
+    running,
+)
 
 ADAPTER = load_adapter("gimp")
 CORE = load_core()
@@ -143,6 +153,37 @@ class FakeGLib(types.ModuleType):
         self.pending.put(None)
 
 
+class FakeMainContext:
+    def __init__(self, glib):
+        self.glib = glib
+
+    def iteration(self, may_block):
+        try:
+            callback = self.glib.pending.get_nowait()
+        except queue.Empty:
+            return False
+        while callback():
+            pass
+        return True
+
+    def pending(self):
+        return not self.glib.pending.empty()
+
+
+class FakeServedGLib(types.ModuleType):
+    """Une boucle principale que personne ne fait tourner : seul le fil qui appelle `iteration` exécute
+    les rappels de `idle_add`, comme le fil principal d'un greffon lancé par `-b`."""
+
+    def __init__(self):
+        super().__init__("GLib")
+        self.pending = queue.Queue()
+        self.MainContext = types.SimpleNamespace(default=lambda: FakeMainContext(self))
+
+    def idle_add(self, callback):
+        self.pending.put(callback)
+        return 1
+
+
 @contextlib.contextmanager
 def gi_modules(gimp=None, gio=None, glib=None, absent=False):
     """Installe un faux paquet `gi`, ou fait échouer `import gi` quand `absent`."""
@@ -169,6 +210,49 @@ def gi_modules(gimp=None, gio=None, glib=None, absent=False):
         for name in names:
             sys.modules.pop(name, None)
         sys.modules.update(saved)
+
+
+def check_background_calls_run_in_the_serving_thread(adapter_module):
+    """Sous `-b` le fil principal cède la main par `serve_main_thread` : un appel venu du fil du pont doit
+    s'exécuter dans le fil qui sert, et un appel encore en file à l'arrêt ne doit pas rester sans réponse."""
+    glib = FakeServedGLib()
+    with gi_modules(gimp=fake_gimp(), glib=glib):
+        adapter = adapter_module.GimpAdapter()
+        stop, serving = threading.Event(), threading.Event()
+        ran_in = {}
+
+        def call():
+            serving.wait(timeout=3.0)
+            ran_in["thread"] = adapter.run_on_main(lambda: threading.current_thread())
+            stop.set()
+
+        caller = threading.Thread(target=call, name="bridge-side", daemon=True)
+        caller.start()
+        deadline = time.monotonic() + 3.0
+
+        def finished():
+            serving.set()
+            return stop.is_set() or time.monotonic() > deadline
+
+        adapter.serve_main_thread(finished)
+        ran_while_serving = stop.is_set()
+        caller.join(timeout=1.0)
+        late = threading.Thread(
+            target=lambda: ran_in.setdefault("late", adapter.run_on_main(lambda: 7)), daemon=True
+        )
+        late.start()
+        while glib.pending.empty() and late.is_alive():
+            time.sleep(0.01)
+        adapter.serve_main_thread(lambda: True)
+        late.join(timeout=1.0)
+    problems = []
+    if not ran_while_serving:
+        problems.append("the call was not run while the service was turning")
+    if ran_in.get("thread") is not threading.current_thread():
+        problems.append("the call did not run in the thread that serves: %r" % ran_in.get("thread"))
+    if ran_in.get("late") != 7:
+        problems.append("a call still queued when the service ended was never run")
+    return problems
 
 
 EXPECTED_STATE = {
@@ -293,6 +377,38 @@ class WithGimpTests(unittest.TestCase):
         self.assertTrue(finished, "run_on_main did not return")
         self.assertIs(outcome["value"], thread, "the call ran in the calling thread")
 
+    def test_in_background_the_serving_thread_runs_the_calls(self):
+        self.assertEqual(check_background_calls_run_in_the_serving_thread(ADAPTER), [])
+
+    def test_counter_proof_an_adapter_that_never_turns_the_loop_runs_nothing(self):
+        defective = defective_adapter("gimp", "if not context.iteration(False):", "if not True:")
+        self.assertNotEqual(check_background_calls_run_in_the_serving_thread(defective), [])
+
+    def test_the_core_hands_the_main_thread_to_the_adapter_until_the_bridge_stops(self):
+        glib = FakeServedGLib()
+        answers = {}
+        with gi_modules(gimp=fake_gimp(), glib=glib):
+            with running(CORE, adapter=ADAPTER.GimpAdapter()) as bridge:
+
+                def ask():
+                    client = Client(bridge.port)
+                    client.hello()
+                    script = "import threading\nresult = threading.current_thread().name"
+                    answers["execute"] = client.request(execute(script))
+                    client.close()
+                    CORE.stop()
+
+                asker = threading.Thread(target=ask, daemon=True)
+                asker.start()
+                CORE.serve_main_thread(seconds=10)
+                asker.join(timeout=2.0)
+        self.assertTrue(answers["execute"]["ok"], answers)
+        self.assertEqual(answers["execute"]["result"], threading.current_thread().name)
+
+    def test_serve_main_thread_without_a_bridge_says_so(self):
+        with self.assertRaises(CORE.BridgeError):
+            CORE.serve_main_thread(seconds=0.1)
+
     def test_outside_gimp_nothing_asks_gimp_even_when_gi_loads(self):
         gimp = fake_gimp()
         gimp.version = lambda: None
@@ -314,6 +430,9 @@ class WithoutGimpTests(unittest.TestCase):
             self.assertEqual(adapter.namespace()["images"](), [])
             self.assertIs(adapter.screenshot("/home/alice/unused.png"), False)
             self.assertEqual(adapter.run_on_main(lambda: 42), 42)
+            ticks = []
+            adapter.serve_main_thread(lambda: ticks.append(1) or len(ticks) > 2)
+            self.assertEqual(len(ticks), 3)
 
     def test_without_gi_the_bridge_answers_with_a_warning(self):
         with gi_modules(absent=True):

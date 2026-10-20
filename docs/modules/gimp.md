@@ -4,12 +4,16 @@
 Python console.** The bridge was written from the public GIMP 3.0 API (GObject
 Introspection: `gi.repository.Gimp`, `Gio`, `GLib`). It ran in GIMP 3.0.4 (Debian 13
 package) started with `gimp-3.0 --new-instance --no-interface --batch-interpreter
-python-fu-eval`, with a Python main loop running after the bridge started. In that run,
-driven by the Hub over MCP, `get_state("hub")` listed `gimp` as connected with version
-`3.0.4`; a script created an image and a layer; `get_state("gimp")` returned the keys
-below and a PNG capture of 200 by 100 pixels in mode 600; a script that failed returned
-its traceback with the right line of the script. Statements marked unconfirmed below
-were not part of that run.
+python-fu-eval -b`, the batch command running the bridge file and then calling
+`serve_main_thread()` (see "Starting the bridge"). In that run, driven by the Hub over
+MCP, `get_state("hub")` listed `gimp` as connected with version `3.0.4`; a script created
+an image and a layer, filled the layer with `layer.fill(Gimp.FillType.FOREGROUND)` and
+exported the image into `LMM_WORK_DIR` (`status: ok`, a PNG of 128 by 128 pixels), a
+second script did the same afterwards and the bridge was still connected;
+`get_state("gimp")` returned the keys below and a PNG capture of 200 by 100 pixels in
+mode 600; a script that failed returned its traceback with the right line of the script.
+The same command with the interface on a virtual screen (`xvfb-run`) gave the same
+results. Statements marked unconfirmed below were not part of those runs.
 
 ## What it does
 
@@ -29,7 +33,9 @@ loads on Python 3.9 or later. It holds no token: it reads the token file at star
 ## Starting the bridge
 
 The bridge never starts on its own. It is not placed in a plug-in or auto-load
-directory: the operator starts it by hand, each time, in GIMP's Python console.
+directory: the operator starts it by hand, each time, in GIMP's Python console, or from
+the batch command of a GIMP started without its interface (see "Started without the
+interface").
 
 1. Create the token once, if it does not exist yet:
 
@@ -97,6 +103,30 @@ directory: the operator starts it by hand, each time, in GIMP's Python console.
    process; the bridge lives in that process and stops when the console is closed
    (unconfirmed). To stop the bridge without closing the console, run `stop()` in it.
 
+### Started without the interface
+
+With `--no-interface`, GIMP has no event loop and the batch command is the whole life of
+the process that runs the bridge: when the command ends, that process, and the bridge
+with it, ends (GIMP itself stays up). Run the bridge file in the batch command and give
+the main thread to the bridge by calling `serve_main_thread()`, which the bridge file
+defines:
+
+```sh
+LIBREMODULAR_BRIDGE_PORT=9301 \
+LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
+gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
+  -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
+```
+
+`--batch-interpreter python-fu-eval` is required: `python-eval` is not an interpreter of
+GIMP 3.0.4, and `--batch-interpreter-args` does not exist. `serve_main_thread()` turns
+GLib's main loop in the thread that called it, so that the scripts the bridge queues
+run there. It returns when the bridge stops (`stop()`), after `seconds` if you pass
+`serve_main_thread(seconds=600)`, or on Ctrl+C; the batch command then ends and so does
+the bridge. A batch command that does not call it, or that ends its own loop, closes
+port 9301 as soon as it returns. The runs above also passed `--no-data --no-fonts` and
+used a profile directory of their own, so that the operator's profile was not touched.
+
 To check the connection from the model's side, call `get_state` with the target `hub`:
 GIMP is listed with `connected: true` and the version GIMP reported.
 
@@ -118,7 +148,8 @@ Each script runs in a fresh namespace that holds:
 - Files created while the script runs are private (creation mask `077`).
 - The bridge hands each script to GIMP's main thread through `GLib.idle_add` and waits for
   it: GIMP's API is not meant to be called from another thread. This worked in GIMP 3.0.4
-  with a running main loop; in the interactive console it has not been tried.
+  without the interface, with the main thread inside `serve_main_thread()`; in the
+  interactive console it has not been tried.
   Outside GIMP, even on a machine where `gi` and the GIMP typelib are installed, the call
   is made directly in the bridge's own thread, because no main loop would ever run it.
 - A script that never returns blocks GIMP's main thread; the Hub answers `timeout`, then

@@ -8,8 +8,10 @@ interface, pas dans la console interactive.
 """
 
 import threading
+import time
 
 DEFAULT_PORT = 9301
+_POLL_INTERVAL = 0.01
 
 
 def _gimp():
@@ -131,6 +133,24 @@ class GimpAdapter:
                 names[name] = module
         names["images"] = images
         return names
+
+    def serve_main_thread(self, finished):
+        """Fait tourner la boucle principale de GLib dans le fil appelant jusqu'à ce que `finished()` soit
+        vrai. Sous `-b` GIMP n'a aucune interface qui la fasse tourner et le processus du greffon meurt avec
+        la commande : le fichier de démarrage appelle `serve_main_thread()` du cœur, qui exécute alors les
+        appels que le pont met en file par `GLib.idle_add`."""
+        GLib = _glib()
+        if GLib is None or not _inside_gimp():
+            while not finished():
+                time.sleep(_POLL_INTERVAL)
+            return
+        context = GLib.MainContext.default()
+        while not finished():
+            if not context.iteration(False):
+                time.sleep(_POLL_INTERVAL)
+        # Un appel mis en file entre la dernière itération et l'arrêt ne doit pas attendre sans fin.
+        while context.pending():
+            context.iteration(False)
 
     def run_on_main(self, function):
         """Exécute `function` dans le fil principal de GIMP et rend sa valeur ou son exception. Sans GLib,
