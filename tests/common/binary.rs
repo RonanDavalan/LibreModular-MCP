@@ -8,7 +8,6 @@
 
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Output, Stdio};
 
@@ -29,7 +28,7 @@ pub fn layout(base: &Path) -> Layout {
     let make = |name: &str| {
         let path = base.join(name);
         fs::create_dir_all(&path).expect("directory");
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).expect("mode");
+        super::make_private(&path);
         path
     };
     Layout {
@@ -44,7 +43,7 @@ pub fn layout(base: &Path) -> Layout {
 pub fn prepare(layout: &Layout, token: &str, config_text: &str) {
     let dir = layout.config.join("libremodular-mcp");
     fs::create_dir_all(&dir).expect("config dir");
-    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).expect("mode");
+    super::make_private(&dir);
     write_file(&dir.join("token"), 0o600, token);
     write_file(&dir.join("config.toml"), 0o600, config_text);
 }
@@ -61,6 +60,14 @@ pub fn command(layout: &Layout, with_runtime: bool) -> Command {
         .stderr(Stdio::piped());
     if with_runtime {
         command.env("XDG_RUNTIME_DIR", &layout.runtime);
+        #[cfg(windows)]
+        command.env("LIBREMODULAR_RUNTIME_DIR", &layout.runtime);
+    }
+    #[cfg(windows)]
+    for name in ["SystemRoot", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA"] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
     }
     command
 }

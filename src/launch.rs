@@ -10,20 +10,30 @@
 
 use std::ffi::{OsStr, OsString};
 use std::fmt;
+#[cfg(unix)]
 use std::fs;
 use std::io::{self, Write};
+#[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::path::Path;
+use std::path::PathBuf;
+#[cfg(unix)]
 use std::process::{Command, Stdio};
 
+#[cfg(unix)]
 use rustix::process::{Pid, Signal, kill_process};
 
 use crate::config::{self, AppSettings, Config, ConfigError, Mode, Paths};
 use crate::protocol::BRIDGE_ADDRESS;
+use crate::security::SecurityError;
+#[cfg(unix)]
 use crate::security::{
-    SecurityError, check_trusted_file, ensure_private_dir, read_control_file, read_system_file,
+    check_trusted_file, ensure_private_dir, read_control_file, read_system_file,
     replace_private_file,
 };
 
@@ -56,7 +66,9 @@ pub const EXIT_FAILED: u8 = 1;
 pub const EXIT_REFUSED: u8 = 2;
 
 const TARGET_PREFIX: &str = "libreoffice-";
+#[cfg(unix)]
 const RECORD_LIMIT: u64 = 4096;
+#[cfg(unix)]
 const PROC_FILE_LIMIT: u64 = 64 * 1024;
 
 const USAGE: &str = "usage:\n  \
@@ -121,6 +133,8 @@ pub enum LaunchError {
     AlreadyRunning { pids: Vec<u32>, uno_port: u16 },
     /// Un pont démarré par un lancement antérieur tourne encore.
     BridgeStillRunning { pid: u32 },
+    /// Le lanceur ne sait pas démarrer LibreOffice sur ce système.
+    NotAvailable,
     /// La configuration ne peut pas être lue ou n'est pas utilisable.
     Config(ConfigError),
     /// Un fichier ou un répertoire du lanceur ne peut pas être utilisé.
@@ -152,7 +166,8 @@ impl LaunchError {
             | LaunchError::PortsClash { .. }
             | LaunchError::BridgeFile(_)
             | LaunchError::AlreadyRunning { .. }
-            | LaunchError::BridgeStillRunning { .. } => EXIT_REFUSED,
+            | LaunchError::BridgeStillRunning { .. }
+            | LaunchError::NotAvailable => EXIT_REFUSED,
             _ => EXIT_FAILED,
         }
     }
@@ -212,6 +227,10 @@ impl fmt::Display for LaunchError {
                 f,
                 "the bridge of an earlier launch is still running (process {pid}); \
                  run 'libremodular-launch libreoffice --stop' first"
+            ),
+            LaunchError::NotAvailable => f.write_str(
+                "not available on Windows in this version: start soffice with --accept and the bridge \
+by hand (see docs/modules/libreoffice.md)",
             ),
             LaunchError::Config(error) => write!(f, "{error}"),
             LaunchError::Files(error) => write!(f, "{error}"),
@@ -278,7 +297,7 @@ pub fn soffice_spawn(
         current_dir: PathBuf::from("/"),
         env: environment
             .iter()
-            .filter(|(name, _)| !name.as_bytes().starts_with(OWN_VARIABLES_PREFIX.as_bytes()))
+            .filter(|(name, _)| !name.to_string_lossy().starts_with(OWN_VARIABLES_PREFIX))
             .cloned()
             .collect(),
     }
@@ -387,6 +406,7 @@ pub fn plan_from_config(
 // Les processus du système
 // --------------------------------------------------------------------------
 
+#[cfg(unix)]
 fn current_uid() -> u32 {
     rustix::process::geteuid().as_raw()
 }
@@ -397,6 +417,7 @@ fn current_uid() -> u32 {
 /// # Erreurs
 /// [`LaunchError::Processes`] quand le listage ne peut pas être lu : le lancement ne continue
 /// pas sans le savoir.
+#[cfg(unix)]
 pub fn running_soffice(proc_dir: &Path, uid: u32) -> Result<Vec<u32>, LaunchError> {
     let mut found = Vec::new();
     for entry in fs::read_dir(proc_dir).map_err(LaunchError::Processes)? {
@@ -424,6 +445,7 @@ pub fn running_soffice(proc_dir: &Path, uid: u32) -> Result<Vec<u32>, LaunchErro
 /// est exactement le fichier du pont. Un processus disparu, un que l'utilisateur ne peut pas lire,
 /// ou tout autre programme ne l'est pas.
 #[must_use]
+#[cfg(unix)]
 pub fn is_the_bridge(proc_dir: &Path, pid: u32, bridge_file: &Path) -> bool {
     let cmdline = proc_dir.join(pid.to_string()).join("cmdline");
     let Ok(bytes) = read_system_file(&cmdline, PROC_FILE_LIMIT) else {
@@ -482,11 +504,13 @@ impl Record {
     }
 }
 
+#[cfg(unix)]
 fn record_path(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join(LAUNCH_DIR).join(RECORD_FILE)
 }
 
 /// L'enregistrement du dernier lancement, s'il y en a un.
+#[cfg(unix)]
 fn read_record(path: &Path) -> Result<Option<Record>, LaunchError> {
     match read_control_file(path, RECORD_LIMIT) {
         Ok(bytes) => String::from_utf8(bytes)
@@ -506,6 +530,7 @@ fn read_record(path: &Path) -> Result<Option<Record>, LaunchError> {
 /// Démarre `spawn` dans un nouveau groupe de processus, sans interpréteur de commandes, avec
 /// exactement son environnement et son entrée et sa sortie envoyées nulle part. Le processus
 /// survit au lanceur : le descripteur est abandonné sans l'attendre.
+#[cfg(unix)]
 fn spawn_detached(spawn: &Spawn) -> Result<u32, LaunchError> {
     let child = Command::new(&spawn.program)
         .args(&spawn.args)
@@ -524,10 +549,12 @@ fn spawn_detached(spawn: &Spawn) -> Result<u32, LaunchError> {
     Ok(child.id())
 }
 
+#[cfg(unix)]
 fn say(out: &mut dyn Write, line: &str) -> Result<(), LaunchError> {
     writeln!(out, "{line}").map_err(LaunchError::Output)
 }
 
+#[cfg(unix)]
 fn prepare_launch_dir(paths: &Paths) -> Result<PathBuf, LaunchError> {
     let runtime = paths.require_runtime_dir().map_err(LaunchError::Config)?;
     let launch_dir = runtime.join(LAUNCH_DIR);
@@ -541,6 +568,7 @@ fn prepare_launch_dir(paths: &Paths) -> Result<PathBuf, LaunchError> {
 ///
 /// # Erreurs
 /// Un refus avant que rien ne démarre (voir [`LaunchError::exit_code`]), ou un échec au démarrage.
+#[cfg(unix)]
 pub fn launch(
     programs: &Programs,
     paths: &Paths,
@@ -617,6 +645,7 @@ pub fn launch(
 ///
 /// # Erreurs
 /// Un enregistrement illisible ou mal formé, ou un signal qui ne peut pas être envoyé.
+#[cfg(unix)]
 pub fn stop(programs: &Programs, paths: &Paths, out: &mut dyn Write) -> Result<(), LaunchError> {
     let runtime = paths.require_runtime_dir().map_err(LaunchError::Config)?;
     let record_file = record_path(runtime);
@@ -676,6 +705,25 @@ enum Request {
     Usage,
 }
 
+/// Le fichier du pont donné sous la forme `--bridge-file=<chemin>`.
+#[cfg(unix)]
+fn bridge_file_option(argument: &OsStr) -> Option<PathBuf> {
+    argument
+        .as_bytes()
+        .strip_prefix(b"--bridge-file=")
+        .filter(|file| !file.is_empty())
+        .map(|file| PathBuf::from(OsStr::from_bytes(file)))
+}
+
+#[cfg(windows)]
+fn bridge_file_option(argument: &OsStr) -> Option<PathBuf> {
+    argument
+        .to_str()?
+        .strip_prefix("--bridge-file=")
+        .filter(|file| !file.is_empty())
+        .map(PathBuf::from)
+}
+
 fn parse_arguments(args: &[OsString]) -> Request {
     let mut rest = args.iter().skip(1);
     let Some(name) = rest.next() else {
@@ -698,17 +746,13 @@ fn parse_arguments(args: &[OsString]) -> Request {
         [flag, file] if *flag == OsStr::new("--bridge-file") => Request::Start {
             bridge_file: PathBuf::from(file),
         },
-        [joined] => joined
-            .as_bytes()
-            .strip_prefix(b"--bridge-file=")
-            .filter(|file| !file.is_empty())
-            .map_or(Request::Usage, |file| Request::Start {
-                bridge_file: PathBuf::from(OsStr::from_bytes(file)),
-            }),
+        [joined] => bridge_file_option(joined)
+            .map_or(Request::Usage, |bridge_file| Request::Start { bridge_file }),
         _ => Request::Usage,
     }
 }
 
+#[cfg(unix)]
 fn start(
     programs: &Programs,
     paths: &Paths,
@@ -719,6 +763,27 @@ fn start(
     let config = config::load(&paths.config_file()).map_err(LaunchError::Config)?;
     let plan = plan_from_config(&config, bridge_file, paths.token_file())?;
     launch(programs, paths, &plan, environment, out)
+}
+
+/// Sous Windows le lanceur ne démarre rien : l'opérateur lance LibreOffice et le pont à la main.
+#[cfg(windows)]
+fn start(
+    _programs: &Programs,
+    _paths: &Paths,
+    _bridge_file: PathBuf,
+    _environment: &[(OsString, OsString)],
+    _out: &mut dyn Write,
+) -> Result<(), LaunchError> {
+    Err(LaunchError::NotAvailable)
+}
+
+/// Sous Windows il n'y a rien à arrêter : le lanceur n'a rien démarré.
+///
+/// # Erreurs
+/// Toujours [`LaunchError::NotAvailable`].
+#[cfg(windows)]
+pub fn stop(_programs: &Programs, _paths: &Paths, _out: &mut dyn Write) -> Result<(), LaunchError> {
+    Err(LaunchError::NotAvailable)
 }
 
 /// Exécute la ligne de commande de `libremodular-launch` et rend son code de sortie.

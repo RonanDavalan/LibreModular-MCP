@@ -3,15 +3,20 @@
 //! Pourquoi ce module existe
 //! Le journal doit être privé, borné et exempt de texte de script et de jeton.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use common::{FAKE_TOKEN, Verdict, mode_of, must_fail, must_pass, write_file};
+#[cfg(unix)]
+use common::mode_of;
+use common::{FAKE_TOKEN, Verdict, must_fail, must_pass, write_file};
 use libremodular_mcp::audit::{
     AuditEntry, AuditLog, AuditUnavailable, ENTRY_KEYS, GuardOutcome, format_timestamp,
     script_fingerprint,
@@ -58,6 +63,7 @@ fn rows(path: &Path) -> Vec<Value> {
         .collect()
 }
 
+#[cfg(unix)]
 #[test]
 fn one_json_line_per_record_with_mode_600_in_a_private_directory() {
     let base = common::private_tempdir();
@@ -230,6 +236,7 @@ fn the_guard_outcome_is_written_as_a_list_of_categories_or_bypassed() {
     assert_eq!(guards[2], serde_json::json!("bypassed"));
 }
 
+#[cfg(unix)]
 #[test]
 fn rotation_keeps_five_generations() {
     let base = common::private_tempdir();
@@ -258,6 +265,7 @@ fn rotation_keeps_five_generations() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn rotation_never_follows_a_link_planted_as_an_old_generation() {
     let base = common::private_tempdir();
@@ -281,6 +289,7 @@ fn unavailable_when_the_directory_cannot_be_used() {
     assert!(matches!(outcome, Err(AuditUnavailable { .. })));
 }
 
+#[cfg(unix)]
 #[test]
 fn unavailable_when_the_journal_path_is_a_directory_even_for_root() {
     let base = common::private_tempdir();
@@ -290,6 +299,7 @@ fn unavailable_when_the_journal_path_is_a_directory_even_for_root() {
     assert!(make(&path).record(&entry(), None).is_err());
 }
 
+#[cfg(unix)]
 #[test]
 #[ignore = "root ignores permission bits"]
 fn unavailable_when_the_directory_is_read_only() {
@@ -302,6 +312,7 @@ fn unavailable_when_the_directory_is_read_only() {
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).expect("restore");
 }
 
+#[cfg(unix)]
 #[test]
 fn unavailable_when_the_journal_is_too_open_or_a_symlink() {
     let base = common::private_tempdir();
@@ -319,6 +330,7 @@ fn unavailable_when_the_journal_is_too_open_or_a_symlink() {
     assert_eq!(fs::read_to_string(&target).expect("target"), "");
 }
 
+#[cfg(unix)]
 #[test]
 fn unavailable_when_the_directory_is_too_open() {
     let base = common::private_tempdir();
@@ -332,6 +344,7 @@ fn unavailable_when_the_directory_is_too_open() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unavailable_journal_writes_nothing() {
     let base = common::private_tempdir();

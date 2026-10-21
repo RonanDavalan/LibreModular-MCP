@@ -8,6 +8,8 @@
 //! sur un profil et un port jetables, ne touche jamais une instance de l'opérateur, et arrête
 //! tout ce qu'il a démarré.
 
+#![cfg(unix)]
+
 #[macro_use]
 mod common;
 
@@ -15,7 +17,9 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -25,6 +29,7 @@ use common::hub::{Session, build_with_token, config};
 use common::{FILE_TOKEN, Verdict, must_pass, write_file};
 use libremodular_mcp::launch::{Plan, Programs, bridge_spawn};
 use libremodular_mcp::security::Token;
+#[cfg(unix)]
 use rustix::process::{Pid, Signal, kill_process_group};
 use serde_json::{Value, json};
 
@@ -40,6 +45,7 @@ fn free_port() -> u16 {
 /// ce que LibreOffice a démarré parte avec lui.
 struct Leader(Child);
 
+#[cfg(unix)]
 impl Drop for Leader {
     fn drop(&mut self) {
         let Some(group) = i32::try_from(self.0.id()).ok().and_then(Pid::from_raw) else {
@@ -108,6 +114,7 @@ fn uno_snippet(path: &OsString, uno_port: u16, code: &str) -> Result<String, Str
     }
 }
 
+#[cfg(unix)]
 fn start_libreoffice(base: &Path, path: &OsString, uno_port: u16) -> Result<Leader, String> {
     let home = base.join("home");
     fs::create_dir(&home).map_err(|error| error.to_string())?;
@@ -162,6 +169,7 @@ fn wait_for_libreoffice(path: &OsString, uno_port: u16) -> Result<String, String
     ))
 }
 
+#[cfg(unix)]
 fn start_bridge(plan: &Plan, path: &OsString) -> Result<(Leader, u16), String> {
     // Le pont est démarré exactement comme le lanceur le démarre.
     let environment = vec![(OsString::from("PATH"), path.clone())];
@@ -215,6 +223,7 @@ fn show(label: &str, value: &Value) {
     );
 }
 
+#[cfg(unix)]
 fn drive(base: &Path) -> Verdict {
     let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
     let (uno_port, bridge_port) = (free_port(), free_port());
@@ -441,6 +450,7 @@ result = {'sheet': sheet.Name, 'a1': sheet.getCellByPosition(0, 0).getValue(), '
     Ok(())
 }
 
+#[cfg(unix)]
 /// Le démarrage à froid : le pont est levé et LibreOffice ne l'est pas, puis LibreOffice démarre.
 fn drive_cold_start(base: &Path) -> Verdict {
     let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
@@ -515,6 +525,7 @@ fn drive_cold_start(base: &Path) -> Verdict {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 #[ignore = "needs LibreOffice and its python3-uno"]
 fn a_bridge_started_before_libreoffice_announces_the_version_once_it_listens() {
@@ -522,6 +533,7 @@ fn a_bridge_started_before_libreoffice_announces_the_version_once_it_listens() {
     must_pass(drive_cold_start(base.path()));
 }
 
+#[cfg(unix)]
 #[test]
 #[ignore = "needs LibreOffice and its python3-uno"]
 fn the_hub_drives_a_real_libreoffice_through_the_generated_bridge() {

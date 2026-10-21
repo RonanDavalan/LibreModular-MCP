@@ -10,8 +10,11 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::ffi::OsString;
 use std::fmt;
-use std::fs::{self, DirBuilder, File};
+#[cfg(unix)]
+use std::fs::DirBuilder;
+use std::fs::{self, File};
 use std::io::{self, Read, Write};
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -23,9 +26,15 @@ use ruff_python_ast::{
 };
 use ruff_python_parser::{Mode, lexer::lex, parse_module};
 use ruff_text_size::{Ranged, TextSize};
+#[cfg(unix)]
 use rustix::fs::{Mode as FileMode, OFlags};
+#[cfg(unix)]
 use rustix::io::Errno;
+#[cfg(unix)]
 use rustix::process::{Resource, Rlimit};
+
+#[cfg(windows)]
+use crate::windows_api;
 
 /// Marqueur qui termine toute chaîne coupée pour tenir dans une borne de taille.
 pub const TRUNCATION_MARKER: &str = "[truncated]";
@@ -36,7 +45,9 @@ const TOKEN_READ_CAP: u64 = 4096;
 const MAX_SYMLINK_HOPS: usize = 40;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 const PRIVATE_DIR_MODE: u32 = 0o700;
+#[cfg(unix)]
 const GROUP_AND_OTHER_BITS: u32 = 0o077;
+#[cfg(unix)]
 const GROUP_AND_OTHER_WRITE_BITS: u32 = 0o022;
 
 // --------------------------------------------------------------------------
@@ -81,6 +92,9 @@ pub enum SecurityError {
     WritableByOthers {
         path: PathBuf,
         mode: u32,
+    },
+    LooseAcl {
+        path: PathBuf,
     },
     TooLarge {
         path: PathBuf,
@@ -159,6 +173,11 @@ impl fmt::Display for SecurityError {
                  (chmod go-w)",
                 path.display()
             ),
+            SecurityError::LooseAcl { path } => write!(
+                f,
+                "{} can be used by an account other than yours (icacls <path> /inheritance:r /grant:r %USERNAME%:F)",
+                path.display()
+            ),
             SecurityError::TooLarge { path, limit } => {
                 write!(f, "{} is larger than {limit} bytes", path.display())
             }
@@ -232,6 +251,7 @@ fn io_error(action: &'static str, path: &Path, source: io::Error) -> SecurityErr
 ///
 /// # Erreurs
 /// Échoue fermé quand la limite des vidages mémoire ne peut pas être abaissée.
+#[cfg(unix)]
 pub fn harden_process() -> Result<(), SecurityError> {
     rustix::process::setrlimit(
         Resource::Core,
@@ -245,12 +265,117 @@ pub fn harden_process() -> Result<(), SecurityError> {
     Ok(())
 }
 
+/// Sous Windows, ni vidage ni rapport d'erreur interactif ne naît du processus.
+///
+/// # Erreurs
+/// Aucune : l'appel ne peut pas échouer.
+#[cfg(windows)]
+pub fn harden_process() -> Result<(), SecurityError> {
+    windows_api::harden();
+    Ok(())
+}
+
 // --------------------------------------------------------------------------
 // Fichiers et répertoires
 // --------------------------------------------------------------------------
 
+#[cfg(unix)]
 fn current_uid() -> u32 {
     rustix::process::geteuid().as_raw()
+}
+
+/// Sous Windows un propriétaire n'est pas un nombre : `1` désigne l'utilisateur courant, `0` `SYSTEM` et les
+/// administrateurs, tout autre compte n'est jamais égal à l'un ni à l'autre.
+#[cfg(windows)]
+fn current_uid() -> u32 {
+    CURRENT_OWNER
+}
+
+#[cfg(windows)]
+const CURRENT_OWNER: u32 = 1;
+#[cfg(windows)]
+const OTHER_OWNER: u32 = u32::MAX;
+
+#[cfg(unix)]
+fn owner_id(_file: &File, info: &fs::Metadata) -> io::Result<u32> {
+    Ok(info.uid())
+}
+
+#[cfg(windows)]
+fn owner_id(file: &File, _info: &fs::Metadata) -> io::Result<u32> {
+    Ok(match windows_api::owner_of(file)? {
+        windows_api::Owner::CurrentUser => CURRENT_OWNER,
+        windows_api::Owner::Administrators => ROOT_UID,
+        windows_api::Owner::Other => OTHER_OWNER,
+    })
+}
+
+/// Refuse un fichier ou un répertoire ouvert que le groupe ou les autres peuvent employer.
+#[cfg(unix)]
+fn check_private(
+    _file: &File,
+    info: &fs::Metadata,
+    path: &Path,
+    expected_mode: u32,
+) -> Result<(), SecurityError> {
+    if info.mode() & GROUP_AND_OTHER_BITS != 0 {
+        return Err(SecurityError::LooseMode {
+            path: path.to_path_buf(),
+            mode: info.mode() & 0o7777,
+            expected: expected_mode,
+        });
+    }
+    Ok(())
+}
+
+/// Refuse un fichier ou un répertoire ouvert dont la liste de contrôle d'accès sert un autre compte.
+#[cfg(windows)]
+fn check_private(
+    file: &File,
+    _info: &fs::Metadata,
+    path: &Path,
+    _expected_mode: u32,
+) -> Result<(), SecurityError> {
+    let shared = windows_api::grants_to_others(file, windows_api::ANY_RIGHT)
+        .map_err(|e| io_error("inspect", path, e))?;
+    if shared {
+        return Err(SecurityError::LooseAcl {
+            path: path.to_path_buf(),
+        });
+    }
+    Ok(())
+}
+
+/// Refuse un fichier de confiance qu'un autre que son propriétaire peut modifier.
+#[cfg(unix)]
+fn check_not_writable_by_others(
+    _file: &File,
+    info: &fs::Metadata,
+    path: &Path,
+) -> Result<(), SecurityError> {
+    if info.mode() & GROUP_AND_OTHER_WRITE_BITS != 0 {
+        return Err(SecurityError::WritableByOthers {
+            path: path.to_path_buf(),
+            mode: info.mode() & 0o7777,
+        });
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn check_not_writable_by_others(
+    file: &File,
+    _info: &fs::Metadata,
+    path: &Path,
+) -> Result<(), SecurityError> {
+    let writable = windows_api::grants_to_others(file, windows_api::MODIFY_RIGHTS)
+        .map_err(|e| io_error("inspect", path, e))?;
+    if writable {
+        return Err(SecurityError::LooseAcl {
+            path: path.to_path_buf(),
+        });
+    }
+    Ok(())
 }
 
 /// Comment un fichier de contrôle est ouvert. La troncature n'est pas une option : un fichier de
@@ -263,6 +388,7 @@ pub enum ControlAccess {
 }
 
 impl ControlAccess {
+    #[cfg(unix)]
     fn flags(self) -> OFlags {
         match self {
             ControlAccess::Read => OFlags::RDONLY,
@@ -276,6 +402,7 @@ impl ControlAccess {
 ///
 /// # Erreurs
 /// Refuse les liens, les fichiers non ordinaires et tout échec de l'ouverture elle-même.
+#[cfg(unix)]
 pub fn open_regular_nofollow(path: &Path, access: ControlAccess) -> Result<File, SecurityError> {
     let flags = access.flags() | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK;
     let fd =
@@ -303,6 +430,49 @@ pub fn open_regular_nofollow(path: &Path, access: ControlAccess) -> Result<File,
     Ok(file)
 }
 
+/// Ouvre sans suivre un point d'analyse final (lien symbolique ou jonction) ; refuse tout sauf un fichier
+/// ordinaire. Un fichier créé naît avec une liste de contrôle d'accès privée à l'utilisateur.
+///
+/// # Erreurs
+/// Refuse les liens, les fichiers non ordinaires et tout échec de l'ouverture elle-même.
+#[cfg(windows)]
+pub fn open_regular_nofollow(path: &Path, access: ControlAccess) -> Result<File, SecurityError> {
+    let kind = match access {
+        ControlAccess::Read => windows_api::Access::Read,
+        ControlAccess::AppendOrCreate => windows_api::Access::AppendOrCreate,
+        ControlAccess::CreateNew => windows_api::Access::CreateNew,
+    };
+    let file = windows_api::open_file(path, kind).map_err(|error| match error.kind() {
+        io::ErrorKind::NotFound => SecurityError::NotFound {
+            path: path.to_path_buf(),
+        },
+        io::ErrorKind::AlreadyExists => SecurityError::AlreadyExists {
+            path: path.to_path_buf(),
+        },
+        _ => io_error("open", path, error),
+    })?;
+    let info = file.metadata().map_err(|e| io_error("inspect", path, e))?;
+    if is_link_like(&info) {
+        return Err(SecurityError::SymlinkRefused {
+            path: path.to_path_buf(),
+        });
+    }
+    if !info.file_type().is_file() {
+        return Err(SecurityError::NotRegularFile {
+            path: path.to_path_buf(),
+        });
+    }
+    Ok(file)
+}
+
+/// Dit si l'entrée est un point d'analyse : lien symbolique ou jonction.
+#[cfg(windows)]
+fn is_link_like(info: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt as WindowsMetadataExt;
+    const REPARSE_POINT: u32 = 0x400;
+    info.file_attributes() & REPARSE_POINT != 0
+}
+
 /// Ouvre un jeton, un journal ou un fichier de capture après contrôle du propriétaire et des permissions.
 ///
 /// Le fichier doit appartenir à l'utilisateur courant et ne porter aucun bit de groupe ni des autres.
@@ -324,18 +494,12 @@ pub fn open_control_file_as(
 ) -> Result<File, SecurityError> {
     let file = open_regular_nofollow(path, access)?;
     let info = file.metadata().map_err(|e| io_error("inspect", path, e))?;
-    if info.uid() != expected_uid {
+    if owner_id(&file, &info).map_err(|e| io_error("inspect", path, e))? != expected_uid {
         return Err(SecurityError::ForeignOwner {
             path: path.to_path_buf(),
         });
     }
-    if info.mode() & GROUP_AND_OTHER_BITS != 0 {
-        return Err(SecurityError::LooseMode {
-            path: path.to_path_buf(),
-            mode: info.mode() & 0o7777,
-            expected: PRIVATE_FILE_MODE,
-        });
-    }
+    check_private(&file, &info, path, PRIVATE_FILE_MODE)?;
     Ok(file)
 }
 
@@ -455,17 +619,12 @@ pub fn check_trusted_file_among(path: &Path, owners: &[u32]) -> Result<(), Secur
     }
     let file = open_regular_nofollow(path, ControlAccess::Read)?;
     let info = file.metadata().map_err(|e| io_error("inspect", path, e))?;
-    if !owners.contains(&info.uid()) {
+    if !owners.contains(&owner_id(&file, &info).map_err(|e| io_error("inspect", path, e))?) {
         return Err(SecurityError::ForeignOwner {
             path: path.to_path_buf(),
         });
     }
-    if info.mode() & GROUP_AND_OTHER_WRITE_BITS != 0 {
-        return Err(SecurityError::WritableByOthers {
-            path: path.to_path_buf(),
-            mode: info.mode() & 0o7777,
-        });
-    }
+    check_not_writable_by_others(&file, &info, path)?;
     Ok(())
 }
 
@@ -503,6 +662,7 @@ pub fn ensure_private_dir(path: &Path) -> Result<(), SecurityError> {
 ///
 /// # Erreurs
 /// Voir [`ensure_private_dir`].
+#[cfg(unix)]
 pub fn ensure_private_dir_as(path: &Path, expected_uid: u32) -> Result<(), SecurityError> {
     let info = match fs::symlink_metadata(path) {
         Ok(info) => info,
@@ -541,6 +701,57 @@ pub fn ensure_private_dir_as(path: &Path, expected_uid: u32) -> Result<(), Secur
         });
     }
     Ok(())
+}
+
+/// Comme [`ensure_private_dir`] avec un propriétaire attendu explicite.
+///
+/// # Erreurs
+/// Voir [`ensure_private_dir`].
+#[cfg(windows)]
+pub fn ensure_private_dir_as(path: &Path, expected_uid: u32) -> Result<(), SecurityError> {
+    let info = match fs::symlink_metadata(path) {
+        Ok(info) => info,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            if let Some(parent) = path.parent() {
+                create_private_dirs_under(parent)?;
+            }
+            match windows_api::create_private_dir(path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(io_error("create directory", path, e)),
+            }
+            fs::symlink_metadata(path).map_err(|e| io_error("inspect", path, e))?
+        }
+        Err(e) => return Err(io_error("inspect", path, e)),
+    };
+    if is_link_like(&info) || !info.file_type().is_dir() {
+        return Err(SecurityError::NotPlainDirectory {
+            path: path.to_path_buf(),
+        });
+    }
+    let handle = windows_api::open_directory(path).map_err(|e| io_error("inspect", path, e))?;
+    if owner_id(&handle, &info).map_err(|e| io_error("inspect", path, e))? != expected_uid {
+        return Err(SecurityError::ForeignOwner {
+            path: path.to_path_buf(),
+        });
+    }
+    check_private(&handle, &info, path, PRIVATE_DIR_MODE)
+}
+
+/// Crée les répertoires manquants de `path`, chacun avec une liste de contrôle d'accès privée.
+#[cfg(windows)]
+fn create_private_dirs_under(path: &Path) -> Result<(), SecurityError> {
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        create_private_dirs_under(parent)?;
+    }
+    match windows_api::create_private_dir(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(io_error("create directory", path, e)),
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -671,6 +882,19 @@ pub fn create_token(path: &Path, rotate: bool) -> Result<(), SecurityError> {
 // Chemins, cibles, tailles
 // --------------------------------------------------------------------------
 
+/// La racine d'un chemin : `/` sous Unix, le lecteur ou le partage et le séparateur sous Windows.
+#[cfg(unix)]
+fn root_of(_path: &Path) -> PathBuf {
+    PathBuf::from("/")
+}
+
+#[cfg(windows)]
+fn root_of(path: &Path) -> PathBuf {
+    path.components()
+        .take_while(|c| matches!(c, Component::Prefix(_) | Component::RootDir))
+        .collect()
+}
+
 fn realpath(path: &Path) -> Result<PathBuf, SecurityError> {
     let mut pending: VecDeque<OsString> = VecDeque::new();
     for component in path.components() {
@@ -680,7 +904,7 @@ fn realpath(path: &Path) -> Result<PathBuf, SecurityError> {
             _ => {}
         }
     }
-    let mut resolved = PathBuf::from("/");
+    let mut resolved = root_of(path);
     let mut hops = 0_usize;
     while let Some(part) = pending.pop_front() {
         if part == ".." {
@@ -703,7 +927,7 @@ fn realpath(path: &Path) -> Result<PathBuf, SecurityError> {
         }
         let target = fs::read_link(&candidate).map_err(|e| io_error("resolve", &candidate, e))?;
         if target.is_absolute() {
-            resolved = PathBuf::from("/");
+            resolved = root_of(&target);
         }
         for component in target.components().rev() {
             match component {
@@ -851,7 +1075,7 @@ pub fn accept_capture(captures_dir: &Path, reported: &Path) -> Result<PathBuf, S
     let info = file
         .metadata()
         .map_err(|e| io_error("inspect", reported, e))?;
-    if info.uid() != current_uid() {
+    if owner_id(&file, &info).map_err(|e| io_error("inspect", reported, e))? != current_uid() {
         return Err(SecurityError::ForeignOwner {
             path: reported.to_path_buf(),
         });
@@ -862,12 +1086,33 @@ pub fn accept_capture(captures_dir: &Path, reported: &Path) -> Result<PathBuf, S
             limit: MAX_CAPTURE_BYTES,
         });
     }
+    restrict_capture(&file, &info, reported)?;
+    Ok(resolved)
+}
+
+/// Ramène une capture au mode 600.
+#[cfg(unix)]
+fn restrict_capture(
+    file: &File,
+    info: &fs::Metadata,
+    reported: &Path,
+) -> Result<(), SecurityError> {
     if info.mode() & GROUP_AND_OTHER_BITS != 0 {
         // Modifié par le descripteur ouvert, pour qu'un chemin échangé ne puisse pas le rediriger.
         file.set_permissions(fs::Permissions::from_mode(PRIVATE_FILE_MODE))
             .map_err(|e| io_error("restrict", reported, e))?;
     }
-    Ok(resolved)
+    Ok(())
+}
+
+/// Sous Windows une capture produite dans le répertoire privé en hérite la liste ; une autre est refusée.
+#[cfg(windows)]
+fn restrict_capture(
+    file: &File,
+    info: &fs::Metadata,
+    reported: &Path,
+) -> Result<(), SecurityError> {
+    check_private(file, info, reported, PRIVATE_FILE_MODE)
 }
 
 /// Supprime une capture refusée, mais seulement quand c'est une entrée directe du répertoire des
@@ -1068,9 +1313,17 @@ const BARE_BUILTINS: [&str; 8] = [
     "str",
 ];
 
+#[cfg(unix)]
 fn write_flag_mask() -> i64 {
     let flags = OFlags::WRONLY | OFlags::RDWR | OFlags::CREATE | OFlags::APPEND | OFlags::TRUNC;
     i64::from(flags.bits())
+}
+
+/// Les drapeaux d'écriture de `os.open` tels que Python les définit sous Windows (`O_WRONLY`, `O_RDWR`,
+/// `O_APPEND`, `O_CREAT`, `O_TRUNC`).
+#[cfg(windows)]
+fn write_flag_mask() -> i64 {
+    0x0001 | 0x0002 | 0x0008 | 0x0100 | 0x0200
 }
 
 fn is_path_class(name: &str) -> bool {
@@ -1163,6 +1416,13 @@ fn posix_join(parts: &[String]) -> String {
         }
     }
     joined
+}
+
+/// Dit si le texte d'un chemin littéral est absolu : `/` ou, sous Windows, `\`, une lettre de lecteur ou
+/// un chemin UNC.
+fn is_absolute_literal(literal: &str) -> bool {
+    literal.starts_with('/')
+        || (cfg!(windows) && (literal.starts_with('\\') || Path::new(literal).is_absolute()))
 }
 
 fn posix_dirname(path: &str) -> String {
@@ -1374,9 +1634,9 @@ impl<'a> Analyzer<'a> {
     /// Développe un `~` initial avec le répertoire personnel, en gardant le reste du texte tel quel.
     /// Les formes `~user` sont laissées : elles exigent la base des utilisateurs.
     fn expand_user(&self, text: &str) -> String {
-        let rest = text
-            .strip_prefix('~')
-            .filter(|rest| rest.is_empty() || rest.starts_with('/'));
+        let rest = text.strip_prefix('~').filter(|rest| {
+            rest.is_empty() || rest.starts_with('/') || (cfg!(windows) && rest.starts_with('\\'))
+        });
         match (rest, &self.home) {
             (Some(rest), Some(home)) => {
                 let joined = format!("{}{rest}", home.trim_end_matches('/'));
@@ -1794,7 +2054,7 @@ impl<'a> Analyzer<'a> {
             return;
         };
         let literal = self.expand_user(&literal);
-        if !literal.starts_with('/') {
+        if !is_absolute_literal(&literal) {
             self.warn(
                 line,
                 &format!(

@@ -4,10 +4,13 @@
 //! Chaque statut que le modèle peut recevoir doit être atteint pour de vrai, et chaque contrôle du
 //! serveur doit être vu arrêtant un script avant qu'il atteigne une application.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -139,6 +142,7 @@ fn status_ok_carries_the_bridge_answer_with_the_fixed_keys() {
     assert_eq!(rows[0]["tool"], "execute_script");
 }
 
+#[cfg(unix)]
 #[test]
 fn the_work_directory_is_private_and_sent_with_the_script() {
     let base = common::private_tempdir();
@@ -390,6 +394,7 @@ fn journal_is_a_directory(hub: &TestHub) {
     fs::create_dir_all(&hub.audit_path).expect("directory in place of the journal");
 }
 
+#[cfg(unix)]
 fn journal_is_a_link(hub: &TestHub) {
     let parent = hub.audit_path.parent().expect("parent");
     fs::create_dir_all(parent).expect("state directory");
@@ -397,6 +402,7 @@ fn journal_is_a_link(hub: &TestHub) {
     symlink(parent.join("elsewhere"), &hub.audit_path).expect("link");
 }
 
+#[cfg(unix)]
 #[test]
 fn status_refused_when_the_journal_cannot_be_written_and_nothing_is_sent() {
     let base = common::private_tempdir();
@@ -633,12 +639,14 @@ fn state_bridge(
     )
 }
 
+#[cfg(unix)]
 fn write_png(capture: &Path, _: &Path) -> String {
     fs::write(capture, TINY_PNG).expect("png");
     fs::set_permissions(capture, fs::Permissions::from_mode(0o644)).expect("mode");
     capture.to_string_lossy().into_owned()
 }
 
+#[cfg(unix)]
 fn write_link(capture: &Path, outside: &Path) -> String {
     symlink(outside.join("target.png"), capture).expect("link");
     capture.to_string_lossy().into_owned()
@@ -673,6 +681,7 @@ fn run_state(
     (answer, hub, base, outside)
 }
 
+#[cfg(unix)]
 #[test]
 fn a_valid_capture_is_kept_private_and_its_path_returned() {
     let (answer, hub, _base, _) = run_state(write_png);
@@ -690,6 +699,7 @@ fn a_valid_capture_is_kept_private_and_its_path_returned() {
     assert!(!answer.to_string().contains("\\x89PNG"));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_capture_that_is_a_link_is_refused_and_the_link_removed_but_not_its_target() {
     let (answer, hub, _base, outside) = run_state(write_link);
@@ -807,6 +817,7 @@ fn hub_with_recorder(base: &Path) -> (TestHub, Arc<RecordingModule>) {
     (hub, recorder)
 }
 
+#[cfg(unix)]
 #[test]
 fn get_state_prepares_the_private_work_directory_and_hands_over_the_one_execute_gets() {
     let base = common::private_tempdir();
@@ -825,6 +836,7 @@ fn get_state_prepares_the_private_work_directory_and_hands_over_the_one_execute_
     assert_eq!(*recorder.executed_in.lock().expect("executed"), vec![work]);
 }
 
+#[cfg(unix)]
 /// Avec le répertoire de travail de l'application rendu peu sûr par `damage`, l'état doit être refusé
 /// et le module ne doit être interrogé sur rien.
 fn check_the_state_refuses_an_unsafe_work_directory(base: &Path, damage: fn(&Path)) -> Verdict {
@@ -853,14 +865,17 @@ fn check_the_state_refuses_an_unsafe_work_directory(base: &Path, damage: fn(&Pat
     Ok(())
 }
 
+#[cfg(unix)]
 fn open_to_others(work: &Path) {
     fs::set_permissions(work, fs::Permissions::from_mode(0o755)).expect("mode");
 }
 
+#[cfg(unix)]
 fn keep_private(work: &Path) {
     fs::set_permissions(work, fs::Permissions::from_mode(0o700)).expect("mode");
 }
 
+#[cfg(unix)]
 #[test]
 fn get_state_refuses_a_work_directory_open_to_others() {
     let base = common::private_tempdir();
@@ -870,6 +885,7 @@ fn get_state_refuses_a_work_directory_open_to_others() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_state_that_ignores_the_work_directory_check_is_detected() {
     // Un répertoire privé est accepté, donc le module est interrogé : le contrôle doit le dire.
@@ -882,6 +898,7 @@ fn counter_proof_a_state_that_ignores_the_work_directory_check_is_detected() {
 
 // --- purge --------------------------------------------------------------------------
 
+#[cfg(unix)]
 #[test]
 fn captures_are_purged_by_age_and_by_count_on_each_call() {
     let base = common::private_tempdir();

@@ -7,6 +7,8 @@
 //! tenu au même résultat. Les entrées marquées `same_as_reference: false` consignent l'unique
 //! différence voulue : un appel `rmdir` ou `unlink` n'est refusé que sur un objet reconnu comme un chemin.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -19,6 +21,7 @@ fn golden() -> Vec<Value> {
     serde_json::from_str(&text).expect("valid JSON")
 }
 
+#[cfg(unix)]
 #[test]
 fn every_pinned_script_gives_exactly_the_pinned_findings_and_warnings() {
     let entries = golden();

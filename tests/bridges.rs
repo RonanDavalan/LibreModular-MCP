@@ -7,6 +7,8 @@
 //! tests Python des ponts, échouer quand Python manque au lieu d'ignorer, et montrer que le client du
 //! Hub et un vrai fichier de pont se comprennent.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
@@ -34,7 +36,7 @@ fn generated(name: &str) -> PathBuf {
 
 #[test]
 fn the_python_tests_of_the_bridges_pass() {
-    let output = Command::new("python3")
+    let output = Command::new(common::python())
         .args(["-m", "unittest", "discover", "-s", "tests/bridges", "-v"])
         .current_dir(ROOT)
         .env("PYTHONDONTWRITEBYTECODE", "1")
@@ -78,7 +80,8 @@ impl BridgeProcess {
         token_file: &Path,
         flags: &[&str],
     ) -> Result<BridgeProcess, String> {
-        let mut child = Command::new("python3")
+        let mut command = Command::new(common::python());
+        command
             .args(flags)
             .arg(bridge_file)
             .env_clear()
@@ -88,7 +91,13 @@ impl BridgeProcess {
             .env("LIBREMODULAR_TOKEN_PATH", token_file)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        // Python ne démarre pas sous Windows sans la racine du système.
+        #[cfg(windows)]
+        if let Some(root) = std::env::var_os("SystemRoot") {
+            command.env("SystemRoot", root);
+        }
+        let mut child = command
             .spawn()
             .map_err(|error| format!("python3 is required: {error}"))?;
         let stderr = child.stderr.take();
@@ -294,7 +303,7 @@ const LIBREOFFICE_TARGETS: [&str; 3] = [
 /// lui, `uno` compris, restent introuvables, quelle que soit la machine. Le contrôle s'en assure d'abord,
 /// puis pilote chacune des trois cibles du Hub contre le fichier du pont, en nommant l'étape qui a échoué.
 fn check_the_hub_reaches_the_libreoffice_bridge_without_libreoffice(bridge_file: &Path) -> Verdict {
-    let probe = Command::new("python3")
+    let probe = Command::new(common::python())
         .args(["-S", "-c", "import uno"])
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())

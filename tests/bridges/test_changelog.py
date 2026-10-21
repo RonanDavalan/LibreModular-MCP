@@ -9,6 +9,7 @@ contrôle est montré en échec sur un script cassé exprès.
 
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import unittest
@@ -196,6 +197,7 @@ class RenderTests(CheckCase):
         self.assertEqual(CHANGELOG.render(FIXED_LOG), CHANGELOG.render(list(FIXED_LOG)))
 
 
+@unittest.skipUnless(shutil.which("git"), "git is required")
 class CheckTests(CheckCase):
     def test_the_check_follows_the_history(self):
         self.must_pass(check_the_check_follows_the_history(CHANGELOG))

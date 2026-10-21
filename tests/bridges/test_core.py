@@ -238,8 +238,10 @@ def check_lines_are_bounded(core):
         stopped_reading = False
         try:
             client.socket.settimeout(10.0)
-            client.send(b"y" * (4 * limit))
-        except (BrokenPipeError, ConnectionResetError, socket.timeout):
+            # Par morceaux : Windows accepte un très gros envoi d'un seul coup avant que la fermeture arrive.
+            for _ in range(4 * limit // (1024 * 1024)):
+                client.send(b"y" * (1024 * 1024))
+        except (ConnectionError, socket.timeout):
             stopped_reading = True
         client.close()
         if not stopped_reading:
@@ -288,6 +290,15 @@ class LineTests(CheckCase):
 def listening_addresses(port):
     """Adresses locales des sockets TCP à l'écoute sur `port`, lues dans le noyau."""
     found = []
+    if os.name == "nt":
+        listing = subprocess.check_output(["netstat", "-an", "-p", "TCP"]).decode("ascii", "ignore")
+        for row in listing.splitlines():
+            fields = row.split()
+            if len(fields) >= 3 and fields[0] == "TCP" and fields[2] == "0.0.0.0:0":
+                address, _, listening_port = fields[1].rpartition(":")
+                if int(listening_port) == port:
+                    found.append(address)
+        return found
     with open("/proc/net/tcp") as table:
         for row in table.readlines()[1:]:
             fields = row.split()
@@ -336,11 +347,17 @@ class AddressTests(CheckCase):
 
     def test_counter_proof_a_socket_not_bound_to_127_0_0_1_is_detected(self):
         # Jamais lié et jamais à l'écoute : le défaut est montré sans ouvrir aucune autre adresse.
-        defective = defective_core(
-            "            listener.bind((LISTEN_ADDRESS, port))\n"
-            "            listener.listen(_LISTEN_BACKLOG)\n",
-            "            pass\n",
-        )
+        if os.name == "nt":
+            # Un socket exclusif jamais lié ne se nomme pas : le défaut est une écoute sur toutes les adresses.
+            defective = defective_core(
+                "listener.bind((LISTEN_ADDRESS, port))", 'listener.bind(("0.0.0.0", port))'
+            )
+        else:
+            defective = defective_core(
+                "            listener.bind((LISTEN_ADDRESS, port))\n"
+                "            listener.listen(_LISTEN_BACKLOG)\n",
+                "            pass\n",
+            )
         self.must_fail(check_listens_on_loopback_only(defective))
 
     def test_only_the_peer_127_0_0_1_is_served(self):
@@ -413,35 +430,88 @@ def malformed(text):
     return lambda directory: directory.token(text=text)
 
 
+def shared_with_everyone(directory):
+    path = directory.token()
+    subprocess.run(
+        ["icacls", str(path), "/grant", "*S-1-1-0:(R)"], check=True, capture_output=True
+    )
+    return path
+
+
+def behind_a_junction(directory):
+    target = directory.path / "real"
+    target.mkdir()
+    (target / "token").write_text(FAKE_TOKEN, encoding="ascii")
+    link = directory.path / "link"
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)], check=True, capture_output=True)
+    return link / "token"
+
+
+@unittest.skipUnless(os.name == "nt", "access lists exist only on Windows")
+class WindowsTokenFileTests(CheckCase):
+    def test_a_token_that_another_account_can_read_is_refused(self):
+        self.must_pass(check_start_refuses(CORE, shared_with_everyone))
+
+    def test_counter_proof_a_core_ignoring_the_access_list_is_detected(self):
+        defective = defective_core(
+            "private = _windows_file_is_private(path)", "private = True"
+        )
+        self.must_fail(check_start_refuses(defective, shared_with_everyone))
+
+    def test_a_private_token_of_the_user_is_accepted(self):
+        directory = PrivateDir()
+        try:
+            path = directory.token()
+            self.assertEqual(CORE._read_token(path), FAKE_TOKEN.encode("ascii"))
+        finally:
+            directory.cleanup()
+
+    def test_the_default_location_is_under_local_application_data(self):
+        self.assertEqual(
+            CORE._default_token_path({"LOCALAPPDATA": "C:\\Users\\a\\AppData\\Local"}),
+            "C:\\Users\\a\\AppData\\Local\\libremodular-mcp\\config\\token",
+        )
+
+
 class TokenFileTests(CheckCase):
+    @unittest.skipIf(os.name == "nt", "file modes, owners and fifos exist only on Unix")
     def test_a_token_open_to_group_or_others_is_refused(self):
         for mode in (0o640, 0o604, 0o620, 0o602, 0o644):
             self.must_pass(check_start_refuses(CORE, too_open(mode)))
 
+    @unittest.skipIf(os.name == "nt", "file modes, owners and fifos exist only on Unix")
     def test_counter_proof_a_core_ignoring_the_mode_is_detected(self):
         defective = defective_core("if info.st_mode & 0o077:", "if False:")
         self.must_fail(check_start_refuses(defective, too_open(0o640)))
 
+    @unittest.skipIf(os.name == "nt", "file modes, owners and fifos exist only on Unix")
     def test_a_symbolic_link_is_refused_even_to_a_private_token(self):
         self.must_pass(check_start_refuses(CORE, symlink_to_a_token))
 
+    @unittest.skipIf(os.name == "nt", "file modes, owners and fifos exist only on Unix")
     def test_counter_proof_a_core_following_links_is_detected(self):
         defective = defective_core("os.O_RDONLY | os.O_NOFOLLOW |", "os.O_RDONLY |")
         self.must_fail(check_start_refuses(defective, symlink_to_a_token))
 
+    @unittest.skipIf(os.name == "nt", "file modes, owners and fifos exist only on Unix")
     def test_a_directory_or_a_fifo_is_refused(self):
         self.must_pass(check_start_refuses(CORE, a_directory))
         self.must_pass(check_start_refuses(CORE, a_fifo))
 
+    @unittest.skipIf(os.name == "nt", "file modes, owners and fifos exist only on Unix")
     def test_counter_proof_a_core_accepting_any_file_type_is_detected(self):
         defective = defective_core("if not stat.S_ISREG(info.st_mode):", "if False:")
         self.must_fail(check_start_refuses(defective, a_directory))
 
-    @unittest.skipUnless(os.geteuid() == 0, "only root can give a file to another user")
+    @unittest.skipUnless(
+        getattr(os, "geteuid", lambda: -1)() == 0, "only root can give a file to another user"
+    )
     def test_a_token_of_another_user_is_refused(self):
         self.must_pass(check_start_refuses(CORE, foreign_owner))
 
-    @unittest.skipUnless(os.geteuid() == 0, "only root can give a file to another user")
+    @unittest.skipUnless(
+        getattr(os, "geteuid", lambda: -1)() == 0, "only root can give a file to another user"
+    )
     def test_counter_proof_a_core_ignoring_the_owner_is_detected(self):
         defective = defective_core("if info.st_uid != os.geteuid():", "if False:")
         self.must_fail(check_start_refuses(defective, foreign_owner))
@@ -605,6 +675,7 @@ def check_private_creation_mask(core):
     return problems
 
 
+@unittest.skipIf(os.name == "nt", "the creation mask has no effect on Windows")
 class MaskTests(CheckCase):
     def test_files_are_private_during_the_script_and_the_mask_is_restored(self):
         self.must_pass(check_private_creation_mask(CORE))
@@ -1067,6 +1138,7 @@ def check_import_has_no_effect(path):
     return []
 
 
+@unittest.skipIf(os.name == "nt", "the probe lists /proc/self/fd")
 class ImportTests(CheckCase):
     def test_importing_the_core_starts_no_thread_and_opens_no_socket(self):
         from bridge_support import CORE_PATH
@@ -1157,6 +1229,7 @@ class LaunchTests(unittest.TestCase):
             with self.assertRaises(CORE.BridgeError):
                 CORE._port_from_environment(bad, 9301)
 
+    @unittest.skipIf(os.name == "nt", "Windows uses LOCALAPPDATA")
     def test_the_default_token_path_follows_xdg_with_the_usual_fallback(self):
         path = CORE._default_token_path
         self.assertEqual(

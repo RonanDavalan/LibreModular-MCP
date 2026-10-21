@@ -3,6 +3,8 @@
 //! Pourquoi ce module existe
 //! Le garde-fou doit refuser les constructions dangereuses et rester silencieux sur les scripts ordinaires.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
@@ -432,6 +434,7 @@ fn reading_outside_the_work_directory_is_allowed() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn extra_write_roots_are_honoured() {
     let script = "open('/home/alice/exports/a.txt', 'w')\n";
@@ -440,6 +443,7 @@ fn extra_write_roots_are_honoured() {
     assert!(guard_script(script, &policy(&extra)).findings.is_empty());
 }
 
+#[cfg(unix)]
 #[test]
 fn work_dir_writes_are_allowed() {
     let script = "import os\nopen(os.path.join(LMM_WORK_DIR, 'a.txt'), 'w')\n";
@@ -452,6 +456,7 @@ fn a_replaced_work_directory_name_is_followed_not_trusted() {
     assert!(found(&analyse(script)).contains(&("G-4".to_owned(), 2)));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_work_directory_symlink_that_leaves_the_directory_is_a_finding() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -516,6 +521,7 @@ fn check_no_false_positives(guard: Guard<'_>) -> Verdict {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn realistic_scripts_are_never_refused_and_false_positive_rate_is_zero() {
     let scripts = realistic_scripts();
@@ -551,6 +557,7 @@ fn import_everything_guard(script: &str, _policy: &GuardPolicy<'_>) -> GuardRepo
     report
 }
 
+#[cfg(unix)]
 #[test]
 fn false_positive_check_fails_on_an_overzealous_guard() {
     must_pass(check_no_false_positives(&guard_script));

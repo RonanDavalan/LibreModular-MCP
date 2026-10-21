@@ -8,6 +8,7 @@
 use std::ffi::OsString;
 use std::fmt;
 use std::io::{self, Read};
+#[cfg(unix)]
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
@@ -16,25 +17,68 @@ use std::sync::{Arc, Mutex, TryLockError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
 use rustix::io::Errno;
+#[cfg(unix)]
 use rustix::process::{Pid, Signal, WaitId, WaitIdOptions, kill_process_group, waitid};
 use serde_json::{Map, Value, json};
 
 use crate::config::Limits;
 use crate::modules::{ExecReply, Health, Module, ModuleError, StateReply};
+#[cfg(windows)]
+use crate::windows_api::Job;
 
 /// L'interpréteur qui exécute les scripts, sauf si le constructeur en reçoit un autre.
+#[cfg(unix)]
 pub const DEFAULT_PYTHON: &str = "/usr/bin/python3";
 /// Où vit `inkex` sous Debian, posé sur `PYTHONPATH`.
+#[cfg(unix)]
 pub const DEFAULT_EXTENSIONS: &str = "/usr/share/inkscape/extensions";
 /// L'exécutable Inkscape, employé pour sa version et pour les captures.
+#[cfg(unix)]
 pub const DEFAULT_INKSCAPE: &str = "/usr/bin/inkscape";
+/// Sous Windows, l'installation d'Inkscape porte son propre Python, ses extensions et l'exécutable en
+/// ligne de commande ; chemins relatifs à son dossier d'installation.
+#[cfg(windows)]
+pub const WINDOWS_PYTHON: &str = "bin\\python.exe";
+#[cfg(windows)]
+pub const WINDOWS_EXTENSIONS: &str = "share\\inkscape\\extensions";
+#[cfg(windows)]
+pub const WINDOWS_INKSCAPE: &str = "bin\\inkscape.com";
 /// Le document de travail, dans le répertoire de travail.
 pub const DOCUMENT_NAME: &str = "current.svg";
 /// Le fichier où le script est écrit, dans le répertoire de travail.
 pub const SCRIPT_NAME: &str = "script.py";
 /// Les seules variables qu'un processus démarré hérite du Hub.
+#[cfg(unix)]
 pub const INHERITED_VARIABLES: [&str; 4] = ["PATH", "HOME", "LANG", "LC_ALL"];
+/// Sous Windows Python et Inkscape ne démarrent pas sans la racine du système, le profil et les
+/// dossiers temporaires.
+#[cfg(windows)]
+pub const INHERITED_VARIABLES: [&str; 10] = [
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "LOCALAPPDATA",
+    "APPDATA",
+];
+
+/// Dit si `name` est l'une des variables héritées ; sous Windows la casse ne compte pas.
+fn is_inherited(name: &OsString) -> bool {
+    INHERITED_VARIABLES.iter().any(|allowed| {
+        if cfg!(windows) {
+            name.to_str()
+                .is_some_and(|text| text.eq_ignore_ascii_case(allowed))
+        } else {
+            name == allowed
+        }
+    })
+}
 
 /// Posé à `1` dans chaque processus : empêche le BLAS de numpy de démarrer un fil par cœur.
 pub const THREAD_VARIABLES: [&str; 2] = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS"];
@@ -69,8 +113,12 @@ pub const EMPTY_DOCUMENT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 pub const SCRIPT_BOOTSTRAP: &str = r#"import sys
 sys.path[:] = [entry for entry in sys.path if entry not in ("", ".")]
 import json
-import resource
 import traceback
+
+try:
+    import resource
+except ImportError:
+    resource = None
 
 
 def report(kind, message, trace):
@@ -81,6 +129,8 @@ def report(kind, message, trace):
 
 
 def cap(limit, value):
+    if resource is None:
+        return
     soft, hard = resource.getrlimit(limit)
     if hard != resource.RLIM_INFINITY:
         value = min(value, hard)
@@ -89,10 +139,11 @@ def cap(limit, value):
 
 try:
     target = sys.argv[1]
-    cap(resource.RLIMIT_CORE, 0)
-    cap(resource.RLIMIT_CPU, int(sys.argv[2]))
-    cap(resource.RLIMIT_AS, int(sys.argv[3]))
-    cap(resource.RLIMIT_NOFILE, int(sys.argv[4]))
+    if resource is not None:
+        cap(resource.RLIMIT_CORE, 0)
+        cap(resource.RLIMIT_CPU, int(sys.argv[2]))
+        cap(resource.RLIMIT_AS, int(sys.argv[3]))
+        cap(resource.RLIMIT_NOFILE, int(sys.argv[4]))
     with open(target, encoding="utf-8") as handle:
         source = handle.read()
 except Exception as error:
@@ -121,9 +172,13 @@ except BaseException as error:
 pub const STATE_BOOTSTRAP: &str = r#"import sys
 sys.path[:] = [entry for entry in sys.path if entry not in ("", ".")]
 import json
-import resource
 from xml.etree import ElementTree
 from xml.parsers import expat
+
+try:
+    import resource
+except ImportError:
+    resource = None
 
 SVG = "{http://www.w3.org/2000/svg}"
 INKSCAPE = "{http://www.inkscape.org/namespaces/inkscape}"
@@ -136,6 +191,8 @@ def report(kind, message):
 
 
 def cap(limit, value):
+    if resource is None:
+        return
     soft, hard = resource.getrlimit(limit)
     if hard != resource.RLIM_INFINITY:
         value = min(value, hard)
@@ -152,10 +209,11 @@ def refuse(*arguments):
 
 try:
     document = sys.argv[1]
-    cap(resource.RLIMIT_CORE, 0)
-    cap(resource.RLIMIT_CPU, int(sys.argv[2]))
-    cap(resource.RLIMIT_AS, int(sys.argv[3]))
-    cap(resource.RLIMIT_NOFILE, int(sys.argv[4]))
+    if resource is not None:
+        cap(resource.RLIMIT_CORE, 0)
+        cap(resource.RLIMIT_CPU, int(sys.argv[2]))
+        cap(resource.RLIMIT_AS, int(sys.argv[3]))
+        cap(resource.RLIMIT_NOFILE, int(sys.argv[4]))
     with open(document, "rb") as handle:
         data = handle.read()
 except Exception as error:
@@ -198,12 +256,48 @@ pub struct InkscapePaths {
     pub inkscape: PathBuf,
 }
 
+#[cfg(unix)]
 impl Default for InkscapePaths {
     fn default() -> Self {
         InkscapePaths {
             python: PathBuf::from(DEFAULT_PYTHON),
             extensions: PathBuf::from(DEFAULT_EXTENSIONS),
             inkscape: PathBuf::from(DEFAULT_INKSCAPE),
+        }
+    }
+}
+
+/// Le dossier d'installation d'Inkscape : sous `%ProgramFiles%`, sinon sous
+/// `%LOCALAPPDATA%\\Programs`, sinon le premier, même absent (le module le dira).
+#[cfg(windows)]
+fn windows_install_dir() -> PathBuf {
+    let under = |variable: &str, tail: &str| {
+        std::env::var_os(variable)
+            .map(PathBuf::from)
+            .filter(|base| base.is_absolute())
+            .map(|base| base.join(tail))
+    };
+    let candidates = [
+        under("ProgramFiles", "Inkscape"),
+        under("LOCALAPPDATA", "Programs\\Inkscape"),
+    ];
+    candidates
+        .iter()
+        .flatten()
+        .find(|dir| dir.join(WINDOWS_INKSCAPE).is_file())
+        .or(candidates.iter().flatten().next())
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from("C:\\Program Files\\Inkscape"))
+}
+
+#[cfg(windows)]
+impl Default for InkscapePaths {
+    fn default() -> Self {
+        let root = windows_install_dir();
+        InkscapePaths {
+            python: root.join(WINDOWS_PYTHON),
+            extensions: root.join(WINDOWS_EXTENSIONS),
+            inkscape: root.join(WINDOWS_INKSCAPE),
         }
     }
 }
@@ -276,7 +370,7 @@ pub fn process_environment(
 ) -> Vec<(OsString, OsString)> {
     let mut env: Vec<(OsString, OsString)> = inherited
         .iter()
-        .filter(|(name, _)| INHERITED_VARIABLES.iter().any(|allowed| name == allowed))
+        .filter(|(name, _)| is_inherited(name))
         .cloned()
         .collect();
     env.push(("PYTHONPATH".into(), extensions.as_os_str().to_owned()));
@@ -423,6 +517,7 @@ fn collected(reader: Option<Receiver<Vec<u8>>>) -> Vec<u8> {
 ///
 /// # Erreurs
 /// [`RunError`] quand le programme ne peut pas démarrer ou que le temps s'écoule.
+#[cfg(unix)]
 pub fn run(spec: &ProcessSpec, timeout: Duration, max_output: usize) -> Result<Finished, RunError> {
     let mut child = Command::new(&spec.program)
         .args(&spec.args)
@@ -467,6 +562,62 @@ pub fn run(spec: &ProcessSpec, timeout: Duration, max_output: usize) -> Result<F
     })
 }
 
+/// Démarre `spec` dans un objet de tâche, sans interpréteur de commandes et avec exactement son
+/// environnement, et attend au plus `timeout`. Quoi qu'il arrive, tout processus encore dans l'objet est
+/// tué avant que l'appel ne rende : le processus, ses descendants, et ce qui a quitté son parent.
+///
+/// # Erreurs
+/// [`RunError`] quand le programme ne peut pas démarrer ou que le temps s'écoule.
+#[cfg(windows)]
+pub fn run(spec: &ProcessSpec, timeout: Duration, max_output: usize) -> Result<Finished, RunError> {
+    let job = Job::new(
+        DEFAULT_MEMORY_BYTES,
+        u32::try_from(timeout.as_secs()).unwrap_or(u32::MAX),
+    )
+    .map_err(RunError::Start)?;
+    let mut child = Command::new(&spec.program)
+        .args(&spec.args)
+        .current_dir(&spec.current_dir)
+        .env_clear()
+        .envs(spec.env.iter().map(|(name, value)| (name, value)))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(RunError::Start)?;
+    if let Err(error) = job.assign(&child) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(RunError::Start(error));
+    }
+    let stdout = child.stdout.take().map(|pipe| drain(pipe, max_output));
+    let stderr = child.stderr.take().map(|pipe| drain(pipe, max_output));
+    let deadline = Instant::now() + timeout;
+    let finished = loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break true,
+            Ok(None) => {}
+            Err(_) => break true,
+        }
+        if Instant::now() >= deadline {
+            break false;
+        }
+        thread::sleep(POLL_INTERVAL);
+    };
+    job.terminate();
+    let status = child.wait().map_err(RunError::Wait)?;
+    let stdout = collected(stdout);
+    let stderr = collected(stderr);
+    if !finished {
+        return Err(RunError::TimedOut);
+    }
+    Ok(Finished {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
 fn signal_name(number: i32) -> &'static str {
     match number {
         6 => " (SIGABRT)",
@@ -479,12 +630,23 @@ fn signal_name(number: i32) -> &'static str {
     }
 }
 
+#[cfg(unix)]
+fn signal_of(status: ExitStatus) -> Option<i32> {
+    status.signal()
+}
+
+/// Windows n'a pas de signal : un processus tué a un code de sortie.
+#[cfg(windows)]
+fn signal_of(_status: ExitStatus) -> Option<i32> {
+    None
+}
+
 /// Comment un processus s'est terminé, sans inventer de trace d'appels.
 #[must_use]
 pub fn describe_status(status: ExitStatus) -> String {
     if let Some(code) = status.code() {
         format!("the process exited with code {code}")
-    } else if let Some(number) = status.signal() {
+    } else if let Some(number) = signal_of(status) {
         format!(
             "the process was ended by signal {number}{}",
             signal_name(number)

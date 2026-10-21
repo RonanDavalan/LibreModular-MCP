@@ -134,7 +134,7 @@ class PrivateDir:
 
     def token(self, text=FAKE_TOKEN, mode=0o600, name="token"):
         path = self.path / name
-        path.write_text(text, encoding="ascii")
+        path.write_bytes(text.encode("ascii"))
         os.chmod(path, mode)
         return path
 
@@ -328,7 +328,7 @@ class Client:
         while b"\n" not in self.buffer:
             try:
                 chunk = self.socket.recv(65536)
-            except ConnectionResetError:
+            except ConnectionError:
                 return None
             if not chunk:
                 return None
@@ -359,7 +359,7 @@ class Client:
                 chunk = self.socket.recv(65536)
             except socket.timeout:
                 return "open", data
-            except ConnectionResetError:
+            except ConnectionError:
                 return "closed", data
             if not chunk:
                 return "closed", data

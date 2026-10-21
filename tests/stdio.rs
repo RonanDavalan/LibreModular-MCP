@@ -6,17 +6,21 @@
 //! pas être vérifiée. Les deux ne s'observent que sur le vrai binaire, démarré avec des répertoires
 //! temporaires privés.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::time::{Duration, Instant, SystemTime};
 
 use common::binary::{Layout, command, layout, prepare, rpc};
 use common::fake_bridge::FakeBridge;
 use common::{FAKE_TOKEN, FILE_TOKEN, Verdict, must_fail, must_pass, write_file};
+#[cfg(unix)]
 use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 
@@ -158,6 +162,7 @@ fn the_hub_refuses_to_start_without_a_token() {
     must_pass(check_refuses_to_start(&layout, true));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_hub_refuses_to_start_with_a_token_readable_by_others() {
     let base = common::private_tempdir();
@@ -168,6 +173,7 @@ fn the_hub_refuses_to_start_with_a_token_readable_by_others() {
     must_pass(check_refuses_to_start(&layout, true));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_hub_refuses_to_start_with_a_volatile_directory_open_to_others() {
     let base = common::private_tempdir();
@@ -179,6 +185,7 @@ fn the_hub_refuses_to_start_with_a_volatile_directory_open_to_others() {
     must_pass(check_refuses_to_start(&layout, true));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_hub_refuses_to_start_without_xdg_runtime_dir_and_never_falls_back_to_tmp() {
     let base = common::private_tempdir();
@@ -205,6 +212,7 @@ fn a_malformed_token_file_is_refused_without_quoting_it() {
 
 // --- s'arrêter sur un signal --------------------------------------------------------
 
+#[cfg(unix)]
 /// Démarrer le Hub, attendre qu'il réponde, placer une capture assez ancienne pour être purgée,
 /// envoyer `signal`, et exiger que le processus se termine à temps sans la capture et sans montrer
 /// le jeton.
@@ -263,16 +271,19 @@ fn check_signal_purges_captures(signal: Signal) -> Verdict {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn sigterm_purges_the_captures_before_the_hub_exits() {
     must_pass(check_signal_purges_captures(Signal::TERM));
 }
 
+#[cfg(unix)]
 #[test]
 fn sigint_purges_the_captures_before_the_hub_exits() {
     must_pass(check_signal_purges_captures(Signal::INT));
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_stop_without_the_purge_is_detected() {
     // SIGKILL ne peut pas être traité : le processus se termine comme se terminerait un signal non

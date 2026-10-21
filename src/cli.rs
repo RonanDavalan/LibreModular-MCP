@@ -22,7 +22,10 @@ use std::task::Poll;
 use std::time::{Duration, SystemTime};
 
 use rmcp::ServiceExt;
+#[cfg(unix)]
 use tokio::signal::unix::{SignalKind, signal};
+#[cfg(windows)]
+use tokio::signal::windows::{ctrl_break, ctrl_c};
 
 use crate::audit::{AuditLog, AuditUnavailable};
 use crate::config::{self, APP_DEFAULTS, ConfigError, Limits, Paths};
@@ -339,8 +342,16 @@ fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
     let ending = runtime.block_on(async move {
         // On écoute avant le début de la session : une demande d'arrêt à n'importe quel moment
         // de la session emprunte la même sortie.
-        let mut terminate = signal(SignalKind::terminate()).map_err(ServeError::Runtime)?;
-        let mut interrupt = signal(SignalKind::interrupt()).map_err(ServeError::Runtime)?;
+        #[cfg(unix)]
+        let (mut terminate, mut interrupt) = (
+            signal(SignalKind::terminate()).map_err(ServeError::Runtime)?,
+            signal(SignalKind::interrupt()).map_err(ServeError::Runtime)?,
+        );
+        #[cfg(windows)]
+        let (mut terminate, mut interrupt) = (
+            ctrl_break().map_err(ServeError::Runtime)?,
+            ctrl_c().map_err(ServeError::Runtime)?,
+        );
         let mut session = pin!(async move {
             let running = session
                 .serve(rmcp::transport::stdio())
@@ -355,10 +366,18 @@ fn serve_stdio(server: HubServer) -> Result<(), ServeError> {
         Ok::<Ending, ServeError>(
             poll_fn(|context| {
                 if terminate.poll_recv(context).is_ready() {
-                    return Poll::Ready(Ending::Signal("SIGTERM"));
+                    return Poll::Ready(Ending::Signal(if cfg!(windows) {
+                        "CTRL_BREAK"
+                    } else {
+                        "SIGTERM"
+                    }));
                 }
                 if interrupt.poll_recv(context).is_ready() {
-                    return Poll::Ready(Ending::Signal("SIGINT"));
+                    return Poll::Ready(Ending::Signal(if cfg!(windows) {
+                        "CTRL_C"
+                    } else {
+                        "SIGINT"
+                    }));
                 }
                 session.as_mut().poll(context).map(Ending::Session)
             })

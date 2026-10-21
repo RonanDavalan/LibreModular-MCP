@@ -7,6 +7,8 @@
 //! fait de `HOME` et des trois répertoires `LIBREMODULAR_*`, tous privés et temporaires, jamais ceux
 //! de l'utilisateur.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
@@ -16,7 +18,9 @@ use std::process::Command;
 
 use common::binary::{BINARY, McpProcess, command, layout};
 use common::fake_bridge::{FakeBridge, Handler, HelloMode, Reply, handler};
-use common::{Verdict, mode_of, must_fail, must_pass, write_file};
+#[cfg(unix)]
+use common::mode_of;
+use common::{Verdict, must_fail, must_pass, write_file};
 use serde_json::{Value, json};
 
 const SUCCESS: &str = "print('smoke-script-ok')\nresult = 1\n";
@@ -105,6 +109,7 @@ struct Defect {
     token_copied_into_state: bool,
 }
 
+#[cfg(unix)]
 fn drive(base: &Path, defect: Defect) -> Verdict {
     let layout = layout(base);
     let config_dir = layout.config.join("libremodular-mcp");
@@ -284,12 +289,14 @@ fn drive(base: &Path, defect: Defect) -> Verdict {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn init_then_a_session_of_four_calls_leaves_four_journal_lines_and_the_token_nowhere_else() {
     let base = common::private_tempdir();
     must_pass(drive(base.path(), Defect::default()));
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_journal_that_keeps_the_script_text_is_detected() {
     let base = common::private_tempdir();
@@ -309,6 +316,7 @@ fn counter_proof_a_journal_that_keeps_the_script_text_is_detected() {
     must_fail(verdict);
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_token_copied_into_another_file_is_detected() {
     let base = common::private_tempdir();

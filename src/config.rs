@@ -587,9 +587,11 @@ impl Paths {
     /// [`ConfigError::Environment`] quand `XDG_RUNTIME_DIR` n'est pas utilisable.
     pub fn require_runtime_dir(&self) -> Result<&Path, ConfigError> {
         self.runtime_dir.as_deref().ok_or_else(|| {
-            ConfigError::Environment(
-                "XDG_RUNTIME_DIR is not set; refusing to write volatile files elsewhere".to_owned(),
-            )
+            ConfigError::Environment(if cfg!(windows) {
+                "LOCALAPPDATA is not set; refusing to write volatile files elsewhere".to_owned()
+            } else {
+                "XDG_RUNTIME_DIR is not set; refusing to write volatile files elsewhere".to_owned()
+            })
         })
     }
 }
@@ -610,6 +612,7 @@ fn absolute_override(variable: &str, value: &OsString) -> Result<PathBuf, Config
 ///
 /// # Erreurs
 /// Une surcharge relative, ou aucun répertoire personnel utilisable quand il en faut un.
+#[cfg(unix)]
 pub fn resolve_paths(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Paths, ConfigError> {
     let non_empty = |name: &str| lookup(name).filter(|value| !value.is_empty());
     let home = || -> Result<PathBuf, ConfigError> {
@@ -659,6 +662,44 @@ pub fn resolve_paths(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Paths,
     })
 }
 
+/// Résout les trois répertoires de base sous Windows : `%LOCALAPPDATA%\libremodular-mcp\` et ses
+/// sous-répertoires `config`, `state` et `run`. Les surcharges `LIBREMODULAR_*` valent comme ailleurs.
+///
+/// # Erreurs
+/// Une surcharge relative, ou aucun `LOCALAPPDATA` utilisable quand il en faut un.
+#[cfg(windows)]
+pub fn resolve_paths(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Paths, ConfigError> {
+    let non_empty = |name: &str| lookup(name).filter(|value| !value.is_empty());
+    let local = || -> Result<PathBuf, ConfigError> {
+        let value = non_empty("LOCALAPPDATA").ok_or_else(|| {
+            ConfigError::Environment(
+                "cannot determine the local application data directory".to_owned(),
+            )
+        })?;
+        let path = PathBuf::from(value);
+        if path.is_absolute() {
+            Ok(path.join(PACKAGE_DIR_NAME))
+        } else {
+            Err(ConfigError::Environment(
+                "LOCALAPPDATA must be an absolute path".to_owned(),
+            ))
+        }
+    };
+    let pick = |override_name: &str, folder: &str| -> Result<PathBuf, ConfigError> {
+        match non_empty(override_name) {
+            Some(value) => {
+                absolute_override(override_name, &value).map(|p| p.join(PACKAGE_DIR_NAME))
+            }
+            None => local().map(|base| base.join(folder)),
+        }
+    };
+    Ok(Paths {
+        config_dir: pick("LIBREMODULAR_CONFIG_DIR", "config")?,
+        state_dir: pick("LIBREMODULAR_STATE_DIR", "state")?,
+        runtime_dir: pick("LIBREMODULAR_RUNTIME_DIR", "run").ok(),
+    })
+}
+
 /// [`resolve_paths`] sur l'environnement du processus en cours.
 ///
 /// # Erreurs
@@ -671,7 +712,7 @@ pub fn resolve_paths_from_process() -> Result<Paths, ConfigError> {
 /// s'en sert pour développer un `~` initial dans un chemin littéral.
 #[must_use]
 pub fn home_dir(lookup: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
-    lookup("HOME")
+    lookup(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())

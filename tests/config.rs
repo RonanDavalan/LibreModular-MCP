@@ -3,12 +3,15 @@
 //! Pourquoi ce module existe
 //! Un mauvais fichier doit arrêter le Hub plutôt qu'affaiblir une protection.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
@@ -57,6 +60,7 @@ fn the_documented_limits_are_the_defaults() {
     assert_eq!(limits.max_timeout_s, 300);
 }
 
+#[cfg(unix)]
 #[test]
 fn values_are_read_and_applications_activate_in_registry_order() {
     let config = parse(
@@ -175,6 +179,7 @@ fn lenient_loader(path: &Path) -> Result<Config, String> {
     Config::from_bytes(&bytes).map_err(|e| e.to_string())
 }
 
+#[cfg(unix)]
 fn check_refuses_untrusted_files(load: ConfigLoader<'_>, base: &Path) -> Verdict {
     let base = common::fresh(base);
     let valid = "[hub]\nmax_timeout_s = 60\n";
@@ -213,6 +218,7 @@ fn check_accepts_a_private_configuration(load: ConfigLoader<'_>, base: &Path) ->
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn the_configuration_file_is_refused_unless_private_regular_and_small() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -224,6 +230,7 @@ fn the_configuration_file_is_refused_unless_private_regular_and_small() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_rejected_configuration_file_does_not_echo_its_content() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -240,6 +247,7 @@ fn a_rejected_configuration_file_does_not_echo_its_content() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_configuration_file_that_is_a_dangling_link_is_not_treated_as_absent() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -262,6 +270,7 @@ fn paths(pairs: &[(&str, &str)]) -> Result<Paths, ConfigError> {
     resolve_paths(lookup(pairs))
 }
 
+#[cfg(unix)]
 #[test]
 fn xdg_paths_and_fallbacks() {
     let fallback = paths(&[("HOME", "/home/alice")]).expect("paths");
@@ -300,6 +309,7 @@ fn xdg_paths_and_fallbacks() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn relative_xdg_values_are_ignored_and_relative_overrides_refused() {
     let relative = paths(&[("HOME", "/home/alice"), ("XDG_RUNTIME_DIR", "run")]).expect("paths");
@@ -313,6 +323,7 @@ fn relative_xdg_values_are_ignored_and_relative_overrides_refused() {
     assert!(paths(&[("HOME", "/home/alice"), ("LIBREMODULAR_CONFIG_DIR", "rel")]).is_err());
 }
 
+#[cfg(unix)]
 #[test]
 fn overrides_replace_the_base_directories() {
     let overridden = paths(&[
@@ -331,6 +342,7 @@ fn overrides_replace_the_base_directories() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn the_home_directory_is_only_needed_when_a_fallback_is_needed() {
     let no_home = paths(&[("XDG_CONFIG_HOME", "/x/c"), ("XDG_STATE_HOME", "/x/s")]).expect("paths");
@@ -340,6 +352,7 @@ fn the_home_directory_is_only_needed_when_a_fallback_is_needed() {
     assert!(paths(&[("HOME", "")]).is_err());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_missing_runtime_directory_never_falls_back_to_a_temporary_one() {
     let resolved = paths(&[("HOME", "/home/alice"), ("TMPDIR", "/tmp")]).expect("paths");

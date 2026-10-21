@@ -5,12 +5,15 @@
 //! test ici lit le code (ou l'exécute dans un processus neuf) et échoue quand une règle est
 //! rompue, et chacun apporte une contre-preuve qui montre que la règle serait remarquée.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -20,7 +23,9 @@ use libremodular_mcp::audit::{AuditEntry, AuditLog};
 use libremodular_mcp::cli::run_init;
 use libremodular_mcp::config::{self, Limits, Paths};
 use libremodular_mcp::security::{Token, create_token, load_token_as, read_control_file_as};
+#[cfg(unix)]
 use rustix::fs::Mode;
+#[cfg(unix)]
 use rustix::process::{Resource, Rlimit, getrlimit, setrlimit, umask};
 
 // --- lecture du code ----------------------------------------------------------------
@@ -40,7 +45,7 @@ fn source_files() -> Vec<(String, String)> {
                     .strip_prefix(root)
                     .expect("inside src")
                     .to_string_lossy()
-                    .into_owned();
+                    .replace('\\', "/");
                 found.push((name, fs::read_to_string(&path).expect("source text")));
             }
         }
@@ -158,10 +163,12 @@ const CHILD_KIND: &str = "LMM_INVARIANT_CHILD";
 const CHILD_FILE: &str = "LMM_INVARIANT_FILE";
 const CHILD_TEST: &str = "hardening_and_private_modes_hold_in_a_fresh_process";
 
+#[cfg(unix)]
 fn core_limit() -> Rlimit {
     getrlimit(Resource::Core)
 }
 
+#[cfg(unix)]
 /// Le corps du processus enfant : rapporter ce qu'il a observé, jamais le jeton.
 fn child(kind: &str, target: &Path) {
     match kind {
@@ -308,6 +315,7 @@ fn check_created_files_have_no_group_or_other_bit(kind: &str, base: &Path) -> Ve
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn hardening_and_private_modes_hold_in_a_fresh_process() {
     if let Ok(kind) = std::env::var(CHILD_KIND) {
@@ -913,7 +921,7 @@ fn bridge_files() -> Vec<(String, String)> {
                     .strip_prefix(root)
                     .expect("inside bridges")
                     .to_string_lossy()
-                    .into_owned();
+                    .replace('\\', "/");
                 found.push((name, fs::read_to_string(&path).expect("bridge text")));
             }
         }
@@ -1329,7 +1337,7 @@ fn counter_proof_an_inkscape_answer_taking_another_way_is_detected() {
 // --- dépendances : exactement les crates approuvées, figées à une version -----------
 
 /// Les crates que `[dependencies]` peut contenir, et rien d'autre.
-const APPROVED_DEPENDENCIES: [&str; 12] = [
+const APPROVED_DEPENDENCIES: [&str; 13] = [
     "clap",
     "getrandom",
     "rmcp",
@@ -1342,6 +1350,7 @@ const APPROVED_DEPENDENCIES: [&str; 12] = [
     "sha2",
     "tokio",
     "toml",
+    "windows-sys",
 ];
 
 /// `=` suivi de trois nombres séparés par des points.
@@ -1364,10 +1373,20 @@ fn dependency_problems(manifest: &str) -> Vec<String> {
     if table.contains_key("features") {
         problems.push("a [features] table: no feature may remove a protection".to_owned());
     }
-    let Some(dependencies) = table.get("dependencies").and_then(toml::Value::as_table) else {
+    let Some(plain) = table.get("dependencies").and_then(toml::Value::as_table) else {
         problems.push("no [dependencies] table".to_owned());
         return problems;
     };
+    // Les crates propres à une plateforme (`[target.'cfg(...)'.dependencies]`) comptent comme les autres.
+    let mut dependencies = plain.clone();
+    if let Some(targets) = table.get("target").and_then(toml::Value::as_table) {
+        for platform in targets.values() {
+            if let Some(extra) = platform.get("dependencies").and_then(toml::Value::as_table) {
+                dependencies.extend(extra.clone());
+            }
+        }
+    }
+    let dependencies = &dependencies;
     for name in dependencies.keys() {
         if !APPROVED_DEPENDENCIES.contains(&name.as_str()) {
             problems.push(format!("{name} is not an approved crate"));

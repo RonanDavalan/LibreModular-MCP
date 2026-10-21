@@ -3,15 +3,20 @@
 //! Pourquoi ce module existe
 //! Un contrôle de permissions faible exposerait le jeton du pont sans bruit.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, symlink};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use common::{FILE_TOKEN, Verdict, current_uid, fresh, mode_of, must_fail, must_pass, write_file};
+#[cfg(unix)]
+use common::mode_of;
+use common::{FILE_TOKEN, Verdict, current_uid, fresh, must_fail, must_pass, write_file};
 use libremodular_mcp::security::{
     ControlAccess, SecurityError, TRUNCATION_MARKER, bounded, check_script_size, check_target,
     check_trusted_file, check_trusted_file_among, check_trusted_file_as, create_token,
@@ -57,6 +62,7 @@ fn check_accepts_private_token(load: Loader<'_>, base: &Path) -> Verdict {
     Ok(())
 }
 
+#[cfg(unix)]
 fn check_refuses_symlink(load: Loader<'_>, base: &Path) -> Verdict {
     let base = fresh(base);
     let real = base.join("real-token");
@@ -99,6 +105,7 @@ fn check_refuses_malformed(load: Loader<'_>, base: &Path) -> Verdict {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn load_token_refusals_and_their_counter_proof() {
     let checks: [fn(Loader<'_>, &Path) -> Verdict; 4] = [
@@ -120,6 +127,7 @@ fn load_token_accepts_a_private_token() {
     must_pass(check_accepts_private_token(&real_load, base.path()));
 }
 
+#[cfg(unix)]
 #[test]
 fn load_token_error_never_contains_the_token() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -178,6 +186,7 @@ fn check_create_does_not_overwrite(create: Creator<'_>, base: &Path) -> Verdict 
     Ok(())
 }
 
+#[cfg(unix)]
 fn check_rotate_replaces_with_mode_600(create: Creator<'_>, base: &Path) -> Verdict {
     let path = fresh(base).join("cfg2").join("token");
     create(&path, false)?;
@@ -207,6 +216,7 @@ fn create_token_never_overwrites_without_rotate() {
     must_fail(check_create_does_not_overwrite(&naive_create, base.path()));
 }
 
+#[cfg(unix)]
 #[test]
 fn create_token_rotate_replaces_and_stays_private() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -253,6 +263,7 @@ fn refusing_to_overwrite_says_so_without_the_token() {
     assert!(!error.to_string().contains(&existing));
 }
 
+#[cfg(unix)]
 #[test]
 fn create_token_refuses_a_directory_that_is_not_private() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -265,6 +276,7 @@ fn create_token_refuses_a_directory_that_is_not_private() {
 
 // --- répertoires privés et ouverture de fichiers ------------------------------------
 
+#[cfg(unix)]
 #[test]
 fn ensure_private_dir_refuses_wide_permissions() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -281,6 +293,7 @@ fn ensure_private_dir_refuses_wide_permissions() {
     assert_eq!(mode_of(created.parent().expect("parent")), 0o700);
 }
 
+#[cfg(unix)]
 #[test]
 fn ensure_private_dir_refuses_a_symlink_a_file_and_a_foreign_owner() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -303,6 +316,7 @@ fn ensure_private_dir_refuses_a_symlink_a_file_and_a_foreign_owner() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn open_regular_nofollow_refuses_links_and_directories() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -321,6 +335,7 @@ fn open_regular_nofollow_refuses_links_and_directories() {
     assert!(open_regular_nofollow(&real, ControlAccess::Read).is_ok());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_dangling_symlink_is_never_created_through() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -332,6 +347,7 @@ fn a_dangling_symlink_is_never_created_through() {
     assert!(!victim.exists(), "the open created the link target");
 }
 
+#[cfg(unix)]
 #[test]
 fn control_files_are_created_private_whatever_the_umask_says() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -354,6 +370,7 @@ fn read_control_file_returns_the_bytes_of_a_private_file() {
     assert_eq!(read_control_file(&path, 16).expect("read"), b"hello");
 }
 
+#[cfg(unix)]
 #[test]
 fn read_control_file_refuses_what_cannot_be_trusted() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -398,6 +415,7 @@ fn naive_resolve(root: &Path, candidate: &str) -> Result<PathBuf, String> {
     Ok(root.join(candidate))
 }
 
+#[cfg(unix)]
 fn check_resolve_confines(resolve: Resolver<'_>, base: &Path) -> Verdict {
     let base = fresh(base);
     let root = base.join("root");
@@ -423,6 +441,7 @@ fn check_resolve_confines(resolve: Resolver<'_>, base: &Path) -> Verdict {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn resolve_under_confines_paths_and_has_a_counter_proof() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -438,6 +457,7 @@ fn resolve_under_keeps_a_not_yet_existing_path_inside_the_root() {
     assert_eq!(resolved, root.join("new").join("file.txt"));
 }
 
+#[cfg(unix)]
 #[test]
 fn resolve_under_follows_a_chain_of_links_and_refuses_a_loop() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -519,6 +539,7 @@ fn bounded_never_splits_a_character_whatever_the_limit() {
 
 type Replacer<'a> = &'a dyn Fn(&Path, &[u8]) -> Result<(), String>;
 
+#[cfg(unix)]
 /// Écrire sur un lien symbolique doit remplacer le lien par un fichier ordinaire privé et laisser
 /// la cible du lien intacte.
 fn check_replace_never_writes_through_a_link(replace: Replacer<'_>, base: &Path) -> Verdict {
@@ -542,6 +563,7 @@ fn check_replace_never_writes_through_a_link(replace: Replacer<'_>, base: &Path)
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn replacing_a_private_file_removes_a_link_instead_of_following_it() {
     let base = common::private_tempdir();
@@ -557,6 +579,7 @@ fn replacing_a_private_file_removes_a_link_instead_of_following_it() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn ensuring_a_private_file_creates_it_once_and_refuses_links_and_loose_modes() {
     use libremodular_mcp::security::ensure_private_file;
@@ -617,6 +640,7 @@ fn check_a_file_others_can_change_is_refused(trust: Trust<'_>, base: &Path) -> V
     Ok(())
 }
 
+#[cfg(unix)]
 fn check_a_link_a_directory_a_relative_path_and_a_foreign_owner_are_refused(
     trust: Trust<'_>,
     base: &Path,
@@ -646,6 +670,7 @@ fn check_a_link_a_directory_a_relative_path_and_a_foreign_owner_are_refused(
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn a_trusted_file_is_absolute_regular_not_a_link_ours_and_not_writable_by_others() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -658,6 +683,7 @@ fn a_trusted_file_is_absolute_regular_not_a_link_ours_and_not_writable_by_others
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_check_of_existence_only_is_detected() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -715,6 +741,7 @@ fn check_only_the_listed_owners_are_admitted(among: Among<'_>, base: &Path) -> V
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn a_trusted_file_may_belong_to_any_listed_owner_and_to_no_other() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -733,6 +760,7 @@ fn counter_proof_a_check_that_ignores_the_owner_is_detected() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_file_installed_by_the_system_is_trusted_by_a_user_but_not_through_check_as() {
     let installed = Path::new("/etc/passwd");
@@ -747,6 +775,7 @@ fn a_file_installed_by_the_system_is_trusted_by_a_user_but_not_through_check_as(
     assert!(matches!(error, SecurityError::ForeignOwner { .. }));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_error_for_a_writable_file_names_the_file_and_its_mode_only() {
     let base = common::private_tempdir();
@@ -775,6 +804,7 @@ fn unbounded_read(path: &Path, _max: u64) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|error| error.to_string())
 }
 
+#[cfg(unix)]
 fn check_a_system_file_is_read_within_its_bound(read: Reader<'_>, base: &Path) -> Verdict {
     let base = fresh(base);
     let path = base.join("cmdline");
@@ -797,6 +827,7 @@ fn check_a_system_file_is_read_within_its_bound(read: Reader<'_>, base: &Path) -
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn a_system_file_is_read_in_one_bounded_read_and_links_are_not_followed() {
     let base = tempfile::tempdir().expect("temporary directory");
@@ -810,6 +841,7 @@ fn a_system_file_is_read_in_one_bounded_read_and_links_are_not_followed() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_process_file_of_the_live_system_can_be_read() {
     let own = std::fs::read_link("/proc/self").expect("self");

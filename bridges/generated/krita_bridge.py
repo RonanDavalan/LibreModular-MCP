@@ -61,7 +61,25 @@ class BridgeError(Exception):
 # --------------------------------------------------------------------------
 
 
+def _checked_token(data, path):
+    """Le jeton lu, sans ses sauts de ligne finaux, ou l'erreur d'un fichier qui n'en est pas un."""
+    while data.endswith(b"\n"):
+        data = data[:-1]
+    if len(data) != TOKEN_HEX_LENGTH or any(byte not in _HEX_DIGITS for byte in data):
+        raise BridgeError(
+            "the token file %s does not hold a token made by libremodular-mcp init" % path
+        )
+    return data
+
+
 def _read_token(token_path):
+    """Lit le jeton dans un fichier ordinaire privé de l'utilisateur courant."""
+    if os.name == "nt":
+        return _read_token_windows(token_path)
+    return _read_token_unix(token_path)
+
+
+def _read_token_unix(token_path):
     """Lit le jeton dans un fichier ordinaire privé de l'utilisateur courant."""
     path = os.fspath(token_path)
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK | os.O_NOCTTY
@@ -92,13 +110,130 @@ def _read_token(token_path):
             data += chunk
     finally:
         os.close(descriptor)
-    while data.endswith(b"\n"):
-        data = data[:-1]
-    if len(data) != TOKEN_HEX_LENGTH or any(byte not in _HEX_DIGITS for byte in data):
+    return _checked_token(data, path)
+
+
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+
+
+def _windows_file_is_private(path):
+    """Vrai quand le propriétaire du fichier est l'utilisateur et que sa liste de contrôle d'accès ne
+    donne aucun droit à un autre compte que l'utilisateur, SYSTEM et les administrateurs. Toute erreur
+    de l'API rend faux : un contrôle impossible n'est pas un contrôle réussi."""
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    pointer = ctypes.c_void_p
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.GetTokenInformation.argtypes = [
+        wintypes.HANDLE, ctypes.c_int, pointer, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)
+    ]
+    advapi32.GetLengthSid.argtypes = [pointer]
+    advapi32.GetLengthSid.restype = wintypes.DWORD
+    advapi32.EqualSid.argtypes = [pointer, pointer]
+    advapi32.CreateWellKnownSid.argtypes = [ctypes.c_int, pointer, pointer, ctypes.POINTER(wintypes.DWORD)]
+    advapi32.GetNamedSecurityInfoW.argtypes = [
+        wintypes.LPCWSTR, ctypes.c_int, wintypes.DWORD,
+        ctypes.POINTER(pointer), ctypes.POINTER(pointer), ctypes.POINTER(pointer),
+        ctypes.POINTER(pointer), ctypes.POINTER(pointer),
+    ]
+    advapi32.GetNamedSecurityInfoW.restype = wintypes.DWORD
+    advapi32.GetAclInformation.argtypes = [pointer, pointer, wintypes.DWORD, ctypes.c_int]
+    advapi32.GetAce.argtypes = [pointer, wintypes.DWORD, ctypes.POINTER(pointer)]
+
+    def token_sid(information_class):
+        token = wintypes.HANDLE()
+        if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x8, ctypes.byref(token)):
+            raise OSError("OpenProcessToken")
+        try:
+            needed = wintypes.DWORD()
+            advapi32.GetTokenInformation(token, information_class, None, 0, ctypes.byref(needed))
+            buffer = ctypes.create_string_buffer(needed.value)
+            if not advapi32.GetTokenInformation(
+                token, information_class, buffer, needed, ctypes.byref(needed)
+            ):
+                raise OSError("GetTokenInformation")
+            sid = ctypes.cast(buffer, ctypes.POINTER(pointer))[0]
+            length = advapi32.GetLengthSid(sid)
+            return ctypes.create_string_buffer(ctypes.string_at(sid, length), length)
+        finally:
+            kernel32.CloseHandle(token)
+
+    def well_known(kind):
+        buffer = ctypes.create_string_buffer(68)
+        size = wintypes.DWORD(68)
+        if not advapi32.CreateWellKnownSid(kind, None, buffer, ctypes.byref(size)):
+            raise OSError("CreateWellKnownSid")
+        return buffer
+
+    mine = [token_sid(1), token_sid(4)]
+    # Administrateurs, SYSTEM, et les deux identités qui désignent le propriétaire du fichier, déjà contrôlé.
+    trusted = mine + [well_known(26), well_known(22), well_known(27), well_known(71)]
+
+    def equal(first, second):
+        return bool(advapi32.EqualSid(ctypes.addressof(first), second))
+
+    owner, dacl, descriptor = pointer(), pointer(), pointer()
+    status = advapi32.GetNamedSecurityInfoW(
+        path, 1, 0x1 | 0x4, ctypes.byref(owner), None, ctypes.byref(dacl), None, ctypes.byref(descriptor)
+    )
+    if status != 0 or not owner.value or not dacl.value:
+        return False
+    try:
+        if not any(equal(sid, owner) for sid in mine + trusted[2:]):
+            return False
+        information = (wintypes.DWORD * 3)()
+        if not advapi32.GetAclInformation(dacl, information, 12, 2):
+            return False
+        for index in range(information[0]):
+            entry = pointer()
+            if not advapi32.GetAce(dacl, index, ctypes.byref(entry)):
+                return False
+            kind = ctypes.string_at(entry, 1)[0]
+            if kind in (1, 6, 10, 12):
+                continue
+            if kind != 0:
+                return False
+            if ctypes.c_uint32.from_address(entry.value + 4).value == 0:
+                continue
+            sid = pointer(entry.value + 8)
+            if not any(equal(trusted_sid, sid) for trusted_sid in trusted):
+                return False
+        return True
+    finally:
+        kernel32.LocalFree(descriptor)
+
+
+def _read_token_windows(token_path):
+    """Lit le jeton dans un fichier ordinaire, sans point d'analyse, privé à l'utilisateur."""
+    path = os.fspath(token_path)
+    try:
+        info = os.lstat(path)
+    except OSError as error:
+        raise BridgeError("cannot open the token file %s: %s" % (path, error.strerror)) from None
+    if info.st_file_attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+        raise BridgeError("the token file %s is a link" % path)
+    if stat.S_IFMT(info.st_mode) != stat.S_IFREG:
+        raise BridgeError("the token file %s is not a regular file" % path)
+    try:
+        private = _windows_file_is_private(path)
+    except Exception:
+        private = False
+    if not private:
         raise BridgeError(
-            "the token file %s does not hold a token made by libremodular-mcp init" % path
+            "the token file %s is open to another account or belongs to one; "
+            "run icacls on it to keep only your own access" % path
         )
-    return data
+    try:
+        with open(path, "rb") as handle:
+            data = handle.read(TOKEN_READ_CAP + 1)
+    except OSError as error:
+        raise BridgeError("cannot open the token file %s: %s" % (path, error.strerror)) from None
+    return _checked_token(data, path)
 
 
 # --------------------------------------------------------------------------
@@ -402,7 +537,11 @@ class _Bridge:
         self._active = None
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # Sous Windows SO_REUSEADDR laisserait un autre processus lier le même port.
+            if os.name == "nt":
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            else:
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((LISTEN_ADDRESS, port))
             listener.listen(_LISTEN_BACKLOG)
             listener.settimeout(_ACCEPT_POLL_S)
@@ -717,6 +856,13 @@ def _port_from_environment(text, default_port):
 
 
 def _default_token_path(environment):
+    if os.name == "nt":
+        local = environment.get("LOCALAPPDATA", "")
+        if not os.path.isabs(local):
+            raise BridgeError(
+                "cannot locate the token: set LIBREMODULAR_TOKEN_PATH or LOCALAPPDATA"
+            )
+        return os.path.join(local, "libremodular-mcp", "config", "token")
     base = environment.get("XDG_CONFIG_HOME", "")
     if not os.path.isabs(base):
         home = environment.get("HOME", "")

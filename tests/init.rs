@@ -3,6 +3,8 @@
 //! Pourquoi ce module existe
 //! La première commande de l'opérateur crée le jeton et doit le faire en sécurité.
 
+#![cfg_attr(windows, allow(unused_imports, dead_code, unused_variables))]
+
 #[macro_use]
 mod common;
 
@@ -11,7 +13,9 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 
-use common::{current_uid, mode_of, write_file};
+#[cfg(unix)]
+use common::mode_of;
+use common::{current_uid, write_file};
 use libremodular_mcp::cli::{run_init, run_with};
 use libremodular_mcp::config::{self, Paths, load};
 use libremodular_mcp::security::load_token_as;
@@ -39,6 +43,7 @@ fn token_text(paths: &Paths) -> String {
     fs::read_to_string(paths.token_file()).expect("token")
 }
 
+#[cfg(unix)]
 #[test]
 fn init_creates_everything_with_private_modes_and_never_shows_the_token() {
     let base = common::private_tempdir();
@@ -87,6 +92,7 @@ fn second_run_changes_nothing_and_says_so() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn rotate_changes_the_token_and_warns_about_bridges() {
     let base = common::private_tempdir();
@@ -101,6 +107,7 @@ fn rotate_changes_the_token_and_warns_about_bridges() {
     assert!(!text.contains(&old) && !text.contains(&new));
 }
 
+#[cfg(unix)]
 #[test]
 fn init_refuses_an_existing_token_with_wide_permissions_and_rotate_repairs_it() {
     let base = common::private_tempdir();
@@ -120,6 +127,7 @@ fn init_refuses_an_existing_token_with_wide_permissions_and_rotate_repairs_it() 
     assert_eq!(mode_of(&paths.token_file()), 0o600);
 }
 
+#[cfg(unix)]
 #[test]
 fn init_refuses_a_configuration_directory_that_is_not_private() {
     let base = common::private_tempdir();
@@ -136,6 +144,7 @@ fn init_refuses_a_configuration_directory_that_is_not_private() {
     assert!(!paths.token_file().exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn init_does_not_overwrite_an_existing_configuration_with_wide_permissions() {
     let base = common::private_tempdir();

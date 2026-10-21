@@ -9,11 +9,14 @@
 //! `uno` ou d'un paquet Python, et les processus de la machine ne sont jamais regardés, hors les
 //! deux tests qui le disent.
 
+#![cfg(unix)]
+
 #[macro_use]
 mod common;
 
 use std::ffi::OsString;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -22,10 +25,12 @@ use std::time::{Duration, Instant};
 
 use common::{FAKE_TOKEN, FILE_TOKEN, Verdict, must_fail, must_pass, write_file};
 use libremodular_mcp::config::{Config, ConfigError, Paths};
+#[cfg(unix)]
 use libremodular_mcp::launch::{
     LaunchError, Plan, Programs, Record, accept_argument, bridge_environment, bridge_spawn,
     is_the_bridge, launch, plan_from_config, run, running_soffice, soffice_spawn, stop,
 };
+#[cfg(unix)]
 use rustix::process::{Pid, Signal, kill_process, test_kill_process};
 use serde_json::Value;
 
@@ -53,6 +58,7 @@ fn python() -> PathBuf {
         .expect("python3 is required to test the launcher")
 }
 
+#[cfg(unix)]
 /// Un faux programme : il écrit ce qu'il a reçu dans `report` et reste vivant, pour pouvoir être
 /// signalé, jusqu'à ce que le répertoire du test soit supprimé. `/proc/self/environ` contient
 /// l'environnement exactement tel qu'il a été donné, quoi que l'interpréteur ait fait ensuite de
@@ -81,6 +87,7 @@ fn write_fake_program(path: &Path, report: &Path) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).expect("mode 700");
 }
 
+#[cfg(unix)]
 /// Ce que les faux programmes reçoivent, et les répertoires autour d'eux.
 struct Setup {
     _base: tempfile::TempDir,
@@ -92,11 +99,13 @@ struct Setup {
     bridge_report: PathBuf,
 }
 
+#[cfg(unix)]
 fn private_dir(path: &Path) {
     fs::create_dir_all(path).expect("directory");
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).expect("mode");
 }
 
+#[cfg(unix)]
 fn setup() -> Setup {
     let base = common::private_tempdir();
     let root = base.path().to_path_buf();
@@ -139,6 +148,7 @@ fn setup() -> Setup {
     }
 }
 
+#[cfg(unix)]
 impl Setup {
     fn config(&self, text: &str) -> Config {
         Config::from_bytes(text.as_bytes()).expect("test configuration")
@@ -211,6 +221,7 @@ impl Setup {
     }
 }
 
+#[cfg(unix)]
 impl Drop for Setup {
     /// Quelle que soit la conclusion d'un test, les faux programmes ne lui survivent pas.
     fn drop(&mut self) {
@@ -224,12 +235,14 @@ impl Drop for Setup {
     }
 }
 
+#[cfg(unix)]
 fn kill(pid: u32) {
     if let Some(pid) = i32::try_from(pid).ok().and_then(Pid::from_raw) {
         let _ = kill_process(pid, Signal::KILL);
     }
 }
 
+#[cfg(unix)]
 fn alive(pid: u32) -> bool {
     i32::try_from(pid)
         .ok()
@@ -286,6 +299,7 @@ fn text_of(report: &Value, key: &str) -> Vec<String> {
 
 // --- les commandes ---------------------------------------------------------------------
 
+#[cfg(unix)]
 #[test]
 fn libreoffice_is_started_with_a_window_from_a_fixed_list_of_arguments() {
     let setup = setup();
@@ -312,6 +326,7 @@ fn libreoffice_is_started_with_a_window_from_a_fixed_list_of_arguments() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn the_bridge_is_the_system_python_on_the_bridge_file_and_nothing_else() {
     let setup = setup();
@@ -320,6 +335,7 @@ fn the_bridge_is_the_system_python_on_the_bridge_file_and_nothing_else() {
     assert_eq!(spawn.args, vec![setup.bridge_file.clone().into_os_string()]);
 }
 
+#[cfg(unix)]
 #[test]
 fn the_defaults_name_the_system_programs() {
     let programs = Programs::default();
@@ -328,6 +344,7 @@ fn the_defaults_name_the_system_programs() {
     assert_eq!(programs.proc_dir, Path::new("/proc"));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_bridge_environment_is_exactly_the_listed_one() {
     let setup = setup();
@@ -360,13 +377,16 @@ fn the_bridge_environment_is_exactly_the_listed_one() {
 
 // --- ce que les enfants reçoivent vraiment ---------------------------------------------
 
+#[cfg(unix)]
 /// Comment un lancement se fait : le lanceur, ou quelque chose construit pour le faire mal.
 type Launcher<'l> = &'l dyn Fn(&Setup) -> Result<(), String>;
 
+#[cfg(unix)]
 fn the_real_launcher(setup: &Setup) -> Result<(), String> {
     setup.launch().map(drop).map_err(|error| error.to_string())
 }
 
+#[cfg(unix)]
 /// Défectueux exprès : les deux mêmes programmes, par `sh -c` et une seule chaîne.
 fn through_a_shell(setup: &Setup) -> Result<(), String> {
     let plan = setup.plan();
@@ -388,6 +408,7 @@ fn through_a_shell(setup: &Setup) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(unix)]
 /// Défectueux exprès : les vraies commandes du lanceur, avec le contenu du jeton ajouté à
 /// l'environnement du pont.
 fn with_the_token_in_the_environment(setup: &Setup) -> Result<(), String> {
@@ -421,6 +442,7 @@ fn with_the_token_in_the_environment(setup: &Setup) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn detached(
     program: &str,
     args: &[String],
@@ -439,6 +461,7 @@ fn detached(
         .spawn()
 }
 
+#[cfg(unix)]
 fn check_the_arguments_arrive_exactly_as_listed(launcher: Launcher<'_>) -> Verdict {
     let setup = setup();
     launcher(&setup)?;
@@ -460,6 +483,7 @@ fn check_the_arguments_arrive_exactly_as_listed(launcher: Launcher<'_>) -> Verdi
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn the_arguments_reach_the_programs_unchanged_with_no_shell_in_between() {
     must_pass(check_the_arguments_arrive_exactly_as_listed(
@@ -467,6 +491,7 @@ fn the_arguments_reach_the_programs_unchanged_with_no_shell_in_between() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_launcher_that_goes_through_a_shell_is_detected() {
     must_fail(check_the_arguments_arrive_exactly_as_listed(
@@ -474,6 +499,7 @@ fn counter_proof_a_launcher_that_goes_through_a_shell_is_detected() {
     ));
 }
 
+#[cfg(unix)]
 fn check_the_token_is_in_no_argument_and_no_variable(launcher: Launcher<'_>) -> Verdict {
     let setup = setup();
     launcher(&setup)?;
@@ -504,6 +530,7 @@ fn check_the_token_is_in_no_argument_and_no_variable(launcher: Launcher<'_>) -> 
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn the_token_is_in_no_argument_and_no_variable_of_a_child_only_its_path_is() {
     must_pass(check_the_token_is_in_no_argument_and_no_variable(
@@ -511,6 +538,7 @@ fn the_token_is_in_no_argument_and_no_variable_of_a_child_only_its_path_is() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_launcher_that_passes_the_token_is_detected() {
     must_fail(check_the_token_is_in_no_argument_and_no_variable(
@@ -518,6 +546,7 @@ fn counter_proof_a_launcher_that_passes_the_token_is_detected() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_bridge_inherits_only_what_is_listed_and_libreoffice_what_it_was_given() {
     let setup = setup();
@@ -559,6 +588,7 @@ fn the_bridge_inherits_only_what_is_listed_and_libreoffice_what_it_was_given() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn both_programs_start_detached_in_a_group_of_their_own_with_nothing_attached() {
     let setup = setup();
@@ -576,6 +606,7 @@ fn both_programs_start_detached_in_a_group_of_their_own_with_nothing_attached() 
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn only_the_loopback_address_is_named_in_what_is_started() {
     let setup = setup();
@@ -596,6 +627,7 @@ fn only_the_loopback_address_is_named_in_what_is_started() {
 
 // --- un LibreOffice déjà en cours d'exécution ----------------------------------------------
 
+#[cfg(unix)]
 /// Avec un `soffice.bin` de l'utilisateur dans le listage, rien ne démarre : ni programme ni
 /// enregistrement. Le message dit quoi faire.
 fn check_nothing_starts_beside_a_running_libreoffice(launcher: Launcher<'_>) -> Verdict {
@@ -616,6 +648,7 @@ fn check_nothing_starts_beside_a_running_libreoffice(launcher: Launcher<'_>) -> 
     Ok(())
 }
 
+#[cfg(unix)]
 /// Défectueux exprès : les programmes sont démarrés sans chercher LibreOffice.
 fn without_looking_for_libreoffice(setup: &Setup) -> Result<(), String> {
     let plan = setup.plan();
@@ -628,6 +661,7 @@ fn without_looking_for_libreoffice(setup: &Setup) -> Result<(), String> {
     Err("started".to_owned())
 }
 
+#[cfg(unix)]
 #[test]
 fn a_running_libreoffice_makes_the_launcher_refuse_and_start_nothing() {
     must_pass(check_nothing_starts_beside_a_running_libreoffice(
@@ -635,6 +669,7 @@ fn a_running_libreoffice_makes_the_launcher_refuse_and_start_nothing() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_launcher_that_does_not_look_for_libreoffice_is_detected() {
     must_fail(check_nothing_starts_beside_a_running_libreoffice(
@@ -642,6 +677,7 @@ fn counter_proof_a_launcher_that_does_not_look_for_libreoffice_is_detected() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_refusal_says_what_to_do_and_names_the_option_to_use() {
     let setup = setup();
@@ -660,6 +696,7 @@ fn the_refusal_says_what_to_do_and_names_the_option_to_use() {
     assert!(text.contains("never closes one it did not start"), "{text}");
 }
 
+#[cfg(unix)]
 #[test]
 fn only_a_soffice_bin_of_the_same_user_counts() {
     let setup = setup();
@@ -680,12 +717,14 @@ fn only_a_soffice_bin_of_the_same_user_counts() {
     assert!(running_soffice(&setup.root.join("no-such-proc"), uid).is_err());
 }
 
+#[cfg(unix)]
 #[test]
 fn the_real_listing_of_processes_can_be_read() {
     // Ce qu'il contient dépend de la machine : seule sa lisibilité est vérifiée.
     assert!(running_soffice(Path::new("/proc"), common::current_uid()).is_ok());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_bridge_of_an_earlier_launch_that_still_runs_makes_the_launcher_refuse() {
     let setup = setup();
@@ -706,6 +745,7 @@ fn a_bridge_of_an_earlier_launch_that_still_runs_makes_the_launcher_refuse() {
 
 // --- la configuration -----------------------------------------------------------------------
 
+#[cfg(unix)]
 #[test]
 fn the_ports_come_from_the_enabled_targets_and_must_agree() {
     let setup = setup();
@@ -764,6 +804,7 @@ fn the_ports_come_from_the_enabled_targets_and_must_agree() {
     assert_eq!(same.exit_code(), 2);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_target_enabled_in_another_mode_is_not_launched_for() {
     let setup = setup();
@@ -778,6 +819,7 @@ fn a_target_enabled_in_another_mode_is_not_launched_for() {
 
 // --- le fichier du pont --------------------------------------------------------------------
 
+#[cfg(unix)]
 #[test]
 fn a_bridge_file_that_cannot_be_trusted_is_refused_and_nothing_starts() {
     let setup = setup();
@@ -822,6 +864,7 @@ fn a_bridge_file_that_cannot_be_trusted_is_refused_and_nothing_starts() {
 
 // --- l'enregistrement ----------------------------------------------------------------------
 
+#[cfg(unix)]
 #[test]
 fn the_record_lists_both_processes_in_a_private_file_of_a_private_directory() {
     let setup = setup();
@@ -860,6 +903,7 @@ fn the_record_lists_both_processes_in_a_private_file_of_a_private_directory() {
     assert!(!out.contains(FILE_TOKEN));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_record_that_is_a_link_stops_the_launch_and_is_never_written_through() {
     let setup = setup();
@@ -888,6 +932,7 @@ fn a_record_that_is_a_link_stops_the_launch_and_is_never_written_through() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn without_a_volatile_directory_nothing_is_written_and_nothing_starts() {
     let mut setup = setup();
@@ -898,6 +943,7 @@ fn without_a_volatile_directory_nothing_is_written_and_nothing_starts() {
     assert!(!setup.soffice_report.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_bridge_that_cannot_start_leaves_libreoffice_alone_and_says_so() {
     let mut setup = setup();
@@ -931,12 +977,14 @@ fn wait_until_gone(pid: u32) -> bool {
     false
 }
 
+#[cfg(unix)]
 fn stopped(setup: &Setup) -> String {
     let mut out = Vec::new();
     stop(&setup.programs, &setup.paths, &mut out).expect("stop");
     String::from_utf8(out).expect("utf-8")
 }
 
+#[cfg(unix)]
 #[test]
 fn stop_ends_the_bridge_only_and_leaves_libreoffice_to_its_operator() {
     let setup = setup();
@@ -961,15 +1009,18 @@ fn stop_ends_the_bridge_only_and_leaves_libreoffice_to_its_operator() {
     assert!(again.contains("nothing to stop"), "{again}");
 }
 
+#[cfg(unix)]
 /// Un enregistrement nomme un numéro de processus qui appartient maintenant à un autre programme :
 /// l'arrêt ne doit pas y toucher. `stopper` est ce qui arrête le pont.
 type Stopper<'s> = &'s dyn Fn(&Setup, &Record);
 
+#[cfg(unix)]
 fn the_real_stop(setup: &Setup, _: &Record) {
     let mut out = Vec::new();
     let _ = stop(&setup.programs, &setup.paths, &mut out);
 }
 
+#[cfg(unix)]
 /// Défectueux exprès : il fait confiance à l'enregistrement et signale le numéro qu'il contient.
 fn stop_without_checking_the_command_line(setup: &Setup, record: &Record) {
     if let Some((pid, _)) = &record.bridge {
@@ -978,6 +1029,7 @@ fn stop_without_checking_the_command_line(setup: &Setup, record: &Record) {
     let _ = fs::remove_file(setup.record_file());
 }
 
+#[cfg(unix)]
 fn check_a_reused_process_number_is_never_signalled(stopper: Stopper<'_>) -> Verdict {
     let setup = setup();
     let turn = one_at_a_time();
@@ -1007,6 +1059,7 @@ fn check_a_reused_process_number_is_never_signalled(stopper: Stopper<'_>) -> Ver
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn a_process_number_taken_by_another_program_is_never_signalled() {
     must_pass(check_a_reused_process_number_is_never_signalled(
@@ -1014,6 +1067,7 @@ fn a_process_number_taken_by_another_program_is_never_signalled() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn counter_proof_a_stop_that_trusts_the_record_kills_the_other_program() {
     must_fail(check_a_reused_process_number_is_never_signalled(
@@ -1021,12 +1075,14 @@ fn counter_proof_a_stop_that_trusts_the_record_kills_the_other_program() {
     ));
 }
 
+#[cfg(unix)]
 #[test]
 fn stop_with_no_record_is_not_an_error() {
     let setup = setup();
     assert!(stopped(&setup).contains("nothing to stop"));
 }
 
+#[cfg(unix)]
 #[test]
 fn stop_with_a_record_it_cannot_read_signals_nothing() {
     let setup = setup();
@@ -1060,6 +1116,7 @@ fn stop_with_a_record_it_cannot_read_signals_nothing() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_recorded_bridge_that_is_gone_is_reported_and_the_record_removed() {
     let setup = setup();
@@ -1085,6 +1142,7 @@ fn a_recorded_bridge_that_is_gone_is_reported_and_the_record_removed() {
 
 // --- avec le vrai /proc ----------------------------------------------------------------------
 
+#[cfg(unix)]
 #[test]
 fn the_bridge_is_recognised_by_an_argument_of_its_real_command_line() {
     let setup = setup();
@@ -1135,6 +1193,7 @@ struct Run {
     err: String,
 }
 
+#[cfg(unix)]
 fn run_args(setup: &Setup, args: &[&str]) -> Run {
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let paths = setup.paths.clone();
@@ -1154,10 +1213,12 @@ fn run_args(setup: &Setup, args: &[&str]) -> Run {
     }
 }
 
+#[cfg(unix)]
 fn write_configuration(setup: &Setup, text: &str) {
     write_file(&setup.paths.config_file(), 0o600, text);
 }
 
+#[cfg(unix)]
 #[test]
 fn the_other_applications_are_started_by_hand() {
     let setup = setup();
@@ -1177,6 +1238,7 @@ fn the_other_applications_are_started_by_hand() {
     assert!(!setup.soffice_report.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn an_unknown_name_or_a_wrong_usage_prints_the_usage_and_exits_with_2() {
     let setup = setup();
@@ -1212,6 +1274,7 @@ fn an_unknown_name_or_a_wrong_usage_prints_the_usage_and_exits_with_2() {
     assert!(!setup.soffice_report.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn help_prints_the_usage_on_the_standard_output_and_exits_with_0() {
     let setup = setup();
@@ -1226,6 +1289,7 @@ fn help_prints_the_usage_on_the_standard_output_and_exits_with_0() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn from_the_command_line_the_launch_and_the_stop_work_and_report_their_exit_codes() {
     let setup = setup();
@@ -1270,6 +1334,7 @@ fn from_the_command_line_the_launch_and_the_stop_work_and_report_their_exit_code
     assert!(stop_result.out.contains("was left running"));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_configuration_without_a_libreoffice_target_is_refused_with_code_2_and_starts_nothing() {
     let setup = setup();
@@ -1292,6 +1357,7 @@ fn a_configuration_without_a_libreoffice_target_is_refused_with_code_2_and_start
     assert!(!setup.soffice_report.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn a_configuration_the_hub_would_refuse_is_an_error_with_code_1() {
     let setup = setup();
@@ -1318,6 +1384,7 @@ fn a_configuration_the_hub_would_refuse_is_an_error_with_code_1() {
     assert!(!setup.soffice_report.exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn directories_that_cannot_be_found_are_an_error_with_code_1() {
     let setup = setup();
