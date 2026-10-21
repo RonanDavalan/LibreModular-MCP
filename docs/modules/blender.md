@@ -212,6 +212,11 @@ after 30 seconds, then `busy`. Blender does not support `bpy.ops` outside its ma
 so that thread can hang at any render; running the script in the main thread removes the
 cause. Set `filepath` under `LMM_WORK_DIR`.
 
+In a new profile the first render is slow. Five new profiles gave a first 128 x 128 render in 30.0 to 30.7 s, and
+the renders after it in 0.12 to 0.13 s. The default delay of the Hub is 30 s: four of the five first renders came back
+`ok`, one came back `timeout`, and the next calls got `busy` until it ended. Raise `default_timeout_s` in the `[hub]`
+section of `config.toml`, or render once by hand before a model does.
+
 For a render driven by `bpy` and judged by pixel, in the Workbench engine (measured in
 Blender 4.3.2, each point a render that came out wrong without an error):
 

@@ -195,6 +195,12 @@ tras 30 s, después `busy`. Blender no admite `bpy.ops` fuera de su hilo princi
 por lo que ese hilo puede colgarse en cualquier renderizado; ejecutar el script en el hilo principal elimina la
 causa. Fije `filepath` dentro de `LMM_WORK_DIR`.
 
+En un perfil nuevo, el primer renderizado es lento. Cinco perfiles nuevos dieron un primer renderizado de 128 por 128 en
+30,0 a 30,7 s, y los siguientes en 0,12 a 0,13 s. El plazo predeterminado del Hub es de 30 s: cuatro de los cinco primeros
+renderizados devolvieron `ok`, uno devolvió `timeout`, y las llamadas siguientes recibieron `busy` hasta que terminó.
+Suba `default_timeout_s` en la sección `[hub]` de `config.toml`, o haga un renderizado a mano antes de que lo haga un
+modelo.
+
 Para un renderizado dirigido por `bpy` y juzgado píxel a píxel, en el motor de renderizado Workbench (medido en
 Blender 4.3.2, cada punto es un renderizado que salió mal sin ningún error):
 

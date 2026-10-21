@@ -201,6 +201,11 @@ qui attend au lieu de l'appeler laisse le script dans le fil réseau du pont. Le
 `busy`. Blender ne prend pas en charge `bpy.ops` hors de son fil principal ; ce fil peut donc se bloquer à n'importe quel
 rendu, et exécuter le script dans le fil principal supprime la cause. Définissez `filepath` sous `LMM_WORK_DIR`.
 
+Dans un profil neuf, le premier rendu est lent. Cinq profils neufs ont donné un premier rendu de 128 par 128 en 30,0 à
+30,7 s, et les rendus suivants en 0,12 à 0,13 s. Le délai par défaut du Hub est de 30 s : quatre des cinq premiers rendus
+ont rendu `ok`, un a rendu `timeout`, et les appels suivants ont reçu `busy` jusqu'à sa fin. Augmentez `default_timeout_s`
+dans la section `[hub]` de `config.toml`, ou faites un rendu à la main avant qu'un modèle ne le fasse.
+
 Pour un rendu piloté par `bpy` et jugé au pixel, dans le moteur Workbench (mesuré dans Blender 4.3.2, chaque point étant un
 rendu qui est sorti faux sans erreur) :
 

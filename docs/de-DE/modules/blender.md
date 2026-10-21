@@ -206,6 +206,12 @@ stattdessen nur wartet, lässt das Skript im Netzwerk-Thread der Brücke laufen.
 jedem Rendern hängen bleiben; führt man das Skript im Hauptthread aus, entfällt die Ursache. Setzen Sie `filepath`
 unterhalb von `LMM_WORK_DIR`.
 
+In einem neuen Profil ist das erste Rendern langsam. Fünf neue Profile lieferten das erste Rendern mit 128 mal 128
+Pixeln in 30,0 bis 30,7 s, die folgenden in 0,12 bis 0,13 s. Die Standardfrist des Hubs beträgt 30 s: Vier der fünf
+ersten Renderings lieferten `ok`, eines lieferte `timeout`, und die folgenden Aufrufe erhielten `busy`, bis es beendet
+war. Erhöhen Sie `default_timeout_s` im Abschnitt `[hub]` von `config.toml`, oder rendern Sie einmal von Hand, bevor ein
+Modell es tut.
+
 Für ein Rendern über `bpy`, das pixelweise beurteilt wird, in der Render-Engine Workbench (gemessen in Blender 4.3.2,
 jeder Punkt ein Bild, das ohne Fehlermeldung falsch herauskam):
 
