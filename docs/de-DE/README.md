@@ -27,6 +27,15 @@ libremodular-mcp init
 
 Das Paket installiert außerdem die Leitfäden in `/usr/share/doc/libremodular-mcp/` und die Handbuchseiten (`man libremodular-mcp`, `man libremodular-launch`) auf Englisch, Französisch, Deutsch und Spanisch.
 
+Unter Windows 11 (x64) laden Sie von derselben Seite `libremodular-mcp-0.1.0-windows.zip` herunter. Es enthält ein einziges Installationsprogramm, auf Windows gebaut und ohne Bildschirm erprobt: stille Installation, `init`, ein gestarteter Hub, der `initialize` beantwortet, Deinstallation, in einem Konto, dessen Name Akzente enthält. Seine Stufe lautet **auf Windows gebaut, ohne Bildschirm erprobt**; noch niemand hat es auf einem eigenen Rechner ausprobiert, daher heißt es nicht getestet. Das Installationsprogramm ist nicht signiert: Windows kann vor dem Start warnen. In PowerShell:
+
+```powershell
+tar -xf libremodular-mcp-0.1.0-windows.zip
+.\libremodular-mcp-0.1.0-setup.exe /S
+```
+
+Es braucht keine Administratorrechte: Es installiert den Hub, `libremodular-launch` (das sich unter Windows weigert zu laufen), die Brücken als Textdateien, die Lizenz und die Leitfäden nach `%LOCALAPPDATA%\Programs\LibreModular-MCP\` und fügt diesen Ordner dem `PATH` Ihres Kontos hinzu (öffnen Sie ein neues Terminal). Führen Sie danach `libremodular-mcp init` aus; Konfiguration und Token liegen in `%LOCALAPPDATA%\libremodular-mcp\config\`. `uninstall.exe` im Installationsordner entfernt das Programm und lässt Konfiguration, Token und Audit-Journal zurück.
+
 Um den Hub stattdessen aus den Quellen zu bauen:
 
 ```sh
@@ -48,7 +57,7 @@ Der Eintrag für den MCP-Client startet das Programm mit dem Argument `serve`:
 }
 ```
 
-Was anzupassen ist: `/home/alice/LibreModular-MCP/` ist der absolute Pfad Ihres Klons; bei einem Paket lautet der Befehl `/usr/bin/libremodular-mcp`. In welche Datei dieser
+Was anzupassen ist: `/home/alice/LibreModular-MCP/` ist der absolute Pfad Ihres Klons; bei einem Paket lautet der Befehl `/usr/bin/libremodular-mcp`; unter Windows ist es der volle Pfad von `libremodular-mcp.exe` im Installationsordner. In welche Datei dieser
 Eintrag gehört und wie seine Schlüssel heißen, hängt von Ihrem Client ab: Die obige Form ist verbreitet, und der
 Hub wurde mit einem für seine Tests geschriebenen Client (JSON-RPC-Zeilen auf Standardeingabe und
 Standardausgabe) ausprobiert, nicht mit einem benannten MCP-Client. Der Hub braucht die Variable
@@ -87,7 +96,7 @@ kontaktieren.
 
 ## Anwendungen
 
-Nur Linux: Die Zielplattform ist Debian 13, und das Calc-Beispiel unten lief auch unter Ubuntu 24.04. Der Hub wird aus einem nativen Paket installiert (Debian, Ubuntu, Fedora, openSUSE Leap oder Arch Linux, siehe Schnellstart) oder aus den Quellen gebaut (Schnellstart). Die Versionen sind die, die die
+Die Zielplattform ist Debian 13, und das Calc-Beispiel unten lief auch unter Ubuntu 24.04. Unter Windows 11 wurde nur das Inkscape-Modul ausprobiert (Inkscape 1.4.2 und 1.4.4): Die Brücken für GIMP, Krita, Blender und LibreOffice wurden dort gegen einen nachgebildeten Host ausprobiert, nicht in den echten Anwendungen, und `libremodular-launch` weigert sich zu laufen. Der Hub wird aus einem nativen Paket installiert (Debian, Ubuntu, Fedora, openSUSE Leap oder Arch Linux, siehe Schnellstart) oder aus den Quellen gebaut (Schnellstart). Die Versionen sind die, die die
 Leitfäden als ausprobiert nennen; der Leitfaden jeder Anwendung sagt, unter welchen Bedingungen und was nicht Teil
 des Laufs war.
 

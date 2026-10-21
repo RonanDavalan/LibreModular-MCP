@@ -123,6 +123,13 @@ Arch Linux :
 sudo pacman -U ./libremodular-mcp-*-x86_64.pkg.tar.zst
 ```
 
+Windows 11 (x64) a un installeur, construit sur Windows et essayé sans écran, pas encore essayé sur la machine d'un utilisateur ; il est livré dans l'archive *libremodular-mcp-0.1.0-windows.zip* et installe le Hub sans droits d'administrateur. Il n'installe pas ces pages de manuel. Dans PowerShell :
+
+```powershell
+tar -xf libremodular-mcp-0.1.0-windows.zip
+.\libremodular-mcp-0.1.0-setup.exe /S
+```
+
 # VOIR AUSSI
 
 **libremodular-launch**(1)

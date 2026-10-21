@@ -27,6 +27,15 @@ libremodular-mcp init
 
 Le paquet installe aussi les guides dans `/usr/share/doc/libremodular-mcp/` et les pages de manuel (`man libremodular-mcp`, `man libremodular-launch`) en anglais, en français, en allemand et en espagnol.
 
+Sous Windows 11 (x64), téléchargez `libremodular-mcp-0.1.0-windows.zip` depuis la même page. Il contient un seul installeur, construit sur Windows et essayé sans écran : installation silencieuse, `init`, Hub démarré qui répond à `initialize`, retrait, dans un compte dont le nom porte des accents. Son niveau est **construit sur Windows, essayé sans écran** ; personne ne l'a encore essayé sur sa propre machine, il n'est donc pas dit testé. L'installeur n'est pas signé : Windows peut avertir avant de l'exécuter. Dans PowerShell :
+
+```powershell
+tar -xf libremodular-mcp-0.1.0-windows.zip
+.\libremodular-mcp-0.1.0-setup.exe /S
+```
+
+Il ne demande aucun droit d'administrateur : il installe le Hub, `libremodular-launch` (qui refuse de s'exécuter sous Windows), les ponts en fichiers texte, la licence et les guides dans `%LOCALAPPDATA%\Programs\LibreModular-MCP\`, et ajoute ce dossier au `PATH` de votre compte (ouvrez un nouveau terminal). Lancez ensuite `libremodular-mcp init` ; la configuration et le jeton vont dans `%LOCALAPPDATA%\libremodular-mcp\config\`. `uninstall.exe`, dans le dossier d'installation, retire le programme et laisse la configuration, le jeton et le journal d'audit.
+
 Pour construire plutôt le Hub depuis les sources :
 
 ```sh
@@ -48,10 +57,10 @@ L'entrée du client MCP lance le binaire avec l'argument `serve` :
 }
 ```
 
-À adapter : `/home/alice/LibreModular-MCP/` est le chemin absolu de votre clone ; avec un paquet, la commande est `/usr/bin/libremodular-mcp`. Le fichier où cette
+À adapter : `/home/alice/LibreModular-MCP/` est le chemin absolu de votre clone ; avec un paquet, la commande est `/usr/bin/libremodular-mcp` ; sous Windows, c'est le chemin complet de `libremodular-mcp.exe` dans le dossier d'installation. Le fichier où cette
 entrée se place, et le nom de ses clés, dépendent de votre client : la forme ci-dessus est courante, et le
 Hub a été essayé avec un client écrit pour ses tests (des lignes JSON-RPC sur son entrée et sa sortie
-standard), pas avec un client MCP nommé. Le Hub a besoin de la variable `XDG_RUNTIME_DIR`, que définit une
+standard), pas avec un client MCP nommé. Sous Linux, le Hub a besoin de la variable `XDG_RUNTIME_DIR`, que définit une
 session de bureau ; sans elle, il refuse de démarrer.
 
 `init` crée `~/.config/libremodular-mcp/config.toml` et le fichier de jeton à côté, tous deux en mode 600. Il
@@ -86,7 +95,7 @@ contacter aucune application.
 
 ## Applications
 
-Linux seulement : la plateforme visée est Debian 13, et l'exemple Calc ci-dessous a aussi tourné sous Ubuntu 24.04. Le Hub s'installe depuis un paquet natif (Debian, Ubuntu, Fedora, openSUSE Leap ou Arch Linux, voir Démarrage rapide) ou se construit depuis les sources (Démarrage rapide). Les
+La plateforme visée est Debian 13, et l'exemple Calc ci-dessous a aussi tourné sous Ubuntu 24.04. Sous Windows 11, seul le module Inkscape a été essayé (Inkscape 1.4.2 et 1.4.4) : les ponts de GIMP, Krita, Blender et LibreOffice y ont été essayés contre un faux hôte, pas dans les vraies applications, et `libremodular-launch` refuse de s'exécuter. Le Hub s'installe depuis un paquet natif (Debian, Ubuntu, Fedora, openSUSE Leap ou Arch Linux, voir Démarrage rapide) ou se construit depuis les sources (Démarrage rapide). Les
 versions sont celles que les guides rapportent comme essayées ; le guide de chaque application dit dans quelles
 conditions, et ce qui n'a pas fait partie de l'essai.
 
