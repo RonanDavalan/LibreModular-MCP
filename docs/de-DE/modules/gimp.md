@@ -140,6 +140,10 @@ Strg+C; der Batch-Befehl endet dann, und mit ihm die Brücke. Ein Batch-Befehl, 
 eigene Schleife beendet, schließt den Port 9301, sobald er zurückkehrt. Die oben genannten Läufe übergaben außerdem
 `--no-data --no-fonts` und verwendeten ein eigenes Profilverzeichnis, damit das Profil des Bedieners unberührt blieb.
 
+Auch ohne Oberfläche braucht GIMP 3.0.4 ein erreichbares X-Display: ohne Display brach derselbe Befehl mit
+`Gtk-WARNING: cannot open display` und dem Exit-Code 1 ab, und der Port 9301 öffnete sich nie. Auf einem Rechner ohne
+Bildschirm geben Sie ihm einen virtuellen X-Server.
+
 Um die Verbindung aus Sicht des Modells zu prüfen, rufen Sie `get_state` mit dem Ziel `hub` auf: GIMP steht dann mit
 `connected: true` und der Version in der Liste, die GIMP gemeldet hat.
 

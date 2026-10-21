@@ -136,6 +136,10 @@ par lots s'achève alors, et le pont avec elle. Une commande de traitement par l
 sa propre boucle, ferme le port 9301 dès qu'elle rend la main. Les essais ci-dessus passaient aussi `--no-data --no-fonts`
 et employaient un répertoire de profil à eux, pour ne pas toucher au profil de l'opérateur.
 
+Sans son interface, GIMP 3.0.4 a quand même besoin d'un écran X qu'il peut joindre : sans écran, la même commande s'est
+arrêtée avec `Gtk-WARNING: cannot open display` et le code de sortie 1, et le port 9301 ne s'est jamais ouvert. Sur une machine
+sans écran, donnez-lui un serveur X virtuel.
+
 Pour vérifier la connexion du côté du modèle, appelez `get_state` avec la cible `hub` : GIMP y figure avec
 `connected: true` et la version que GIMP a indiquée.
 

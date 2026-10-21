@@ -144,6 +144,10 @@ the bridge. A batch command that does not call it, or that ends its own loop, cl
 port 9301 as soon as it returns. The runs above also passed `--no-data --no-fonts` and
 used a profile directory of their own, so that the operator's profile was not touched.
 
+Without its interface, GIMP 3.0.4 still needs an X display it can reach: with no display, the same command stopped
+with `Gtk-WARNING: cannot open display` and exit code 1, and port 9301 never opened. On a machine without a screen,
+give it a virtual X server.
+
 To check the connection from the model's side, call `get_state` with the target `hub`:
 GIMP is listed with `connected: true` and the version GIMP reported.
 

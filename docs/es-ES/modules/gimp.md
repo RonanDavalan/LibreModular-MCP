@@ -106,6 +106,8 @@ gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
 
 `--batch-interpreter python-fu-eval` es obligatorio: `python-eval` no es un intérprete de GIMP 3.0.4 y `--batch-interpreter-args` no existe. `serve_main_thread()` hace girar el bucle principal de GLib en el hilo que lo llamó, para que los scripts que el puente pone en cola se ejecuten allí. Vuelve cuando el puente se detiene (`stop()`), tras `seconds` si usted pasa `serve_main_thread(seconds=600)`, o con Ctrl+C; entonces termina el comando por lotes y con él el puente. Un comando por lotes que no lo llama, o que termina su propio bucle, cierra el puerto 9301 en cuanto vuelve. En las ejecuciones anteriores se pasó además `--no-data --no-fonts` y se usó un directorio de perfil propio, para no tocar el perfil del operador.
 
+Sin su interfaz, GIMP 3.0.4 sigue necesitando una pantalla X a la que pueda acceder: sin pantalla, el mismo comando se detuvo con `Gtk-WARNING: cannot open display` y el código de salida 1, y el puerto 9301 nunca se abrió. En una máquina sin pantalla, déle un servidor X virtual.
+
 Para comprobar la conexión desde el lado del modelo, llame a `get_state` con el destino `hub`: GIMP figura en la lista con `connected: true` y la versión que comunicó GIMP.
 
 ## Lo que ve un script
