@@ -1,0 +1,48 @@
+name: Windows installer
+
+# A la demande seulement : le runner construit l'installeur de la version portee par Cargo.toml,
+# comme sur une machine Windows, puis rejoue la validation sans ecran.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: C:\lmm-target
+      TEMP: C:\lmm-temp
+      TMP: C:\lmm-temp
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.97 for the GNU target
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force C:\lmm-temp | Out-Null
+          rustup toolchain install 1.97-x86_64-pc-windows-gnu --profile minimal
+          rustup default 1.97-x86_64-pc-windows-gnu
+          gcc --version
+      - name: Install NSIS 3.11
+        shell: powershell
+        run: choco install nsis --version 3.11 -y --no-progress
+      - name: Build the installer and the archive
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force C:\lmm-out | Out-Null
+          .github\windows\construire-installeur.ps1 -Source $PWD -Out C:\lmm-out -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe" | Tee-Object C:\lmm-out\SHA256.txt
+      - name: Validate the installer without a screen
+        shell: powershell
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches.Groups[1].Value
+          .github\windows\valider-installeur.ps1 -Installer C:\lmm-out\libremodular-mcp-$version-setup.exe -Version $version -Work C:\lmm-val
+          .github\windows\valider-installeur.ps1 -Installer C:\lmm-out\libremodular-mcp-$version-setup.exe -Version $version -Work C:\lmm-val -Default
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libremodular-mcp-windows
+          path: |
+            C:\lmm-out\libremodular-mcp-*-windows.zip
+            C:\lmm-out\SHA256.txt
+          if-no-files-found: error
