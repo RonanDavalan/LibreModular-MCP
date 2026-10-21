@@ -231,13 +231,16 @@ lisez `dir()` dans le GIMP en cours d'exécution plutôt que d'en conclure que l
 | Charger un fichier | `Gimp.File.load(gfile)` | `Gimp.file_load(Gimp.RunMode.NONINTERACTIVE, gfile)` |
 | Définir le calque actif | `Gimp.image_set_active_layer(image, layer)` | n'existe pas |
 
-Trois appels échouent sans lever d'erreur :
+Quatre appels échouent sans lever d'erreur :
 
 - `image.insert_layer(layer, None, 0)` avec un calque qui appartient à une autre image ne fait rien : `image.get_layers()`
   reste vide. Copiez d'abord le calque avec `Gimp.Layer.new_from_drawable(layer, image)`, puis insérez la copie.
 - `layer.edit_bucket_fill(...)` a laissé un calque d'une image `Gimp.ImageBaseType.RGB` entièrement transparent (l'image
   aplatie se lisait `srgba(0,0,0,0)`), alors que `layer.fill(Gimp.FillType.FOREGROUND)` l'a rempli. Le pont ne garantit
   pas de calque actif, dont le remplissage au seau semble avoir besoin.
+- `layer.fill(Gimp.FillType.FOREGROUND)` ignore la sélection et remplit tout le calque. Avec une ellipse sélectionnée,
+  un calque transparent rempli ainsi se lisait avec un alpha de 1,0 dans son coin ; `layer.edit_fill(Gimp.FillType.FOREGROUND)`
+  restait dans la sélection (alpha 0,0 dans le coin, 1,0 au centre). Pour remplir une sélection, utilisez `edit_fill`.
 - `layer.scale(width, height, local_origin)` avec une hauteur négative (`-1`, « garder les proportions ») ne fait rien ;
   avec deux dimensions positives, elle redimensionne le calque.
 

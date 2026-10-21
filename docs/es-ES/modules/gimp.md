@@ -200,10 +200,11 @@ Observado en GIMP 3.0.4. Un script escrito de memoria a partir de GIMP 2.10 fall
 | Cargar un archivo | `Gimp.File.load(gfile)` | `Gimp.file_load(Gimp.RunMode.NONINTERACTIVE, gfile)` |
 | Establecer la capa activa | `Gimp.image_set_active_layer(image, layer)` | no existe |
 
-Tres llamadas fallan sin lanzar ningún error:
+Cuatro llamadas fallan sin lanzar ningún error:
 
 - `image.insert_layer(layer, None, 0)` con una capa que pertenece a otra imagen no hace nada: `image.get_layers()` queda vacía. Cópiela primero con `Gimp.Layer.new_from_drawable(layer, image)` y después inserte la copia.
 - `layer.edit_bucket_fill(...)` dejó una capa de una imagen `Gimp.ImageBaseType.RGB` totalmente transparente (la imagen aplanada leía `srgba(0,0,0,0)`), mientras que `layer.fill(Gimp.FillType.FOREGROUND)` la rellenó. El puente no garantiza una capa activa, que el relleno con cubo de pintura parece necesitar.
+- `layer.fill(Gimp.FillType.FOREGROUND)` ignora la selección y rellena toda la capa. Con una elipse seleccionada, una capa transparente rellenada así leía alfa 1,0 en su esquina; `layer.edit_fill(Gimp.FillType.FOREGROUND)` se mantuvo dentro de la selección (alfa 0,0 en la esquina, 1,0 en el centro). Para rellenar una selección, use `edit_fill`.
 - `layer.scale(width, height, local_origin)` con una altura negativa (`-1`, «mantener la proporción») no hace nada; con dos dimensiones positivas cambia el tamaño de la capa.
 
 ## Límites

@@ -248,7 +248,7 @@ that the API is broken.
 | Load a file | `Gimp.File.load(gfile)` | `Gimp.file_load(Gimp.RunMode.NONINTERACTIVE, gfile)` |
 | Set the active layer | `Gimp.image_set_active_layer(image, layer)` | does not exist |
 
-Three calls fail without raising an error:
+Four calls fail without raising an error:
 
 - `image.insert_layer(layer, None, 0)` with a layer that belongs to another image does
   nothing: `image.get_layers()` stays empty. Copy it first with
@@ -257,6 +257,10 @@ Three calls fail without raising an error:
   transparent (the flattened image read `srgba(0,0,0,0)`), whereas
   `layer.fill(Gimp.FillType.FOREGROUND)` filled it. The bridge does not guarantee an
   active layer, which the bucket fill seems to need.
+- `layer.fill(Gimp.FillType.FOREGROUND)` ignores the selection and fills the whole layer.
+  With an ellipse selected, a transparent layer filled this way read alpha 1.0 at its
+  corner; `layer.edit_fill(Gimp.FillType.FOREGROUND)` kept to the selection (alpha 0.0 at
+  the corner, 1.0 at the centre). To fill a selection, use `edit_fill`.
 - `layer.scale(width, height, local_origin)` with a negative height (`-1`, "keep the
   ratio") does nothing; with two positive dimensions it resizes the layer.
 

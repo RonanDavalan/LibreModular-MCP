@@ -241,7 +241,7 @@ kaputt.
 | Eine Datei laden | `Gimp.File.load(gfile)` | `Gimp.file_load(Gimp.RunMode.NONINTERACTIVE, gfile)` |
 | Die aktive Ebene setzen | `Gimp.image_set_active_layer(image, layer)` | gibt es nicht |
 
-Drei Aufrufe schlagen fehl, ohne einen Fehler auszulösen:
+Vier Aufrufe schlagen fehl, ohne einen Fehler auszulösen:
 
 - `image.insert_layer(layer, None, 0)` mit einer Ebene, die zu einem anderen Bild gehört, bewirkt nichts:
   `image.get_layers()` bleibt leer. Kopieren Sie die Ebene zuerst mit `Gimp.Layer.new_from_drawable(layer, image)` und
@@ -249,6 +249,9 @@ Drei Aufrufe schlagen fehl, ohne einen Fehler auszulösen:
 - `layer.edit_bucket_fill(...)` ließ eine Ebene eines Bildes vom Typ `Gimp.ImageBaseType.RGB` völlig transparent (das
   zusammengefügte Bild las sich als `srgba(0,0,0,0)`), während `layer.fill(Gimp.FillType.FOREGROUND)` sie füllte. Die
   Brücke stellt keine aktive Ebene sicher, die der Farbeimer offenbar braucht.
+- `layer.fill(Gimp.FillType.FOREGROUND)` ignoriert die Auswahl und füllt die ganze Ebene. Bei ausgewählter Ellipse las
+  sich eine so gefüllte transparente Ebene in ihrer Ecke mit Alpha 1.0; `layer.edit_fill(Gimp.FillType.FOREGROUND)`
+  blieb in der Auswahl (Alpha 0.0 in der Ecke, 1.0 in der Mitte). Um eine Auswahl zu füllen, verwenden Sie `edit_fill`.
 - `layer.scale(width, height, local_origin)` mit einer negativen Höhe (`-1`, „Seitenverhältnis beibehalten“) bewirkt
   nichts; mit zwei positiven Maßen ändert es die Größe der Ebene.
 
