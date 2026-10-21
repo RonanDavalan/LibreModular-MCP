@@ -221,6 +221,11 @@ rendu qui est sorti faux sans erreur) :
 - Un PNG transparent paraît vide dans une visionneuse qui compose sur du blanc : jugez le rendu sur l'image composée, et
   lisez les vraies couleurs avec un histogramme (`magick render.png +dither -colors 6 -format %c histogram:info:`).
 
+Dans le moteur par défaut (`BLENDER_EEVEE_NEXT`, mesuré dans Blender 4.3.2), la transformation de vue d'une scène neuve
+est `AgX`, qui modifie les couleurs en route vers le PNG : une couleur de monde écrite `#1c385c` a été rendue `#103759`,
+et la réponse du script était `ok`. Avec `scene.view_settings.view_transform = "Standard"`, le même fond a été rendu
+`#1C385C`. Une surface éclairée ne se lit jamais comme la couleur de son matériau, quelle que soit la transformation.
+
 ## Exemple
 
 Un script qui ajoute un triangle à la scène active avec l'API de données. Exécuté tel quel dans la scène par défaut, il

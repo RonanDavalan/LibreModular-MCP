@@ -218,6 +218,11 @@ Blender 4.3.2, cada punto es un renderizado que salió mal sin ningún error):
   sobre la imagen compuesta y lea los colores reales con un histograma
   (`magick render.png +dither -colors 6 -format %c histogram:info:`).
 
+En el motor predeterminado (`BLENDER_EEVEE_NEXT`, medido en Blender 4.3.2), la transformación de vista de una escena nueva
+es `AgX`, que cambia los colores de camino al PNG: un color de mundo escrito `#1c385c` se renderizó como `#103759`, y la
+respuesta del script fue `ok`. Con `scene.view_settings.view_transform = "Standard"`, el mismo fondo se renderizó como
+`#1C385C`. Una superficie iluminada nunca se lee como el color de su material, sea cual sea la transformación.
+
 ## Ejemplo
 
 Un script que añade un triángulo a la escena activa con la API de datos. Ejecutado tal cual en

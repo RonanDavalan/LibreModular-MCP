@@ -230,6 +230,12 @@ jeder Punkt ein Bild, das ohne Fehlermeldung falsch herauskam):
   zusammengesetzten Ergebnis und lesen Sie die tatsächlichen Farben mit einem Histogramm ab
   (`magick render.png +dither -colors 6 -format %c histogram:info:`).
 
+In der Standard-Engine (`BLENDER_EEVEE_NEXT`, gemessen in Blender 4.3.2) ist die Ansichtstransformation einer neuen
+Szene `AgX`; sie verändert die Farben auf dem Weg zur PNG-Datei: Eine als `#1c385c` geschriebene Weltfarbe wurde als
+`#103759` gerendert, und die Antwort des Skripts lautete `ok`. Mit `scene.view_settings.view_transform = "Standard"`
+wurde derselbe Hintergrund als `#1C385C` gerendert. Eine beleuchtete Fläche liest sich nie als die Farbe ihres
+Materials, gleich welche Transformation gilt.
+
 ## Beispiel
 
 Ein Skript, das der aktiven Szene mit der Daten-Schnittstelle ein Dreieck hinzufügt. Unverändert in der Standardszene

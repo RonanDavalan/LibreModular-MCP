@@ -234,6 +234,12 @@ Blender 4.3.2, each point a render that came out wrong without an error):
   on the composed image, and read the real colours with a histogram
   (`magick render.png +dither -colors 6 -format %c histogram:info:`).
 
+In the default engine (`BLENDER_EEVEE_NEXT`, measured in Blender 4.3.2) the view transform of a
+new scene is `AgX`, which changes colours on the way to the PNG: a world colour written as
+`#1c385c` rendered as `#103759`, and the script's answer was `ok`. With
+`scene.view_settings.view_transform = "Standard"` the same background rendered `#1C385C`.
+A lit surface never reads as the colour of its material, whatever the transform.
+
 ## Example
 
 A script that adds a triangle to the active scene with the data API. Run as written in
