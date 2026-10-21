@@ -74,13 +74,13 @@ Bediener führt die erzeugte Datei jedes Mal von Hand aus, in Kritas Scripter.
    Sie Folgendes aus:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py", encoding="utf-8").read())
    ```
 
    Mit dem installierten Paket:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py", encoding="utf-8").read())
    ```
 
    Die Brücke startet in einem Hintergrund-Thread, und Krita bleibt bedienbar. Sie schreibt eine Zeile in den

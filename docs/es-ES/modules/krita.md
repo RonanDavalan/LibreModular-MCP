@@ -59,13 +59,13 @@ El puente nunca se inicia solo. No se instala nada en el directorio de complemen
 4. Abra Scripter (en Krita 5, en *Tools → Scripts → Scripter*; la ruta exacta del menú no está confirmada) y ejecute:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py", encoding="utf-8").read())
    ```
 
    Con el paquete instalado:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py", encoding="utf-8").read())
    ```
 
    El puente se inicia en un hilo en segundo plano y Krita sigue siendo utilizable. Escribe una línea en el flujo de error del proceso y, cuando Scripter redirige ese flujo, en la salida de Scripter:

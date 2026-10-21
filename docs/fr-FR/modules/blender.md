@@ -78,13 +78,13 @@ Le pont ne démarre jamais seul : l'opérateur le démarre à la main, à chaqu
    ou, dans un Blender déjà ouvert, exécutez-le depuis la console Python de l'espace de travail *Scripting* :
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py", encoding="utf-8").read())
    ```
 
    Depuis le paquet installé :
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py", encoding="utf-8").read())
    ```
 
    Les variables peuvent aussi être définies dans cette console, avant la ligne ci-dessus, par `os.environ` : le pont les

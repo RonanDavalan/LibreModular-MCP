@@ -66,13 +66,13 @@ El puente nunca se inicia solo: el operador lo inicia a mano, cada vez.
    espacio de trabajo *Scripting*:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py", encoding="utf-8").read())
    ```
 
    Con el paquete instalado:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py", encoding="utf-8").read())
    ```
 
    Las variables también pueden definirse en esa consola, antes de la línea anterior, mediante

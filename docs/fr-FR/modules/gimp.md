@@ -80,13 +80,13 @@ lots d'un GIMP démarré sans interface (voir « Démarrage sans interface »)
 4. Ouvrez la console Python (dans GIMP 3.0, sous *Filters → Development → Python-Fu* ; le chemin de menu exact : non confirmé) et exécutez le fichier généré :
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py", encoding="utf-8").read())
    ```
 
    Depuis le paquet installé :
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py", encoding="utf-8").read())
    ```
 
    Le pont démarre dans un fil d'exécution d'arrière-plan et la console reste utilisable. Il écrit une ligne sur le flux
@@ -116,7 +116,7 @@ appelant `serve_main_thread()`, que le fichier du pont définit :
 LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
-  -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
+  -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py', encoding='utf-8').read()); serve_main_thread()"
 ```
 
 Depuis le paquet installé :
@@ -125,7 +125,7 @@ Depuis le paquet installé :
 LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
-  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py').read()); serve_main_thread()"
+  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py', encoding='utf-8').read()); serve_main_thread()"
 ```
 
 `--batch-interpreter python-fu-eval` est obligatoire : `python-eval` n'est pas un interpréteur de GIMP 3.0.4, et

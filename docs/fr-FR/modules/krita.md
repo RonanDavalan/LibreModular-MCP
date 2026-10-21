@@ -72,13 +72,13 @@ le fichier généré, à chaque fois, depuis le Scripter de Krita.
    exécutez :
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py", encoding="utf-8").read())
    ```
 
    Depuis le paquet installé :
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py", encoding="utf-8").read())
    ```
 
    Le pont démarre dans un fil d'exécution d'arrière-plan et Krita reste utilisable. Il écrit une ligne sur le flux

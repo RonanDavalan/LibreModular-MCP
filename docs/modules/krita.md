@@ -76,13 +76,13 @@ Krita's Scripter.
    unconfirmed) and run:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py", encoding="utf-8").read())
    ```
 
    From the installed package:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py", encoding="utf-8").read())
    ```
 
    The bridge starts in a background thread and Krita stays usable. It writes one line on

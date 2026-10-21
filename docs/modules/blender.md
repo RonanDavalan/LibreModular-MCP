@@ -81,13 +81,13 @@ The bridge never starts on its own: the operator starts it by hand, each time.
    *Scripting* workspace:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py", encoding="utf-8").read())
    ```
 
    From the installed package:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py", encoding="utf-8").read())
    ```
 
    The variables can also be set in that console, before the line above, through

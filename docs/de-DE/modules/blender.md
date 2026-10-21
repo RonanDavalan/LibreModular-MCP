@@ -79,13 +79,13 @@ Die Brücke startet nie von selbst: Der Bediener startet sie jedes Mal von Hand.
    oder führen Sie sie in einem bereits geöffneten Blender aus der Python-Konsole des Arbeitsbereichs *Scripting* aus:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py", encoding="utf-8").read())
    ```
 
    Mit dem installierten Paket:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py", encoding="utf-8").read())
    ```
 
    Die Variablen lassen sich auch in dieser Konsole über `os.environ` setzen, vor der Zeile oben: Die Brücke liest sie,

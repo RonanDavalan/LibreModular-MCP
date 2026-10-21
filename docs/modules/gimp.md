@@ -85,13 +85,13 @@ interface").
    the exact menu path is unconfirmed) and run the generated file:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py", encoding="utf-8").read())
    ```
 
    From the installed package:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py", encoding="utf-8").read())
    ```
 
    The bridge starts in a background thread and the console stays usable. It writes one
@@ -123,7 +123,7 @@ defines:
 LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
-  -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
+  -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py', encoding='utf-8').read()); serve_main_thread()"
 ```
 
 From the installed package:
@@ -132,7 +132,7 @@ From the installed package:
 LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
-  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py').read()); serve_main_thread()"
+  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py', encoding='utf-8').read()); serve_main_thread()"
 ```
 
 `--batch-interpreter python-fu-eval` is required: `python-eval` is not an interpreter of

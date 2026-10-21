@@ -83,13 +83,13 @@ Oberfläche gestartet wurde (siehe „Ohne Oberfläche gestartet“).
    unbestätigt) und führen Sie die erzeugte Datei aus:
 
    ```python
-   exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
+   exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py", encoding="utf-8").read())
    ```
 
    Mit dem installierten Paket:
 
    ```python
-   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
+   exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py", encoding="utf-8").read())
    ```
 
    Die Brücke startet in einem Hintergrund-Thread, und die Konsole bleibt bedienbar. Sie schreibt eine Zeile in den
@@ -120,7 +120,7 @@ Führen Sie die Brückendatei im Batch-Befehl aus und übergeben Sie den Hauptth
 LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
-  -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
+  -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py', encoding='utf-8').read()); serve_main_thread()"
 ```
 
 Mit dem installierten Paket:
@@ -129,7 +129,7 @@ Mit dem installierten Paket:
 LIBREMODULAR_BRIDGE_PORT=9301 \
 LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
-  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py').read()); serve_main_thread()"
+  -b "exec(open('/usr/share/libremodular-mcp/bridges/gimp_bridge.py', encoding='utf-8').read()); serve_main_thread()"
 ```
 
 `--batch-interpreter python-fu-eval` ist erforderlich: `python-eval` ist in GIMP 3.0.4 kein Interpreter, und
