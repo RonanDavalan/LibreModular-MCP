@@ -197,7 +197,7 @@ impl fmt::Display for LaunchError {
                 f,
                 "the bridge file is refused: {error}; pass the absolute path of uno_bridge.py \
                  with --bridge-file: bridges/generated/uno_bridge.py in a clone, \
-                 /usr/share/libremodular-mcp/bridges/uno_bridge.py from the Debian package"
+                 /usr/share/libremodular-mcp/bridges/uno_bridge.py from the package"
             ),
             LaunchError::AlreadyRunning { pids, uno_port } => write!(
                 f,
