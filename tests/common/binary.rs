@@ -60,11 +60,12 @@ pub fn command(layout: &Layout, with_runtime: bool) -> Command {
         .stderr(Stdio::piped());
     if with_runtime {
         command.env("XDG_RUNTIME_DIR", &layout.runtime);
-        #[cfg(windows)]
-        command.env("LIBREMODULAR_RUNTIME_DIR", &layout.runtime);
     }
+    // Sous Windows le répertoire volatil a toujours un emplacement : le test le pose, jamais le profil.
     #[cfg(windows)]
-    for name in ["SystemRoot", "TEMP", "TMP", "USERPROFILE", "LOCALAPPDATA"] {
+    command.env("LIBREMODULAR_RUNTIME_DIR", &layout.runtime);
+    #[cfg(windows)]
+    for name in ["SystemRoot", "TEMP", "TMP"] {
         if let Some(value) = std::env::var_os(name) {
             command.env(name, value);
         }
