@@ -16,7 +16,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use common::fake_bridge::TINY_PNG;
@@ -36,6 +36,18 @@ use serde_json::{Value, json};
 
 const MEMORY: u64 = 2 * 1024 * 1024 * 1024;
 
+static PROCESS_START: Mutex<()> = Mutex::new(());
+
+/// Tenu pendant qu'un faux programme est écrit et tant que le test démarre des processus. Un
+/// processus démarré dans un test copie, jusqu'à son `exec`, chaque fichier qu'un autre test a
+/// ouvert en écriture ; exécuter ce fichier échoue alors avec « Text file busy ». Les tests
+/// partagent un processus, ils passent donc à tour de rôle.
+fn one_at_a_time() -> MutexGuard<'static, ()> {
+    PROCESS_START
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Le premier `python3` du PATH du test.
 fn python() -> PathBuf {
     let path = std::env::var_os("PATH").expect("PATH");
@@ -52,6 +64,7 @@ struct Setup {
     work: PathBuf,
     captures: PathBuf,
     paths: InkscapePaths,
+    _turn: MutexGuard<'static, ()>,
 }
 
 fn fake_inkscape(path: &Path) {
@@ -75,6 +88,7 @@ fn fake_inkscape(path: &Path) {
 }
 
 fn setup() -> Setup {
+    let turn = one_at_a_time();
     let base = common::private_tempdir();
     let make = |name: &str| {
         let path = base.path().join(name);
@@ -96,6 +110,7 @@ fn setup() -> Setup {
             inkscape,
         },
         _base: base,
+        _turn: turn,
     }
 }
 
