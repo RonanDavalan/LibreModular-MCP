@@ -64,7 +64,7 @@ fichier lisible par d'autres oblige le Hub à le refuser.
 - Pour rendre une valeur, un script affiche `LMM_RESULT: ` suivi d'un JSON, en **dernière ligne** de sa sortie standard.
   Le Hub retire cette ligne de `stdout` et rend la valeur comme `result`. Sans cette ligne, ou quand son JSON est invalide
   (la ligne reste alors dans `stdout`), `result` vaut `null`. Si la sortie dépasse `max_output_bytes`, la fin de la sortie
-  est perdue, et la ligne de résultat avec elle.
+  est perdue, et la ligne de résultat avec elle ; la réponse porte `"truncated": true`.
 - Quand le script lève une exception (`SystemExit` comprise), le programme d'amorçage écrit `LMM_ERROR: ` suivi de
   `{"type", "message", "traceback"}` en dernière ligne de l'erreur standard. Le Hub retire cette ligne de `stderr` et la
   rend comme `error`, avec la trace d'erreur de Python.

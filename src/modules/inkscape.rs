@@ -384,8 +384,9 @@ pub fn version_command(paths: &InkscapePaths, env: Vec<(OsString, OsString)>) ->
     }
 }
 
-/// Lit un tube jusqu'au bout, en gardant au plus `limit` octets : le reste est lu et jeté, pour
-/// qu'un processus bavard ne bloque jamais sur un tube plein.
+/// Lit un tube jusqu'au bout, en gardant au plus `limit` octets et un de plus : le reste est lu et
+/// jeté, pour qu'un processus bavard ne bloque jamais sur un tube plein. L'octet en trop fait
+/// dépasser la borne au point de sortie du Hub, qui coupe alors avec son marqueur et pose `truncated`.
 fn drain(mut pipe: impl Read + Send + 'static, limit: usize) -> Receiver<Vec<u8>> {
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
@@ -395,7 +396,7 @@ fn drain(mut pipe: impl Read + Send + 'static, limit: usize) -> Receiver<Vec<u8>
             match pipe.read(&mut chunk) {
                 Ok(0) => break,
                 Ok(count) => {
-                    let room = limit.saturating_sub(kept.len());
+                    let room = limit.saturating_add(1).saturating_sub(kept.len());
                     if let Some(part) = chunk.get(..count.min(room)) {
                         kept.extend_from_slice(part);
                     }

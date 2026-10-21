@@ -68,7 +68,7 @@ kann; schreibt eines eine Datei, die andere lesen können, lehnt der Hub sie ab.
 - Um einen Wert zurückzugeben, gibt ein Skript `LMM_RESULT: ` gefolgt von JSON als **letzte Zeile** seiner
   Standardausgabe aus. Der Hub entnimmt diese Zeile aus `stdout` und liefert den Wert als `result` zurück. Fehlt
   diese Zeile oder ist ihr JSON ungültig (die Zeile bleibt dann in `stdout`), ist `result` `null`. Überschreitet die
-  Ausgabe `max_output_bytes`, gehen das Ende der Ausgabe und mit ihm die Ergebniszeile verloren.
+  Ausgabe `max_output_bytes`, gehen das Ende der Ausgabe und mit ihm die Ergebniszeile verloren, und die Antwort trägt `"truncated": true`.
 - Löst das Skript eine Ausnahme aus (auch `SystemExit`), schreibt der Bootstrap `LMM_ERROR: ` gefolgt von
   `{"type", "message", "traceback"}` als letzte Zeile der Standardfehlerausgabe. Der Hub entnimmt diese Zeile aus
   `stderr` und liefert sie als `error` zurück, mit der eigenen Fehlerspur von Python.

@@ -28,7 +28,9 @@ use libremodular_mcp::modules::inkscape::{
     script_command, state_command,
 };
 use libremodular_mcp::modules::{ExecReply, Health, Module, ModuleError, StateReply};
+use libremodular_mcp::output::finalize;
 use libremodular_mcp::registry::HubWorkFiles;
+use libremodular_mcp::security::Token;
 use rustix::process::{Pid, Signal, kill_process};
 use serde_json::{Value, json};
 
@@ -576,8 +578,8 @@ fn counter_proof_without_a_tight_memory_limit_the_allocation_succeeds() {
     must_fail(check_memory_is_bounded(&setup, &generous));
 }
 
-/// Trois Mio sur chaque flux doivent revenir bornés à `max_output_bytes`, sans que le processus
-/// bloque sur un tube plein.
+/// Trois Mio sur chaque flux doivent revenir bornés à `max_output_bytes` et un octet, sans que le
+/// processus bloque sur un tube plein.
 fn check_output_is_bounded(setup: &Setup, limits: Limits) -> Verdict {
     let module = InkscapeModule::new(
         setup.paths.clone(),
@@ -596,12 +598,12 @@ fn check_output_is_bounded(setup: &Setup, limits: Limits) -> Verdict {
     ensure!(reply.ok, "{:?}", reply.error);
     let bound = Limits::default().max_output_bytes;
     ensure!(
-        reply.stdout.len() <= bound,
+        reply.stdout.len() <= bound + 1,
         "stdout holds {} bytes",
         reply.stdout.len()
     );
     ensure!(
-        reply.stderr.len() <= bound,
+        reply.stderr.len() <= bound + 1,
         "stderr holds {} bytes",
         reply.stderr.len()
     );
@@ -626,6 +628,63 @@ fn counter_proof_a_larger_bound_lets_the_output_through() {
         ..Limits::default()
     };
     must_fail(check_output_is_bounded(&setup, loose));
+}
+
+/// Une sortie plus longue que `max_output_bytes` doit arriver au point de sortie du Hub avec un octet
+/// de trop : il la coupe alors avec son marqueur et pose `truncated`. `keep` donne ce que le module
+/// laisse passer du flux.
+fn check_overflow_is_flagged(setup: &Setup, keep: fn(&str, usize) -> String) -> Verdict {
+    let limits = Limits::default();
+    let module = InkscapeModule::new(
+        setup.paths.clone(),
+        limits,
+        hub_environment(),
+        Arc::new(HubWorkFiles),
+    );
+    let reply = module
+        .execute(
+            "import sys\nsys.stdout.write('x' * (3 * 1024 * 1024))\n",
+            20,
+            &setup.work,
+        )
+        .map_err(|error| format!("execute: {error}"))?;
+    ensure!(reply.ok, "{:?}", reply.error);
+    let stdout = keep(&reply.stdout, limits.max_output_bytes);
+    let token = Token::new(FAKE_TOKEN).map_err(|error| format!("token: {error}"))?;
+    let answer = finalize(&json!({ "stdout": stdout }), &token, &limits)
+        .map_err(|error| format!("finalize: {error}"))?;
+    ensure!(
+        answer["truncated"] == json!(true),
+        "truncated is not set for an output of {} bytes",
+        stdout.len()
+    );
+    ensure!(
+        answer["stdout"]
+            .as_str()
+            .is_some_and(|text| text.ends_with("[truncated]")),
+        "the cut output does not end with the marker"
+    );
+    Ok(())
+}
+
+fn keep_all(text: &str, _bound: usize) -> String {
+    text.to_owned()
+}
+
+fn keep_the_bound_only(text: &str, bound: usize) -> String {
+    text.chars().take(bound).collect()
+}
+
+#[test]
+fn an_output_beyond_the_limit_comes_back_flagged_as_truncated() {
+    let setup = setup();
+    must_pass(check_overflow_is_flagged(&setup, keep_all));
+}
+
+#[test]
+fn counter_proof_an_output_cut_exactly_at_the_limit_is_not_flagged() {
+    let setup = setup();
+    must_fail(check_overflow_is_flagged(&setup, keep_the_bound_only));
 }
 
 // --- le document de travail -------------------------------------------------------------

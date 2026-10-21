@@ -55,7 +55,7 @@ siguiente script puede usar; uno que escribe un archivo legible por otros hace q
   de su salida estándar. El Hub retira esa línea de `stdout` y devuelve el valor
   como `result`. Sin esa línea, o cuando su JSON no es válido (la línea permanece entonces en
   `stdout`), `result` es `null`. Si la salida supera `max_output_bytes`, el final de la
-  salida, y con él la línea de resultado, se pierde.
+  salida, y con él la línea de resultado, se pierde, y la respuesta lleva `"truncated": true`.
 - Cuando el script lanza una excepción (`SystemExit` incluido), el código de arranque escribe
   `LMM_ERROR: ` seguido de `{"type", "message", "traceback"}` como última línea del
   error estándar. El Hub retira esa línea de `stderr` y la devuelve como `error`, con

@@ -70,7 +70,7 @@ next script can use; one that writes a file readable by others makes the Hub ref
   of its standard output. The Hub takes that line out of `stdout` and returns the value
   as `result`. Without such a line, or when its JSON is invalid (the line then stays in
   `stdout`), `result` is `null`. If the output exceeds `max_output_bytes`, the end of the
-  output, and the result line with it, is lost.
+  output, and the result line with it, is lost, and the answer carries `"truncated": true`.
 - When the script raises an exception (`SystemExit` included), the bootstrap writes
   `LMM_ERROR: ` followed by `{"type", "message", "traceback"}` as the last line of the
   standard error. The Hub takes that line out of `stderr` and returns it as `error`, with
