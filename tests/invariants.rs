@@ -1780,7 +1780,7 @@ fn counter_proof_a_third_tool_an_application_module_or_a_new_security_item_is_de
 
 // --- le README : les mots qu'il ne doit pas employer --------------------------------
 
-/// `AI` comme mot à part entière, `Windows` et `macOS`, n'importe où dans le texte.
+/// `AI` comme mot à part entière et `macOS`, n'importe où dans le texte ; Windows est une plateforme livrée.
 fn readme_word_problems(text: &str) -> Vec<String> {
     let mut problems = Vec::new();
     for (number, line) in text.lines().enumerate() {
@@ -1788,7 +1788,7 @@ fn readme_word_problems(text: &str) -> Vec<String> {
             .split(|c: char| !c.is_alphanumeric())
             .filter(|word| !word.is_empty())
             .collect();
-        for forbidden in ["AI", "Windows", "macOS"] {
+        for forbidden in ["AI", "macOS"] {
             if words.contains(&forbidden) {
                 problems.push(format!("line {}: {forbidden}", number + 1));
             }
@@ -1798,7 +1798,7 @@ fn readme_word_problems(text: &str) -> Vec<String> {
 }
 
 #[test]
-fn the_readme_never_says_ai_windows_or_macos() {
+fn the_readme_never_says_ai_or_macos() {
     let text = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("README.md"))
         .expect("README.md");
     let problems = readme_word_problems(&text);
@@ -1810,7 +1810,6 @@ fn counter_proof_a_forbidden_word_in_the_readme_is_detected() {
     for defective in [
         "An AI that drives applications.",
         "AI-powered scripts",
-        "Runs on Windows 11.",
         "Also tried on macOS.",
         "(AI)",
     ] {
@@ -1818,6 +1817,7 @@ fn counter_proof_a_forbidden_word_in_the_readme_is_detected() {
     }
     for fine in [
         "A language model drives applications.",
+        "Runs on Windows 11.",
         "The MAIN thread said so.",
         "an Inkscape window the operator opened",
         "mail, maintain, again",
