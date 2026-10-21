@@ -30,6 +30,7 @@ FIXED_LOG = [
     "Add the third thing",
     "Fix a defect of the second thing",
     "Merge pull request #7 from alice/feature",
+    "Changelog regenerated from the commit titles",
     "Document how the second thing starts",
     "",
     "Test the second thing against a fake",

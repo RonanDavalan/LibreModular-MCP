@@ -30,7 +30,7 @@ SECTIONS = (
     ("Tests", ("Test", "Check", "Prove", "Cover")),
 )
 OTHER = "Changed"
-SKIPPED_PREFIXES = ("Merge ",)
+SKIPPED_PREFIXES = ("Merge ", "Changelog regenerated")
 
 
 def section_of(title):
@@ -43,7 +43,8 @@ def section_of(title):
 
 def render(titles):
     """Le texte du journal des modifications pour `titles`, du plus récent au plus ancien. Les commits
-    de fusion et les titres vides sont laissés de côté ; chaque section garde l'ordre de l'historique."""
+    de fusion, ceux qui régénèrent le journal (leur titre ne pourrait jamais figurer dans le fichier
+    qu'ils écrivent) et les titres vides sont laissés de côté ; chaque section garde l'ordre de l'historique."""
     kept = [
         title.strip()
         for title in titles
