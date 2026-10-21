@@ -60,7 +60,7 @@ El puente es el archivo generado `bridges/generated/uno_bridge.py`: el núcleo c
 `uno`, que importa cuando una solicitud lo necesita; se carga en Python 3.9 o posterior, con o
 sin `uno`. No guarda ningún token.
 
-El paquete Debian instala el mismo archivo como `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. Los comandos siguientes nombran el archivo del puente de un clon y, a continuación, el del paquete.
+El paquete instala el mismo archivo como `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. Los comandos siguientes nombran el archivo del puente de un clon y, a continuación, el del paquete.
 
 ## El límite que debe conocer primero
 
@@ -113,7 +113,7 @@ Cree el token una vez, si aún no existe (`libremodular-mcp init`), y después:
 libremodular-launch libreoffice --bridge-file /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
-Con el paquete Debian:
+Con el paquete instalado:
 
 ```sh
 libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py
@@ -146,7 +146,7 @@ Lo que el lanzador hace y no hace:
   no sea modificable por el grupo ni por otros. Un clon nuevo hecho con una `umask` de `002` (la predeterminada
   de muchas cuentas de Debian) da el modo `664`, que el lanzador rechaza: ejecute
   `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py` una vez. El archivo que instala el
-  paquete Debian pertenece a root con el modo `644`: no hay nada que cambiar. El directorio
+  paquete pertenece a root con el modo `644`: no hay nada que cambiar. El directorio
   que contiene el archivo no se comprueba.
 - **Se niega a iniciar nada si ya hay un LibreOffice suyo en ejecución** (un proceso `soffice.bin`
   de su usuario, leído de `/proc`). Nunca se conecta a una instancia que pueda contener
@@ -198,7 +198,7 @@ LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 /usr/bin/python3 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
-Con el paquete Debian:
+Con el paquete instalado:
 
 ```sh
 LD_LIBRARY_PATH=/usr/lib/libreoffice/program \

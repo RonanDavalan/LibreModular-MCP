@@ -32,7 +32,7 @@ The bridge is the generated file `bridges/generated/blender_bridge.py`: the comm
 assembled by `python3 scripts/build_bridges.py`. It uses the Python standard library only
 and loads on Python 3.9 or later. It holds no token: it reads the token file at start.
 
-The Debian package installs the same file as `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
+The package installs the same file as `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
 
 ## Starting the bridge
 
@@ -69,7 +69,7 @@ The bridge never starts on its own: the operator starts it by hand, each time.
    blender --python /home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
    ```
 
-   From the Debian package:
+   From the installed package:
 
    ```sh
    LIBREMODULAR_BRIDGE_PORT=9303 \
@@ -84,7 +84,7 @@ The bridge never starts on its own: the operator starts it by hand, each time.
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
    ```
 
-   From the Debian package:
+   From the installed package:
 
    ```python
    exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
@@ -117,7 +117,7 @@ runpy.run_path("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
 ]()
 ```
 
-From the Debian package:
+From the installed package:
 
 ```python
 import runpy

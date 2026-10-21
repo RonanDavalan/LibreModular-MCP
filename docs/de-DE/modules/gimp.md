@@ -29,7 +29,7 @@ vom GIMP-Adapter (`bridges/adapters/gimp.py`), zusammengesetzt von `python3 scri
 Standardbibliothek von Python und lässt sich ab Python 3.9 laden. Sie hält kein Token, sondern liest die Token-Datei beim
 Start.
 
-Das Debian-Paket installiert dieselbe Datei als `/usr/share/libremodular-mcp/bridges/gimp_bridge.py`. Die folgenden Befehle nennen die Brückendatei eines Klons und danach die des Pakets.
+Das Paket installiert dieselbe Datei als `/usr/share/libremodular-mcp/bridges/gimp_bridge.py`. Die folgenden Befehle nennen die Brückendatei eines Klons und danach die des Pakets.
 
 ## Die Brücke starten
 
@@ -86,7 +86,7 @@ Oberfläche gestartet wurde (siehe „Ohne Oberfläche gestartet“).
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
    ```
 
-   Mit dem Debian-Paket:
+   Mit dem installierten Paket:
 
    ```python
    exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
@@ -123,7 +123,7 @@ gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
   -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
 ```
 
-Mit dem Debian-Paket:
+Mit dem installierten Paket:
 
 ```sh
 LIBREMODULAR_BRIDGE_PORT=9301 \

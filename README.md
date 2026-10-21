@@ -10,10 +10,18 @@ An MCP server that lets a language model drive desktop applications by running s
 
 Install the Hub, let it create its configuration and its token, then declare it in your MCP client.
 
-On Debian 12 or 13 and on Ubuntu 22.04, 24.04 or 26.04 (amd64), install the Debian package; its installation and its removal were validated in a container. Download `libremodular-mcp_*_amd64.deb` from the [releases page](https://github.com/RonanDavalan/LibreModular-MCP/releases), then:
+On Debian, Ubuntu, Fedora, openSUSE Leap or Arch Linux, install the native package of your family; its installation and its removal were validated in a container on every version listed. Download it from the [releases page](https://github.com/RonanDavalan/LibreModular-MCP/releases), then run the command of your family:
+
+| Family | Versions | Package | Command |
+|---|---|---|---|
+| Debian, Ubuntu | Debian 12 and 13; Ubuntu 22.04, 24.04 and 26.04 (amd64) | `libremodular-mcp_*_amd64.deb` | `sudo apt install ./libremodular-mcp_*_amd64.deb` |
+| Fedora | 43, 44 and 45 (x86_64) | `libremodular-mcp-*.fc*.x86_64.rpm` | `sudo dnf install ./libremodular-mcp-*.fc*.x86_64.rpm` |
+| openSUSE Leap | 16.0 and 16.1 (x86_64) | `libremodular-mcp-*.leap*.x86_64.rpm` | `sudo zypper install --allow-unsigned-rpm ./libremodular-mcp-*.leap*.x86_64.rpm` |
+| Arch Linux | rolling (x86_64) | `libremodular-mcp-*-x86_64.pkg.tar.zst` | `sudo pacman -U ./libremodular-mcp-*-x86_64.pkg.tar.zst` |
+
+The RPM packages and the Arch package are not signed: `zypper` needs `--allow-unsigned-rpm`, and `dnf` installs the local file with a warning that it skipped the OpenPGP check. Then create the configuration and the token, once, as your own user:
 
 ```sh
-sudo apt install ./libremodular-mcp_*_amd64.deb
 libremodular-mcp init
 ```
 
@@ -40,7 +48,7 @@ The entry for the MCP client runs the binary with the argument `serve`:
 }
 ```
 
-What to adapt: `/home/alice/LibreModular-MCP/` is the absolute path of your clone; with the Debian package, the command is `/usr/bin/libremodular-mcp`. Which file this
+What to adapt: `/home/alice/LibreModular-MCP/` is the absolute path of your clone; with a package, the command is `/usr/bin/libremodular-mcp`. Which file this
 entry goes into, and what its keys are called, depends on your client: the shape above is a common
 one, and the Hub was tried with a client written for its tests (JSON-RPC lines on its standard
 input and output), not with a named MCP client. The Hub needs the variable `XDG_RUNTIME_DIR`,
@@ -80,7 +88,7 @@ whether it is connected, without contacting any application.
 
 ## Applications
 
-Linux only: the target platform is Debian 13, and the Calc example below also ran on Ubuntu 24.04. The Hub installs from the Debian package (Debian 12 and 13, Ubuntu 22.04, 24.04 and 26.04) or builds from the sources (Quick start). The versions are those the
+Linux only: the target platform is Debian 13, and the Calc example below also ran on Ubuntu 24.04. The Hub installs from a native package (Debian, Ubuntu, Fedora, openSUSE Leap or Arch Linux, see Quick start) or builds from the sources (Quick start). The versions are those the
 guides report as tried; the guide of each application says under which conditions, and what was not
 part of the run.
 
@@ -170,7 +178,7 @@ for any other (`cargo test --locked --test invariants`).
   Only the `cli` mode kills a script that runs past its time.
 - `libremodular-launch` refuses a bridge file that the group or others can write, or that belongs to a user other than you and root. A clone made
   with a `umask` of `002` gives mode 664: run `chmod 600` on the bridge file once. Mode 600 and
-  mode 644 are accepted; the bridge files of the Debian package belong to root with mode 644.
+  mode 644 are accepted; the bridge files of the packages belong to root with mode 644.
 
 ## Tests
 

@@ -53,7 +53,7 @@ vom Adapter (`bridges/adapters/uno.py`), zusammengesetzt von `python3 scripts/bu
 Standardbibliothek von Python, abgesehen von `uno`, das sie importiert, wenn eine Anfrage es braucht; sie lässt sich ab
 Python 3.9 laden, mit oder ohne `uno`. Sie hält kein Token.
 
-Das Debian-Paket installiert dieselbe Datei als `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. Die folgenden Befehle nennen die Brückendatei eines Klons und danach die des Pakets.
+Das Paket installiert dieselbe Datei als `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. Die folgenden Befehle nennen die Brückendatei eines Klons und danach die des Pakets.
 
 ## Die Grenze, die Sie zuerst kennen müssen
 
@@ -105,7 +105,7 @@ Legen Sie das Token einmalig an, falls es noch nicht existiert (`libremodular-mc
 libremodular-launch libreoffice --bridge-file /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
-Mit dem Debian-Paket:
+Mit dem installierten Paket:
 
 ```sh
 libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py
@@ -135,7 +135,7 @@ Was der Starter tut und was nicht:
 - Die Brückendatei muss ein absoluter Pfad zu einer regulären Datei sein, kein Link, Ihnen oder root gehören und für die
   Gruppe und andere nicht beschreibbar sein. Ein frischer Klon, der mit einer `umask` von `002` angelegt wurde (der
   Voreinstellung vieler Debian-Konten), ergibt den Modus `664`, den der Starter ablehnt: Führen Sie einmalig
-  `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py` aus. Die vom Debian-Paket installierte Datei
+  `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py` aus. Die vom Paket installierte Datei
   gehört root mit dem Modus `644`: Es ist nichts zu ändern. Das Verzeichnis, das die Datei enthält,
   wird nicht geprüft.
 - **Er weigert sich zu starten, wenn schon ein LibreOffice von Ihnen läuft** (ein Prozess `soffice.bin` Ihres Benutzers,
@@ -188,7 +188,7 @@ LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 /usr/bin/python3 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
-Mit dem Debian-Paket:
+Mit dem installierten Paket:
 
 ```sh
 LD_LIBRARY_PATH=/usr/lib/libreoffice/program \

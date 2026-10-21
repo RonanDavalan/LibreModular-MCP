@@ -30,7 +30,7 @@ The bridge is the generated file `bridges/generated/gimp_bridge.py`: the common 
 by `python3 scripts/build_bridges.py`. It uses the Python standard library only and
 loads on Python 3.9 or later. It holds no token: it reads the token file at start.
 
-The Debian package installs the same file as `/usr/share/libremodular-mcp/bridges/gimp_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
+The package installs the same file as `/usr/share/libremodular-mcp/bridges/gimp_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
 
 ## Starting the bridge
 
@@ -88,7 +88,7 @@ interface").
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py").read())
    ```
 
-   From the Debian package:
+   From the installed package:
 
    ```python
    exec(open("/usr/share/libremodular-mcp/bridges/gimp_bridge.py").read())
@@ -126,7 +126,7 @@ gimp-3.0 --new-instance --no-interface --batch-interpreter python-fu-eval \
   -b "exec(open('/home/alice/LibreModular-MCP/bridges/generated/gimp_bridge.py').read()); serve_main_thread()"
 ```
 
-From the Debian package:
+From the installed package:
 
 ```sh
 LIBREMODULAR_BRIDGE_PORT=9301 \

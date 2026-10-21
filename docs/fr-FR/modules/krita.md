@@ -26,7 +26,7 @@ l'adaptateur Krita (`bridges/adapters/krita.py`), assemblés par `python3 script
 bibliothèque standard de Python et se charge avec Python 3.9 ou plus récent. Il ne détient aucun jeton : il lit le
 fichier de jeton au démarrage.
 
-Le paquet Debian installe le même fichier sous `/usr/share/libremodular-mcp/bridges/krita_bridge.py`. Les commandes ci-dessous nomment le fichier du pont d'un clone, puis celui du paquet.
+Le paquet installe le même fichier sous `/usr/share/libremodular-mcp/bridges/krita_bridge.py`. Les commandes ci-dessous nomment le fichier du pont d'un clone, puis celui du paquet.
 
 ## Démarrage du pont
 
@@ -75,7 +75,7 @@ le fichier généré, à chaque fois, depuis le Scripter de Krita.
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/krita_bridge.py").read())
    ```
 
-   Depuis le paquet Debian :
+   Depuis le paquet installé :
 
    ```python
    exec(open("/usr/share/libremodular-mcp/bridges/krita_bridge.py").read())

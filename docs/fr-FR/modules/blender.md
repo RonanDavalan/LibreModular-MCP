@@ -30,7 +30,7 @@ l'adaptateur Blender (`bridges/adapters/blender.py`), assemblés par `python3 sc
 la bibliothèque standard de Python et se charge avec Python 3.9 ou plus récent. Il ne détient aucun jeton : il lit le
 fichier de jeton au démarrage.
 
-Le paquet Debian installe le même fichier sous `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. Les commandes ci-dessous nomment le fichier du pont d'un clone, puis celui du paquet.
+Le paquet installe le même fichier sous `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. Les commandes ci-dessous nomment le fichier du pont d'un clone, puis celui du paquet.
 
 ## Démarrage du pont
 
@@ -67,7 +67,7 @@ Le pont ne démarre jamais seul : l'opérateur le démarre à la main, à chaqu
    blender --python /home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
    ```
 
-   Depuis le paquet Debian :
+   Depuis le paquet installé :
 
    ```sh
    LIBREMODULAR_BRIDGE_PORT=9303 \
@@ -81,7 +81,7 @@ Le pont ne démarre jamais seul : l'opérateur le démarre à la main, à chaqu
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
    ```
 
-   Depuis le paquet Debian :
+   Depuis le paquet installé :
 
    ```python
    exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
@@ -114,7 +114,7 @@ runpy.run_path("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
 ]()
 ```
 
-Depuis le paquet Debian :
+Depuis le paquet installé :
 
 ```python
 import runpy

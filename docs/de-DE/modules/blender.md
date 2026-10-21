@@ -31,7 +31,7 @@ gefolgt vom Blender-Adapter (`bridges/adapters/blender.py`), zusammengesetzt von
 nutzt nur die Standardbibliothek von Python und lässt sich ab Python 3.9 laden. Sie hält kein Token, sondern liest die
 Token-Datei beim Start.
 
-Das Debian-Paket installiert dieselbe Datei als `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. Die folgenden Befehle nennen die Brückendatei eines Klons und danach die des Pakets.
+Das Paket installiert dieselbe Datei als `/usr/share/libremodular-mcp/bridges/blender_bridge.py`. Die folgenden Befehle nennen die Brückendatei eines Klons und danach die des Pakets.
 
 ## Die Brücke starten
 
@@ -68,7 +68,7 @@ Die Brücke startet nie von selbst: Der Bediener startet sie jedes Mal von Hand.
    blender --python /home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
    ```
 
-   Mit dem Debian-Paket:
+   Mit dem installierten Paket:
 
    ```sh
    LIBREMODULAR_BRIDGE_PORT=9303 \
@@ -82,7 +82,7 @@ Die Brücke startet nie von selbst: Der Bediener startet sie jedes Mal von Hand.
    exec(open("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py").read())
    ```
 
-   Mit dem Debian-Paket:
+   Mit dem installierten Paket:
 
    ```python
    exec(open("/usr/share/libremodular-mcp/bridges/blender_bridge.py").read())
@@ -115,7 +115,7 @@ runpy.run_path("/home/alice/LibreModular-MCP/bridges/generated/blender_bridge.py
 ]()
 ```
 
-Mit dem Debian-Paket:
+Mit dem installierten Paket:
 
 ```python
 import runpy

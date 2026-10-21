@@ -35,7 +35,7 @@ avec le code 2.
 **--bridge-file** *chemin*
 :   Le chemin absolu de *uno_bridge.py*. Le fichier doit être un fichier ordinaire, non un lien, appartenir à l'utilisateur courant ou à root, et n'être inscriptible ni par le groupe ni par les autres.
 
-    Avec le paquet Debian :
+    Avec le paquet installé :
 
     */usr/share/libremodular-mcp/bridges/uno_bridge.py*
 
@@ -72,7 +72,7 @@ avec le code 2.
 
 # EXEMPLES
 
-Démarrer LibreOffice et son pont depuis le paquet Debian, puis arrêter le pont :
+Démarrer LibreOffice et son pont depuis le paquet installé, puis arrêter le pont :
 
 ```sh
 libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py

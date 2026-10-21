@@ -10,10 +10,18 @@ Un serveur MCP qui permet à un modèle de langage de piloter des applications d
 
 Installez le Hub, laissez-le créer sa configuration et son jeton, puis déclarez-le dans votre client MCP.
 
-Sous Debian 12 ou 13 et sous Ubuntu 22.04, 24.04 ou 26.04 (amd64), installez le paquet Debian ; son installation et son retrait ont été validés en conteneur. Téléchargez `libremodular-mcp_*_amd64.deb` depuis la [page des versions](https://github.com/RonanDavalan/LibreModular-MCP/releases), puis :
+Sous Debian, Ubuntu, Fedora, openSUSE Leap ou Arch Linux, installez le paquet natif de votre famille ; son installation et son retrait ont été validés en conteneur sur chaque version listée. Téléchargez-le depuis la [page des versions](https://github.com/RonanDavalan/LibreModular-MCP/releases), puis lancez la commande de votre famille :
+
+| Famille | Versions | Paquet | Commande |
+|---|---|---|---|
+| Debian, Ubuntu | Debian 12 et 13 ; Ubuntu 22.04, 24.04 et 26.04 (amd64) | `libremodular-mcp_*_amd64.deb` | `sudo apt install ./libremodular-mcp_*_amd64.deb` |
+| Fedora | 43, 44 et 45 (x86_64) | `libremodular-mcp-*.fc*.x86_64.rpm` | `sudo dnf install ./libremodular-mcp-*.fc*.x86_64.rpm` |
+| openSUSE Leap | 16.0 et 16.1 (x86_64) | `libremodular-mcp-*.leap*.x86_64.rpm` | `sudo zypper install --allow-unsigned-rpm ./libremodular-mcp-*.leap*.x86_64.rpm` |
+| Arch Linux | continu (x86_64) | `libremodular-mcp-*-x86_64.pkg.tar.zst` | `sudo pacman -U ./libremodular-mcp-*-x86_64.pkg.tar.zst` |
+
+Les paquets RPM et le paquet Arch ne sont pas signés : `zypper` exige `--allow-unsigned-rpm`, et `dnf` installe le fichier local en avertissant qu'il a ignoré la vérification OpenPGP. Créez ensuite la configuration et le jeton, une seule fois, avec votre propre compte :
 
 ```sh
-sudo apt install ./libremodular-mcp_*_amd64.deb
 libremodular-mcp init
 ```
 
@@ -40,7 +48,7 @@ L'entrée du client MCP lance le binaire avec l'argument `serve` :
 }
 ```
 
-À adapter : `/home/alice/LibreModular-MCP/` est le chemin absolu de votre clone ; avec le paquet Debian, la commande est `/usr/bin/libremodular-mcp`. Le fichier où cette
+À adapter : `/home/alice/LibreModular-MCP/` est le chemin absolu de votre clone ; avec un paquet, la commande est `/usr/bin/libremodular-mcp`. Le fichier où cette
 entrée se place, et le nom de ses clés, dépendent de votre client : la forme ci-dessus est courante, et le
 Hub a été essayé avec un client écrit pour ses tests (des lignes JSON-RPC sur son entrée et sa sortie
 standard), pas avec un client MCP nommé. Le Hub a besoin de la variable `XDG_RUNTIME_DIR`, que définit une
@@ -78,7 +86,7 @@ contacter aucune application.
 
 ## Applications
 
-Linux seulement : la plateforme visée est Debian 13, et l'exemple Calc ci-dessous a aussi tourné sous Ubuntu 24.04. Le Hub s'installe depuis le paquet Debian (Debian 12 et 13, Ubuntu 22.04, 24.04 et 26.04) ou se construit depuis les sources (Démarrage rapide). Les
+Linux seulement : la plateforme visée est Debian 13, et l'exemple Calc ci-dessous a aussi tourné sous Ubuntu 24.04. Le Hub s'installe depuis un paquet natif (Debian, Ubuntu, Fedora, openSUSE Leap ou Arch Linux, voir Démarrage rapide) ou se construit depuis les sources (Démarrage rapide). Les
 versions sont celles que les guides rapportent comme essayées ; le guide de chaque application dit dans quelles
 conditions, et ce qui n'a pas fait partie de l'essai.
 
@@ -167,7 +175,7 @@ Le Hub n'ouvre aucune connexion autre que celles vers les ponts sur `127.0.0.1`�
   tue un script qui dépasse son délai.
 - `libremodular-launch` refuse un fichier de pont que le groupe ou les autres peuvent écrire, ou qui appartient à un autre utilisateur que vous et root. Un clone fait
   avec un `umask` de `002` donne le mode 664 : lancez `chmod 600` sur le fichier de pont une fois. Les modes
-  600 et 644 sont acceptés ; les fichiers de pont du paquet Debian appartiennent à root avec le mode 644.
+  600 et 644 sont acceptés ; les fichiers de pont des paquets appartiennent à root avec le mode 644.
 
 ## Tests
 

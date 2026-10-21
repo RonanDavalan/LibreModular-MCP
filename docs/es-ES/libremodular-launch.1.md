@@ -35,7 +35,7 @@ salida 2.
 **--bridge-file** *ruta*
 :   La ruta absoluta de *uno_bridge.py*. El archivo debe ser un archivo ordinario, no un enlace, pertenecer al usuario actual o a root, y no poder ser escrito por el grupo ni por otros.
 
-    Con el paquete Debian:
+    Con el paquete instalado:
 
     */usr/share/libremodular-mcp/bridges/uno_bridge.py*
 
@@ -72,7 +72,7 @@ salida 2.
 
 # EJEMPLOS
 
-Iniciar LibreOffice y su puente desde el paquete Debian y después detener el puente:
+Iniciar LibreOffice y su puente desde el paquete instalado y después detener el puente:
 
 ```sh
 libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py

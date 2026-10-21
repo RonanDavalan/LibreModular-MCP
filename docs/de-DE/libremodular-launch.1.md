@@ -35,7 +35,7 @@ enden mit dem Exit-Code 2.
 **--bridge-file** *Pfad*
 :   Der absolute Pfad von *uno_bridge.py*. Die Datei muss eine gewöhnliche Datei sein, kein Link, dem aktuellen Benutzer oder root gehören und weder für die Gruppe noch für andere schreibbar sein.
 
-    Beim Debian-Paket:
+    Beim installierten Paket:
 
     */usr/share/libremodular-mcp/bridges/uno_bridge.py*
 
@@ -72,7 +72,7 @@ enden mit dem Exit-Code 2.
 
 # BEISPIELE
 
-LibreOffice und seine Brücke aus dem Debian-Paket starten und dann die Brücke beenden:
+LibreOffice und seine Brücke aus dem installierten Paket starten und dann die Brücke beenden:
 
 ```sh
 libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py

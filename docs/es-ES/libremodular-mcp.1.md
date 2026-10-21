@@ -60,7 +60,7 @@ Un cliente MCP inicia el Hub con el argumento **serve**. Ninguna aplicación est
 :   Archivos volátiles: el directorio de trabajo de cada script y las capturas, modo 700.
 
 */usr/share/libremodular-mcp/bridges/*
-:   Los puentes que instala el paquete Debian: *gimp_bridge.py*, *krita_bridge.py*, *blender_bridge.py* y *uno_bridge.py*, propiedad de root y legibles por todos. La guía de cada aplicación, en
+:   Los puentes que instala el paquete: *gimp_bridge.py*, *krita_bridge.py*, *blender_bridge.py* y *uno_bridge.py*, propiedad de root y legibles por todos. La guía de cada aplicación, en
     */usr/share/doc/libremodular-mcp/docs/modules/*, dice cómo iniciar su puente.
 
 */usr/share/doc/libremodular-mcp/*
@@ -97,10 +97,30 @@ Declarar el Hub en un cliente MCP: el comando es */usr/bin/libremodular-mcp* con
 
 # DISPONIBILIDAD
 
-El paquete Debian admite Debian 12 y 13 y Ubuntu 22.04, 24.04 y 26.04, en amd64; su instalación y su desinstalación se han validado en un contenedor. Instálelo con:
+Los paquetes nativos admiten Debian 12 y 13 y Ubuntu 22.04, 24.04 y 26.04 (amd64), Fedora 43, 44 y 45 y openSUSE Leap 16.0 y 16.1 (x86_64), y Arch Linux (x86_64); su instalación y su desinstalación se han validado en un contenedor. Instale el paquete de su familia con uno de estos comandos:
+
+Debian y Ubuntu:
 
 ```sh
 sudo apt install ./libremodular-mcp_*_amd64.deb
+```
+
+Fedora:
+
+```sh
+sudo dnf install ./libremodular-mcp-*.fc*.x86_64.rpm
+```
+
+openSUSE Leap:
+
+```sh
+sudo zypper install --allow-unsigned-rpm ./libremodular-mcp-*.leap*.x86_64.rpm
+```
+
+Arch Linux:
+
+```sh
+sudo pacman -U ./libremodular-mcp-*-x86_64.pkg.tar.zst
 ```
 
 # VÉASE TAMBIÉN

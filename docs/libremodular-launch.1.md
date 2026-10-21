@@ -34,7 +34,7 @@ The other applications have no launcher: start their bridge by hand, as their gu
 **--bridge-file** *path*
 :   The absolute path of *uno_bridge.py*. The file must be a regular file, not a link, owned by the current user or by root, and not writable by the group or by others.
 
-    With the Debian package:
+    With the installed package:
 
     */usr/share/libremodular-mcp/bridges/uno_bridge.py*
 
@@ -70,7 +70,7 @@ The other applications have no launcher: start their bridge by hand, as their gu
 
 # EXAMPLES
 
-Start LibreOffice and its bridge from the Debian package, then stop the bridge:
+Start LibreOffice and its bridge from the installed package, then stop the bridge:
 
 ```sh
 libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py

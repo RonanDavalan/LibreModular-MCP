@@ -60,7 +60,7 @@ The bridge is the generated file `bridges/generated/uno_bridge.py`: the common c
 `uno`, which it imports when a request needs it; it loads on Python 3.9 or later, with or
 without `uno`. It holds no token.
 
-The Debian package installs the same file as `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
+The package installs the same file as `/usr/share/libremodular-mcp/bridges/uno_bridge.py`. The commands below name the bridge file of a clone, then the one of the package.
 
 ## The limit to know first
 
@@ -113,7 +113,7 @@ Create the token once, if it does not exist yet (`libremodular-mcp init`), then:
 libremodular-launch libreoffice --bridge-file /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
-From the Debian package:
+From the installed package:
 
 ```sh
 libremodular-launch libreoffice --bridge-file /usr/share/libremodular-mcp/bridges/uno_bridge.py
@@ -146,7 +146,7 @@ What the launcher does, and does not do:
   root and not writable by the group or others. A fresh clone made with a `umask` of `002` (the default
   of many Debian accounts) gives mode `664`, which the launcher refuses: run
   `chmod 600 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py` once. The file the
-  Debian package installs belongs to root with mode `644`: nothing to change. The directory
+  package installs belongs to root with mode `644`: nothing to change. The directory
   that holds the file is not checked.
 - **It refuses to start if a LibreOffice of yours is already running** (a `soffice.bin`
   process of your user, read from `/proc`). It never attaches to an instance that may hold
@@ -198,7 +198,7 @@ LIBREMODULAR_TOKEN_PATH=/home/alice/.config/libremodular-mcp/token \
 /usr/bin/python3 /home/alice/LibreModular-MCP/bridges/generated/uno_bridge.py
 ```
 
-From the Debian package:
+From the installed package:
 
 ```sh
 LD_LIBRARY_PATH=/usr/lib/libreoffice/program \
