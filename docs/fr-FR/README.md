@@ -6,6 +6,15 @@
 
 Un serveur MCP qui permet à un modèle de langage de piloter des applications de bureau en y exécutant des scripts.
 
+Le site [libremodular.davalan.fr](https://libremodular.davalan.fr/fr/) propose des pages à lire en ligne sur les mêmes sujets :
+
+- [Démarrage rapide](https://libremodular.davalan.fr/fr/quickstart/)
+- [Installation](https://libremodular.davalan.fr/fr/installation/)
+- [Architecture](https://libremodular.davalan.fr/fr/architecture/)
+- [Sécurité](https://libremodular.davalan.fr/fr/security/)
+
+Ce dépôt se suffit à lui-même : tout ce qu'il faut pour installer, lancer et vérifier le Hub s'y trouve.
+
 ## Démarrage rapide
 
 Installez le Hub, laissez-le créer sa configuration et son jeton, puis déclarez-le dans votre client MCP.

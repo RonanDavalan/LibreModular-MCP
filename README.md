@@ -6,6 +6,15 @@
 
 An MCP server that lets a language model drive desktop applications by running scripts in them.
 
+The website [libremodular.davalan.fr](https://libremodular.davalan.fr/) has pages to read online on the same subjects:
+
+- [Quickstart](https://libremodular.davalan.fr/quickstart/)
+- [Installation](https://libremodular.davalan.fr/installation/)
+- [Architecture](https://libremodular.davalan.fr/architecture/)
+- [Security](https://libremodular.davalan.fr/security/)
+
+This repository is complete without it: everything needed to install, run and check the Hub is here.
+
 ## Quick start
 
 Install the Hub, let it create its configuration and its token, then declare it in your MCP client.
