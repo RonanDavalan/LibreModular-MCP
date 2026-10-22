@@ -20,7 +20,9 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use rustix::io::Errno;
 #[cfg(unix)]
-use rustix::process::{Pid, Signal, WaitId, WaitIdOptions, kill_process_group, waitid};
+use rustix::process::{
+    Pid, Signal, WaitId, WaitIdOptions, kill_process_group, test_kill_process_group, waitid,
+};
 use serde_json::{Map, Value, json};
 
 use crate::config::Limits;
@@ -96,6 +98,9 @@ pub const RESULT_PREFIX: &str = "LMM_RESULT: ";
 pub const ERROR_PREFIX: &str = "LMM_ERROR: ";
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
+/// Combien de temps un groupe de processus tué peut mettre à disparaître avant que `run` rende quand même la main.
+#[cfg(unix)]
+const GROUP_GRACE: Duration = Duration::from_secs(2);
 /// Combien de temps les lecteurs de sortie peuvent prendre une fois le groupe de processus disparu.
 const OUTPUT_GRACE: Duration = Duration::from_secs(2);
 const READ_CHUNK: usize = 64 * 1024;
@@ -511,9 +516,23 @@ fn collected(reader: Option<Receiver<Vec<u8>>>) -> Vec<u8> {
         .unwrap_or_default()
 }
 
+/// Attend qu'aucun processus ne porte plus l'identifiant du groupe `group`. Un processus abattu passe par
+/// l'état de zombie puis par celui de mort avant de disparaître : rendre la main avant la disparition
+/// laisse un observateur le voir encore, tantôt vivant, tantôt mort.
+#[cfg(unix)]
+fn wait_for_group_to_vanish(group: Pid) {
+    let deadline = Instant::now() + GROUP_GRACE;
+    while Instant::now() < deadline {
+        if test_kill_process_group(group) == Err(Errno::SRCH) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+
 /// Démarre `spec` dans un nouveau groupe de processus, sans interpréteur de commandes et avec
 /// exactement son environnement, et attend au plus `timeout`. Quoi qu'il arrive, tout processus
-/// encore dans le groupe est tué avant que l'appel ne rende.
+/// encore dans le groupe est tué, et a disparu, avant que l'appel ne rende.
 ///
 /// # Erreurs
 /// [`RunError`] quand le programme ne peut pas démarrer ou que le temps s'écoule.
@@ -550,6 +569,7 @@ pub fn run(spec: &ProcessSpec, timeout: Duration, max_output: usize) -> Result<F
     };
     let _ = kill_process_group(group, Signal::KILL);
     let status = child.wait().map_err(RunError::Wait)?;
+    wait_for_group_to_vanish(group);
     let stdout = collected(stdout);
     let stderr = collected(stderr);
     if !finished {

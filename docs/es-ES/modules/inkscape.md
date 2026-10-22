@@ -75,7 +75,7 @@ siguiente script puede usar; uno que escribe un archivo legible por otros hace q
 | `RLIMIT_CORE` | 0: ningún volcado de memoria |
 | Salida | `max_output_bytes` por flujo; el resto se lee y se descarta, para que el proceso nunca se bloquee en una tubería llena |
 
-Después de que termina un proceso, todo lo que siga en ejecución en su grupo también se mata. Un proceso
+Después de que termina un proceso, todo lo que siga en ejecución en su grupo también se mata, y el Hub responde cuando el grupo ha desaparecido (dos segundos como máximo). Un proceso
 que abandona su grupo a propósito (con `setsid`, por ejemplo) no se sigue. Solo se ejecuta un script
 a la vez: una segunda solicitud mientras tanto responde `busy`.
 

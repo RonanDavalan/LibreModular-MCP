@@ -90,7 +90,7 @@ next script can use; one that writes a file readable by others makes the Hub ref
 | `RLIMIT_CORE` | 0: no core dump |
 | Output | `max_output_bytes` per stream; the rest is read and dropped, so the process never blocks on a full pipe |
 
-After a process ends, anything still running in its group is killed as well. A process
+After a process ends, anything still running in its group is killed as well, and the Hub answers once the group has gone (two seconds at most). A process
 that leaves its group on purpose (with `setsid`, for example) is not followed. One script
 runs at a time: a second request meanwhile answers `busy`.
 

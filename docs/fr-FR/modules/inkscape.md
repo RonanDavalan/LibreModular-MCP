@@ -83,7 +83,7 @@ fichier lisible par d'autres oblige le Hub à le refuser.
 | `RLIMIT_CORE` | 0 : aucun vidage mémoire |
 | Sortie | `max_output_bytes` par flux ; le reste est lu puis abandonné, si bien que le processus ne reste jamais bloqué sur un tube plein |
 
-Quand un processus s'achève, tout ce qui tourne encore dans son groupe est tué aussi. Un processus qui quitte son groupe
+Quand un processus s'achève, tout ce qui tourne encore dans son groupe est tué aussi, et le Hub répond une fois le groupe disparu (deux secondes au plus). Un processus qui quitte son groupe
 volontairement (avec `setsid`, par exemple) n'est pas suivi. Un seul script tourne à la fois : une seconde requête
 pendant ce temps reçoit `busy`.
 

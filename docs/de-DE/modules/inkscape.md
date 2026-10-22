@@ -87,7 +87,7 @@ kann; schreibt eines eine Datei, die andere lesen können, lehnt der Hub sie ab.
 | `RLIMIT_CORE` | 0: kein Core-Dump |
 | Ausgabe | `max_output_bytes` je Datenstrom; der Rest wird gelesen und verworfen, sodass der Prozess nie an einer vollen Pipe blockiert |
 
-Wenn ein Prozess endet, wird auch alles beendet, was in seiner Gruppe noch läuft. Ein Prozess, der seine Gruppe mit
+Wenn ein Prozess endet, wird auch alles beendet, was in seiner Gruppe noch läuft, und der Hub antwortet erst, wenn die Gruppe verschwunden ist (höchstens zwei Sekunden). Ein Prozess, der seine Gruppe mit
 Absicht verlässt (z. B. mit `setsid`), wird nicht weiterverfolgt. Es läuft jeweils nur ein Skript: Eine zweite Anfrage
 in der Zwischenzeit erhält die Antwort `busy`.
 
