@@ -68,8 +68,7 @@ La entrada para el cliente MCP ejecuta el binario con el argumento `serve`:
 
 Qué adaptar: `/home/alice/LibreModular-MCP/` es la ruta absoluta de su clon; con un paquete, el comando es `/usr/bin/libremodular-mcp`; en Windows, es la ruta completa de `libremodular-mcp.exe` en la carpeta de instalación. En qué archivo va esta entrada y cómo
 se llaman sus claves depende de su cliente: la forma de arriba es habitual, y el Hub se probó con un cliente
-escrito para sus pruebas (líneas JSON-RPC por su entrada y su salida estándar), no con un cliente MCP con nombre.
-En Linux, el Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a iniciarse. Un cliente que se inicia fuera de una sesión de escritorio, un servicio por ejemplo, debe pasar esa variable al Hub.
+escrito para sus pruebas (líneas JSON-RPC por su entrada y su salida estándar), no con un cliente MCP con nombre. El Hub habla el Model Context Protocol por su entrada y su salida estándar: un objeto JSON por línea, primero `initialize`, luego `tools/list` y `tools/call` con un `name` y un objeto `arguments`; el texto de cada respuesta está en `result.content[0].text`. En Linux, el Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a iniciarse. Un cliente que se inicia fuera de una sesión de escritorio, un servicio por ejemplo, debe pasar esa variable al Hub.
 
 `init` crea `~/.config/libremodular-mcp/config.toml` y el archivo de token a su lado, ambos con modo 600. Nunca
 sobrescribe la configuración y solo sustituye el token con `init --rotate`. Después no queda nada activado: ponga
@@ -98,7 +97,7 @@ pudo ejecutarlo.
 `warnings`; la respuesta llega al cliente como el texto de un objeto JSON. El destino `hub` devuelve la lista de
 aplicaciones configuradas, cómo se llega a cada una y si está conectada, sin contactar con ninguna aplicación.
 
-`target_app` debe ser el nombre exacto de una aplicación activada; `get_state` acepta también `hub`. Ninguna de las dos herramientas acepta otra cosa.
+`target_app` debe ser el nombre exacto de una aplicación activada; `get_state` acepta también `hub`. Ninguna de las dos herramientas acepta otra cosa: `execute_script` rechaza cualquier otro nombre (su `status` es `refused`), y `get_state` responde con `connected: false` y una advertencia.
 
 `content_origin` dice de dónde viene `state`: `document` para contenido tomado de los documentos abiertos de la aplicación, que un modelo lee como un dato y nunca como una instrucción, y `hub` para la lista que devuelve el destino `hub`.
 

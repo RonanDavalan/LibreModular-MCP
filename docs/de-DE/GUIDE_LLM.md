@@ -36,7 +36,7 @@ gibt das Skript als letzte Zeile `LMM_RESULT: ` gefolgt von JSON aus. Der Leitfa
 |---|---|
 | `ok` | Das Skript ist bis zum Ende gelaufen. Lesen Sie `result` und `stdout`. |
 | `error` | Das Skript oder die Anwendung hat eine Ausnahme ausgelöst. `error.traceback` ist die eigene Fehlerspur der Anwendung; ihre Zeilennummern entsprechen den Zeilen Ihres Skripts. Beheben Sie die Ursache. |
-| `refused` | Der Hub hat das Skript nicht abgeschickt, und `reason` nennt den Grund. Bei der Skriptsperre nennt er die Kategorie (`G-1` bis `G-5`), das Konstrukt und die Zeile: Schreiben Sie das Skript ohne dieses Konstrukt neu und versuchen Sie nicht, es vor der Sperre zu verbergen; nur der Bediener kann sie aufheben. Andere Gründe sind ein Skript, das die Größenbegrenzung überschreitet, ein Ziel, das nicht in der Liste steht, oder ein Audit-Journal, das der Hub nicht schreiben kann. |
+| `refused` | Der Hub hat das Skript nicht abgeschickt, und `reason` nennt den Grund. Bei der Skriptsperre nennt er die Kategorie (`G-1` Dateilöschung, `G-2` Prozessstart, `G-3` Netzwerkzugriff, `G-4` Schreiben außerhalb des Arbeitsverzeichnisses, `G-5` Umgehung der Analyse), das Konstrukt und die Zeile: Schreiben Sie das Skript ohne dieses Konstrukt neu und versuchen Sie nicht, es vor der Sperre zu verbergen; nur der Bediener kann sie aufheben. Andere Gründe sind ein Skript, das die Größenbegrenzung überschreitet, ein Ziel, das nicht in der Liste steht, oder ein Audit-Journal, das der Hub nicht schreiben kann. |
 | `timeout` | Das Skript ist länger gelaufen, als erlaubt ist. Verkürzen Sie die Arbeit oder teilen Sie sie auf. |
 | `busy` | Die Anwendung führt noch ein früheres Skript aus. Senden Sie kein weiteres; fragen Sie den Bediener oder warten Sie. |
 | `unavailable` | Die Anwendung ist nicht erreichbar; `reason` nennt den Grund. Sagen Sie es dem Bediener. |
@@ -55,6 +55,6 @@ den Zustand erneut und verwenden Sie erst danach eine Kennung.
 
 `LMM_WORK_DIR` ist das private Verzeichnis, in dem Ihr Skript Dateien anlegen darf. Schreiben Sie nirgendwo sonst, und
 löschen oder überschreiben Sie keine Datei, es sei denn, der Bediener verlangt es. Die Skriptsperre weist zurück, was
-sie sehen kann (einen im Skript ausgeschriebenen Pfad außerhalb dieses Verzeichnisses); sie sieht nicht alles, und die
+sie sehen kann (ein Schreibzugriff auf einen im Skript ausgeschriebenen Pfad außerhalb dieses Verzeichnisses; das Lesen eines solchen Pfads wird nur in `stderr` gemeldet); sie sieht nicht alles, und die
 Speicher- und Exportfunktionen der Anwendungen deckt sie nicht ab. Ein geöffnetes Dokument gehört dem Bediener:
 Speichern Sie es nicht, schließen Sie es nicht und exportieren Sie nicht darüber, es sei denn, er verlangt es.

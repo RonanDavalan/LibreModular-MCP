@@ -31,7 +31,7 @@ El lenguaje es Python en todas las aplicaciones. Escriba todo el trabajo en un s
 |---|---|
 | `ok` | El script se ejecutó hasta el final. Lea `result` y `stdout`. |
 | `error` | El script o la aplicación lanzaron una excepción. `error.traceback` es la traza de error propia de la aplicación; sus números de línea son las líneas de su script. Corrija la causa. |
-| `refused` | El Hub no envió el script y `reason` dice por qué. Si la causa es la compuerta de scripts, esa razón nombra la categoría (de `G-1` a `G-5`), la construcción y la línea: reescriba sin esa construcción y no intente ocultársela a la compuerta, que solo el operador puede levantar. Otras causas son un script que supera el límite de tamaño, un destino que no está listado o un diario de auditoría en el que el Hub no puede escribir. |
+| `refused` | El Hub no envió el script y `reason` dice por qué. Si la causa es la compuerta de scripts, esa razón nombra la categoría (`G-1` eliminación de archivos, `G-2` lanzamiento de procesos, `G-3` acceso a la red, `G-4` escritura fuera del directorio de trabajo, `G-5` evasión del análisis), la construcción y la línea: reescriba sin esa construcción y no intente ocultársela a la compuerta, que solo el operador puede levantar. Otras causas son un script que supera el límite de tamaño, un destino que no está listado o un diario de auditoría en el que el Hub no puede escribir. |
 | `timeout` | El script se ejecutó más tiempo del permitido. Acorte el trabajo o divídalo. |
 | `busy` | La aplicación aún está ejecutando un script anterior. No envíe otro; pregunte al operador o espere. |
 | `unavailable` | No se puede contactar con la aplicación; `reason` dice por qué. Avise al operador. |
@@ -48,6 +48,6 @@ y solo entonces use un identificador.
 
 `LMM_WORK_DIR` es el directorio privado donde su script puede crear archivos. No escriba
 en ningún otro lugar, ni elimine ni sobrescriba ningún archivo, a menos que el operador se lo haya pedido. La
-compuerta de scripts rechaza lo que ve (una ruta literal fuera de ese directorio); no lo ve todo,
+compuerta de scripts rechaza lo que ve (una escritura en una ruta literal fuera de ese directorio; la lectura de una ruta así solo se señala en `stderr`); no lo ve todo,
 y las funciones de guardado y exportación de las aplicaciones no están cubiertas por ella. Un documento que está
 abierto pertenece al operador: no lo guarde, ni lo cierre, ni exporte sobre él, salvo que el operador se lo pida.

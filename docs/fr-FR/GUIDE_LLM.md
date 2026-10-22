@@ -36,7 +36,7 @@ application, `docs/modules/<application>.md`, liste les noms que votre script re
 |---|---|
 | `ok` | Le script est allé jusqu'au bout. Lisez `result` et `stdout`. |
 | `error` | Le script ou l'application a levé une exception. `error.traceback` est la trace d'erreur propre à l'application ; ses numéros de ligne sont ceux de votre script. Corrigez la cause. |
-| `refused` | Le Hub n'a pas envoyé le script, et `reason` en donne la raison. Pour le garde-fou de script, il nomme la catégorie (`G-1` à `G-5`), la construction et la ligne : réécrivez sans elle, et n'essayez pas de la dissimuler au garde-fou, que seul l'opérateur peut lever. Les autres raisons sont un script qui dépasse la limite de taille, une cible absente de la liste, ou un journal d'audit que le Hub ne peut pas écrire. |
+| `refused` | Le Hub n'a pas envoyé le script, et `reason` en donne la raison. Pour le garde-fou de script, il nomme la catégorie (`G-1` suppression de fichier, `G-2` lancement de processus, `G-3` accès réseau, `G-4` écriture hors du répertoire de travail, `G-5` contournement de l'analyse), la construction et la ligne : réécrivez sans elle, et n'essayez pas de la dissimuler au garde-fou, que seul l'opérateur peut lever. Les autres raisons sont un script qui dépasse la limite de taille, une cible absente de la liste, ou un journal d'audit que le Hub ne peut pas écrire. |
 | `timeout` | Le script a duré plus longtemps que le délai accordé. Raccourcissez le travail ou découpez-le. |
 | `busy` | L'application exécute encore un script précédent. N'en envoyez pas un autre ; demandez à l'opérateur ou attendez. |
 | `unavailable` | L'application est injoignable ; `reason` en donne la raison. Dites-le à l'opérateur. |
@@ -52,7 +52,7 @@ identifiants lus plus tôt ont pu disparaître ou désigner autre chose. Relisez
 ## 6. N'écrivez jamais hors du répertoire de travail annoncé
 
 `LMM_WORK_DIR` est le répertoire privé où votre script peut créer des fichiers. N'écrivez nulle part ailleurs, et ne
-supprimez ni n'écrasez aucun fichier, sauf si l'opérateur vous l'a demandé. Le garde-fou refuse ce qu'il voit (un chemin
-littéral hors de ce répertoire) ; il ne voit pas tout, et les fonctions d'enregistrement et d'export des applications
+supprimez ni n'écrasez aucun fichier, sauf si l'opérateur vous l'a demandé. Le garde-fou refuse ce qu'il voit (une écriture vers un chemin
+littéral hors de ce répertoire ; la lecture d'un tel chemin n'est que signalée dans `stderr`) ; il ne voit pas tout, et les fonctions d'enregistrement et d'export des applications
 échappent à son contrôle. Un document ouvert appartient à l'opérateur : ne l'enregistrez pas, ne le fermez pas et ne
 l'écrasez pas par un export, sauf demande de sa part.

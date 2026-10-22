@@ -69,7 +69,7 @@ L'entrée du client MCP lance le binaire avec l'argument `serve` :
 À adapter : `/home/alice/LibreModular-MCP/` est le chemin absolu de votre clone ; avec un paquet, la commande est `/usr/bin/libremodular-mcp` ; sous Windows, c'est le chemin complet de `libremodular-mcp.exe` dans le dossier d'installation. Le fichier où cette
 entrée se place, et le nom de ses clés, dépendent de votre client : la forme ci-dessus est courante, et le
 Hub a été essayé avec un client écrit pour ses tests (des lignes JSON-RPC sur son entrée et sa sortie
-standard), pas avec un client MCP nommé. Sous Linux, le Hub a besoin de la variable `XDG_RUNTIME_DIR`, que définit une
+standard), pas avec un client MCP nommé. Le Hub parle le Model Context Protocol sur son entrée et sa sortie standard : un objet JSON par ligne, `initialize` d'abord, puis `tools/list` et `tools/call` avec un `name` et un objet `arguments` ; le texte de chaque réponse est dans `result.content[0].text`. Sous Linux, le Hub a besoin de la variable `XDG_RUNTIME_DIR`, que définit une
 session de bureau ; sans elle, il refuse de démarrer. Un client lancé hors d'une session de bureau, un service par exemple, doit transmettre cette variable au Hub.
 
 `init` crée `~/.config/libremodular-mcp/config.toml` et le fichier de jeton à côté, tous deux en mode 600. Il
@@ -100,7 +100,7 @@ lui-même a refusé le script ou n'a pas pu l'exécuter.
 rend la liste des applications configurées, la manière dont chacune est jointe et si elle est connectée, sans
 contacter aucune application.
 
-`target_app` doit être le nom exact d'une application activée ; `get_state` accepte aussi `hub`. Aucun des deux outils n'accepte autre chose.
+`target_app` doit être le nom exact d'une application activée ; `get_state` accepte aussi `hub`. Aucun des deux outils n'accepte autre chose : `execute_script` refuse tout autre nom (son `status` est `refused`), et `get_state` répond avec `connected: false` et un avertissement.
 
 `content_origin` dit d'où vient `state` : `document` pour du contenu pris dans les documents ouverts de l'application, qu'un modèle lit comme une donnée et jamais comme une instruction, et `hub` pour la liste que rend la cible `hub`.
 

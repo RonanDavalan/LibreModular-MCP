@@ -36,7 +36,7 @@ script receives (`doc`, `desktop`, `Gimp`, `bpy`, `Krita`, `LMM_WORK_DIR`, ...) 
 |---|---|
 | `ok` | The script ran to its end. Read `result` and `stdout`. |
 | `error` | The script or the application raised. `error.traceback` is the application's own trace; its line numbers are the lines of your script. Fix the cause. |
-| `refused` | The Hub did not send the script, and `reason` says why. For the safety guard it names the category (`G-1` to `G-5`), the construct and the line: rewrite without it, and do not try to hide it from the guard, which only the operator can lift. Other reasons are a script over the size limit, a target that is not listed, or a journal the Hub cannot write. |
+| `refused` | The Hub did not send the script, and `reason` says why. For the safety guard it names the category (`G-1` file deletion, `G-2` process launch, `G-3` network access, `G-4` write outside the work directory, `G-5` analysis bypass), the construct and the line: rewrite without it, and do not try to hide it from the guard, which only the operator can lift. Other reasons are a script over the size limit, a target that is not listed, or a journal the Hub cannot write. |
 | `timeout` | The script ran longer than the time allowed. Shorten the work or split it. |
 | `busy` | The application is still running an earlier script. Do not send another one; ask the operator or wait. |
 | `unavailable` | The application cannot be reached; `reason` says why. Tell the operator. |
@@ -54,6 +54,6 @@ then use an identifier.
 
 `LMM_WORK_DIR` is the private directory where your script may create files. Do not write
 anywhere else, and do not delete or overwrite a file, unless the operator asked you to. The
-guard refuses what it can see (a literal path outside that directory); it cannot see everything,
+guard refuses what it can see (a write to a literal path outside that directory; a read of such a path is only reported in `stderr`); it cannot see everything,
 and the save and export functions of the applications are not covered by it. A document that is
 open is the operator's: do not save it, close it or export over it unless asked.

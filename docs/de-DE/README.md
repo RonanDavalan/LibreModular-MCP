@@ -69,7 +69,7 @@ Der Eintrag für den MCP-Client startet das Programm mit dem Argument `serve`:
 Was anzupassen ist: `/home/alice/LibreModular-MCP/` ist der absolute Pfad Ihres Klons; bei einem Paket lautet der Befehl `/usr/bin/libremodular-mcp`; unter Windows ist es der volle Pfad von `libremodular-mcp.exe` im Installationsordner. In welche Datei dieser
 Eintrag gehört und wie seine Schlüssel heißen, hängt von Ihrem Client ab: Die obige Form ist verbreitet, und der
 Hub wurde mit einem für seine Tests geschriebenen Client (JSON-RPC-Zeilen auf Standardeingabe und
-Standardausgabe) ausprobiert, nicht mit einem benannten MCP-Client. Der Hub braucht die Variable
+Standardausgabe) ausprobiert, nicht mit einem benannten MCP-Client. Der Hub spricht das Model Context Protocol über Standardeingabe und Standardausgabe: ein JSON-Objekt pro Zeile, zuerst `initialize`, dann `tools/list` und `tools/call` mit einem `name` und einem Objekt `arguments`; der Text jeder Antwort steht in `result.content[0].text`. Der Hub braucht die Variable
 `XDG_RUNTIME_DIR`, die eine Desktop-Sitzung setzt; ohne sie weigert er sich zu starten. Ein Client, der außerhalb einer Desktop-Sitzung startet, etwa als Dienst, muss diese Variable an den Hub weitergeben.
 
 `init` legt `~/.config/libremodular-mcp/config.toml` und daneben die Token-Datei an, beide mit Modus 600. Es
@@ -101,7 +101,7 @@ das Skript abgelehnt hat oder es nicht ausführen konnte.
 Liste der konfigurierten Anwendungen, wie jede erreicht wird und ob sie verbunden ist, ohne eine Anwendung zu
 kontaktieren.
 
-`target_app` muss der genaue Name einer aktivierten Anwendung sein; `get_state` akzeptiert außerdem `hub`. Keines der beiden Werkzeuge akzeptiert etwas anderes.
+`target_app` muss der genaue Name einer aktivierten Anwendung sein; `get_state` akzeptiert außerdem `hub`. Keines der beiden Werkzeuge akzeptiert etwas anderes: `execute_script` weist jeden anderen Namen zurück (sein `status` ist `refused`), und `get_state` antwortet mit `connected: false` und einer Warnung.
 
 `content_origin` sagt, woher `state` stammt: `document` für Inhalte aus den geöffneten Dokumenten der Anwendung, die ein Modell als Daten liest und nie als Anweisung, und `hub` für die Liste, die das Ziel `hub` liefert.
 

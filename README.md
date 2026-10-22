@@ -69,7 +69,7 @@ The entry for the MCP client runs the binary with the argument `serve`:
 What to adapt: `/home/alice/LibreModular-MCP/` is the absolute path of your clone; with a package, the command is `/usr/bin/libremodular-mcp`; on Windows, it is the full path of `libremodular-mcp.exe` in the install folder. Which file this
 entry goes into, and what its keys are called, depends on your client: the shape above is a common
 one, and the Hub was tried with a client written for its tests (JSON-RPC lines on its standard
-input and output), not with a named MCP client. On Linux, the Hub needs the variable `XDG_RUNTIME_DIR`,
+input and output), not with a named MCP client. The Hub speaks the Model Context Protocol over its standard input and output: one JSON object per line, `initialize` first, then `tools/list` and `tools/call` with a `name` and an `arguments` object; the text of each answer is in `result.content[0].text`. On Linux, the Hub needs the variable `XDG_RUNTIME_DIR`,
 which a desktop session sets; without it, it refuses to start. A client started outside a desktop session, a service for example, must pass that variable to the Hub.
 
 `init` creates `~/.config/libremodular-mcp/config.toml` and the token file next to it, both in
@@ -102,7 +102,7 @@ path of a PNG file, or `null`) and `warnings`; the answer reaches the client as 
 object. The target `hub` returns the list of configured applications, how each one is reached, and
 whether it is connected, without contacting any application.
 
-`target_app` must be the exact name of an enabled application; `get_state` also accepts `hub`. Neither tool accepts anything else.
+`target_app` must be the exact name of an enabled application; `get_state` also accepts `hub`. Neither tool accepts anything else: `execute_script` refuses any other name (its `status` is `refused`), and `get_state` answers with `connected: false` and a warning.
 
 `content_origin` says where `state` comes from: `document` for content taken from the application's open documents, which a model reads as data and never as instructions, and `hub` for the list that the target `hub` returns.
 
