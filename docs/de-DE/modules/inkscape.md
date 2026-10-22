@@ -40,6 +40,8 @@ die Konfiguration kann sie ändern:
 | Erweiterungen von Inkscape, auf `PYTHONPATH` gelegt, damit `import inkex` funktioniert | `/usr/share/inkscape/extensions` |
 | Inkscape, für seine Version und für Aufnahmen | `/usr/bin/inkscape` |
 
+Auf einem frischen Debian 13 zieht das Paket `inkscape` `python3-tinycss2` nicht nach, das `import inkex` braucht: Installieren Sie beide mit `sudo apt install inkscape python3-tinycss2`. Ohne es endet ein Skript, das `inkex` importiert, mit `ModuleNotFoundError: No module named 'tinycss2'`.
+
 ## Was ein Skript sieht
 
 Das Skript wird in eine private Datei des Arbeitsverzeichnisses geschrieben, nie auf der Befehlszeile übergeben und

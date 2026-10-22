@@ -41,6 +41,8 @@ neither a script nor the configuration can change them:
 | Inkscape extensions, put on `PYTHONPATH` so that `import inkex` works | `/usr/share/inkscape/extensions` |
 | Inkscape, for its version and for captures | `/usr/bin/inkscape` |
 
+On a clean Debian 13, the `inkscape` package does not pull in `python3-tinycss2`, which `import inkex` needs: install both with `sudo apt install inkscape python3-tinycss2`. Without it, a script that imports `inkex` ends with `ModuleNotFoundError: No module named 'tinycss2'`.
+
 ## What a script sees
 
 The script is written to a private file of the work directory, never passed on the
