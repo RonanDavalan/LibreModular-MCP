@@ -89,16 +89,15 @@ def check_the_place_is_free_when_the_client_sees_the_close(core):
     problems = []
     with running(core) as bridge:
         for round_number in range(30):
-            stranger = Client(bridge.port)
-            stranger.send(b"\n")
-            stranger.outcome()
-            stranger.close()
             client = Client(bridge.port)
             answer = client.hello()
-            client.close()
             if not answer or answer.get("ok") is not True:
                 problems.append("round %d: a client that connects as soon as the close is seen is not served: %r" % (round_number, answer))
+                client.close()
                 break
+            client.send(b"not json\n")
+            client.outcome()
+            client.close()
     return problems
 
 
