@@ -603,8 +603,9 @@ class _Bridge:
         except Exception as error:
             _say("LMM bridge: connection ended on %s" % type(error).__name__)
         finally:
-            _discard(connection)
+            # Fermée sous le verrou : un client qui voit la fermeture et se reconnecte aussitôt trouve la place libre.
             with self._lock:
+                _discard(connection)
                 if self._active is connection:
                     self._active = None
 

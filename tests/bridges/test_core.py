@@ -85,6 +85,23 @@ def check_strangers_get_no_answer(core):
     return problems
 
 
+def check_the_place_is_free_when_the_client_sees_the_close(core):
+    problems = []
+    with running(core) as bridge:
+        for round_number in range(30):
+            stranger = Client(bridge.port)
+            stranger.send(b"\n")
+            stranger.outcome()
+            stranger.close()
+            client = Client(bridge.port)
+            answer = client.hello()
+            client.close()
+            if not answer or answer.get("ok") is not True:
+                problems.append("round %d: a client that connects as soon as the close is seen is not served: %r" % (round_number, answer))
+                break
+    return problems
+
+
 class HelloTests(CheckCase):
     def test_a_valid_hello_is_answered_with_the_protocol_fields(self):
         with running(CORE) as bridge:
@@ -105,6 +122,16 @@ class HelloTests(CheckCase):
 
     def test_strangers_are_disconnected_without_an_answer(self):
         self.must_pass(check_strangers_get_no_answer(CORE))
+
+    def test_the_place_is_free_when_the_client_sees_the_close(self):
+        self.must_pass(check_the_place_is_free_when_the_client_sees_the_close(CORE))
+
+    def test_counter_proof_a_core_that_frees_the_place_after_the_close_is_detected(self):
+        defective = defective_core(
+            "            with self._lock:\n                _discard(connection)\n",
+            "            _discard(connection)\n            time.sleep(0.2)\n            with self._lock:\n",
+        )
+        self.must_fail(check_the_place_is_free_when_the_client_sees_the_close(defective))
 
     def test_counter_proof_a_core_that_accepts_any_token_is_detected(self):
         defective = defective_core(
