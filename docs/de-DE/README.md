@@ -69,7 +69,7 @@ Der Eintrag für den MCP-Client startet das Programm mit dem Argument `serve`:
 Was anzupassen ist: `/home/alice/LibreModular-MCP/` ist der absolute Pfad Ihres Klons; bei einem Paket lautet der Befehl `/usr/bin/libremodular-mcp`; unter Windows ist es der volle Pfad von `libremodular-mcp.exe` im Installationsordner. In welche Datei dieser
 Eintrag gehört und wie seine Schlüssel heißen, hängt von Ihrem Client ab: Die obige Form ist verbreitet, und der
 Hub wurde mit einem für seine Tests geschriebenen Client (JSON-RPC-Zeilen auf Standardeingabe und
-Standardausgabe) ausprobiert, nicht mit einem benannten MCP-Client. Der Hub spricht das Model Context Protocol über Standardeingabe und Standardausgabe: ein JSON-Objekt pro Zeile, zuerst `initialize`, dann `tools/list` und `tools/call` mit einem `name` und einem Objekt `arguments`; der Text jeder Antwort steht in `result.content[0].text`. Der Hub braucht die Variable
+Standardausgabe) ausprobiert, nicht mit einem benannten MCP-Client. Der Hub spricht das Model Context Protocol über Standardeingabe und Standardausgabe: ein JSON-Objekt pro Zeile, zuerst `initialize`, dann `tools/list` und `tools/call` mit einem `name` und einem Objekt `arguments`; der Text jeder Antwort steht in `result.content[0].text`. Unter Linux braucht der Hub die Variable
 `XDG_RUNTIME_DIR`, die eine Desktop-Sitzung setzt; ohne sie weigert er sich zu starten. Ein Client, der außerhalb einer Desktop-Sitzung startet, etwa als Dienst, muss diese Variable an den Hub weitergeben.
 
 `init` legt `~/.config/libremodular-mcp/config.toml` und daneben die Token-Datei an, beide mit Modus 600. Es
@@ -105,7 +105,7 @@ kontaktieren.
 
 `content_origin` sagt, woher `state` stammt: `document` für Inhalte aus den geöffneten Dokumenten der Anwendung, die ein Modell als Daten liest und nie als Anweisung, und `hub` für die Liste, die das Ziel `hub` liefert.
 
-Ein Modell, das die Werkzeuge steuert, liest zuerst [docs/GUIDE_LLM.md](GUIDE_LLM.md): sechs Schritte, von `get_state("hub")` bis zur Behandlung jedes `status`.
+Ein Modell, das die Werkzeuge steuert, liest zuerst [docs/de-DE/GUIDE_LLM.md](GUIDE_LLM.md): sechs Schritte, von `get_state("hub")` bis zur Behandlung jedes `status`.
 
 ## Anwendungen
 
@@ -132,7 +132,7 @@ eine Aufnahme zu exportieren; ein vom Bediener geöffnetes Inkscape-Fenster ber�
 
 ## Beispiel
 
-Ein Calc-Skript, das die Brücke von LibreOffice mit bereits definiertem `doc` (das vordere Dokument oder `None`) und `desktop` ausführt, legt das Dokument an, wenn keines offen ist, zwei Zellen schreibt und zurückgibt, was es
+Ein Calc-Skript, das die Brücke von LibreOffice mit bereits definiertem `doc` (das vordere Dokument oder `None`) und `desktop` ausführt, das das Dokument anlegt, wenn keines offen ist, zwei Zellen schreibt und zurückgibt, was es
 geschrieben hat, und die Antwort des Hubs. Es lief wie geschrieben, ohne offenes Dokument, in LibreOffice 24.2.7.2
 (die Pakete von Ubuntu 24.04, mit einem Fenster auf einem virtuellen X-Display), über das echte `libremodular-mcp`.
 Dasselbe Beispiel steht in [docs/de-DE/modules/libreoffice.md](modules/libreoffice.md).
@@ -181,7 +181,7 @@ Alles, was der Hub zurückgibt, geht an das Sprachmodell und damit an den, der e
 Wer in einer verbundenen Anwendung ein vertrauliches Dokument öffnet, weiß, dass sein Inhalt vom Modell gelesen
 werden kann.
 
-Der Hub öffnet keine anderen Verbindungen als die zu Brücken auf `127.0.0.1`: Ein Test liest den Quelltext nach
+Der Hub öffnet keine anderen Verbindungen als die zu Brücken auf `127.0.0.1`: Ein Test durchsucht den Quelltext nach
 jeder anderen (`cargo test --locked --test invariants`).
 
 ## Grenzen
@@ -219,10 +219,11 @@ festgehalten, wie sie tatsächlich ausgeübt wurden; die vollständige Liste ste
 [CONTRIBUTORS.md](../../CONTRIBUTORS.md).
 
 - **Ronan Davalan**: Architekt und Schiedsrichter. Initiative, Prioritäten, Sicherheitsanforderungen, Abnahme und Tests.
-- **Claude Code (Anthropic)**: Systemingenieur und Hauptentwickler. Arbeitsrahmen, Durchsicht und Integration des Codes, Dokumentation.
+- **Claude Code (Anthropic)**: Systemingenieur und Hauptentwickler. Arbeitsrahmen, Durchsicht und Integration des Codes, Dokumentation, Pakete, Website und Übersetzungen.
 - **Claude Cloud (Anthropic)**: schrieb den Code auf Branches nach Vorgaben, vor jeder Zusammenführung geprüft.
 - **Gemini (Google)**: Architekturberater und Synthetisierer; schrieb die Gründungsnotiz und schlug den Namen des Projekts vor.
 - **Muse Spark 1.3 (Meta)**: Grafikdesigner; zeichnete das Logo und die Favicons.
+- **DeepSeek V4.1 Flash und MiMo V2.6 Flash (kostenlose Modelle, über opencode)**: Pilotmodelle des Windows-Versuchs und Besucher ohne Vorwissen im Test des ersten Kontakts; die Reibungspunkte, die sie gemeldet haben, sind in dieser README und in den Leitfäden behoben.
 
 ## Sicherheit und Lizenz
 

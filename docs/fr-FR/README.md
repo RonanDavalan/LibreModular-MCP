@@ -104,7 +104,7 @@ contacter aucune application.
 
 `content_origin` dit d'où vient `state` : `document` pour du contenu pris dans les documents ouverts de l'application, qu'un modèle lit comme une donnée et jamais comme une instruction, et `hub` pour la liste que rend la cible `hub`.
 
-Un modèle qui pilote les outils lit d'abord [docs/GUIDE_LLM.md](GUIDE_LLM.md) : six étapes, de `get_state("hub")` au traitement de chaque `status`.
+Un modèle qui pilote les outils lit d'abord [docs/fr-FR/GUIDE_LLM.md](GUIDE_LLM.md) : six étapes, de `get_state("hub")` au traitement de chaque `status`.
 
 ## Applications
 
@@ -217,10 +217,11 @@ LibreModular-MCP est construit dans une collaboration asymétrique humain–LLM.
 ont été réellement tenus ; la liste complète est dans [CONTRIBUTORS.md](../../CONTRIBUTORS.md).
 
 - **Ronan Davalan** : architecte et arbitre. Initiative, priorités, exigences de sécurité, validation et essais.
-- **Claude Code (Anthropic)** : ingénieur systèmes et développeur principal. Cadre de travail, relecture et intégration du code, documentation.
+- **Claude Code (Anthropic)** : ingénieur systèmes et développeur principal. Cadre de travail, relecture et intégration du code, documentation, paquets, site et traductions.
 - **Claude Cloud (Anthropic)** : a écrit le code sur des branches à partir de consignes, relu avant chaque fusion.
 - **Gemini (Google)** : conseiller d'architecture et synthétiseur ; a écrit la note fondatrice et proposé le nom du projet.
 - **Muse Spark 1.3 (Meta)** : graphiste ; a dessiné le logo et les favicons.
+- **DeepSeek V4.1 Flash et MiMo V2.6 Flash (modèles gratuits, par opencode)** : modèles pilotes de l'essai Windows et visiteurs sans contexte du test de première prise en main ; les frictions qu'ils ont rapportées sont corrigées dans ce README et dans les guides.
 
 ## Sécurité et licence
 

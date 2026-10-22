@@ -101,7 +101,7 @@ aplicaciones configuradas, cómo se llega a cada una y si está conectada, sin c
 
 `content_origin` dice de dónde viene `state`: `document` para contenido tomado de los documentos abiertos de la aplicación, que un modelo lee como un dato y nunca como una instrucción, y `hub` para la lista que devuelve el destino `hub`.
 
-Un modelo que maneja las herramientas lee primero [docs/GUIDE_LLM.md](GUIDE_LLM.md): seis pasos, de `get_state("hub")` al tratamiento de cada `status`.
+Un modelo que maneja las herramientas lee primero [docs/es-ES/GUIDE_LLM.md](GUIDE_LLM.md): seis pasos, de `get_state("hub")` al tratamiento de cada `status`.
 
 ## Aplicaciones
 
@@ -184,7 +184,7 @@ busca de cualquier otra (`cargo test --locked --test invariants`).
 
 - El Hub no es un entorno aislado. Un script se ejecuta con los derechos del usuario, dentro de una aplicación cuyo
   Python puede hacer todo lo que puede el usuario.
-- La compuerta de scripts detiene un script torpe, no uno decidido. Lea el texto de un script antes de enviarlo; no
+- La compuerta de scripts detiene un script torpe, no uno decidido. Lee el texto de un script antes de enviarlo; no
   ve `runpy`, `pickle`, `http.server`, las funciones de guardado de las aplicaciones ni una ruta pasada como
   parámetro a una función.
 - El puerto UNO de LibreOffice no tiene autenticación: cualquier proceso que pueda alcanzarlo en esta máquina maneja
@@ -214,12 +214,13 @@ LibreModular-MCP se construye en una colaboración asimétrica entre humano y LL
 se desempeñaron realmente; la lista completa está en [CONTRIBUTORS.md](../../CONTRIBUTORS.md).
 
 - **Ronan Davalan**: arquitecto y árbitro. Iniciativa, prioridades, requisitos de seguridad, validación y pruebas.
-- **Claude Code (Anthropic)**: ingeniero de sistemas y desarrollador principal. Marco de trabajo, revisión e integración del código, documentación.
+- **Claude Code (Anthropic)**: ingeniero de sistemas y desarrollador principal. Marco de trabajo, revisión e integración del código, documentación, paquetes, sitio web y traducciones.
 - **Claude Cloud (Anthropic)**: escribió el código en ramas a partir de instrucciones, revisado antes de cada fusión.
 - **Gemini (Google)**: asesor de arquitectura y sintetizador; escribió la nota fundacional y propuso el nombre del proyecto.
 - **Muse Spark 1.3 (Meta)**: diseñador gráfico; dibujó el logotipo y los favicons.
+- **DeepSeek V4.1 Flash y MiMo V2.6 Flash (modelos gratuitos, mediante opencode)**: modelos piloto de la prueba en Windows y visitantes sin contexto de la prueba de primer contacto; los puntos de fricción que comunicaron están corregidos en este README y en las guías.
 
 ## Seguridad y licencia
 
-Informe de una vulnerabilidad como dice [SECURITY.md](../../SECURITY.md). El código tiene licencia MIT, véase
+Notifique una vulnerabilidad como indica [SECURITY.md](../../SECURITY.md). El código tiene licencia MIT, véase
 [LICENSE](../../LICENSE).
