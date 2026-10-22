@@ -352,8 +352,7 @@ Das darauf folgende `get_state` lieferte unter `state`:
   Start über UNO; beim allerersten Start in einer anderen Umgebung (kalter Cache) hatte es nach 8 s noch nicht
   geantwortet und nach 14 s schon. Ausprobiert gegen LibreOffice 24.2.7.2: eine Brücke vor LibreOffice gestartet,
   danach LibreOffice gestartet, dann den Zustand erneut abgefragt und den Hub erneut verbunden
-  (`cargo test --test libreoffice_real -- --ignored`; derselbe Test schlägt gegen die Brückendatei von vor dieser
-  Änderung fehl, wobei die Warnung bestehen bleibt).
+  (`cargo test --test libreoffice_real -- --ignored`).
 - Nur das **aktuelle** Dokument ist erreichbar. Sind mehrere Dokumente einer Familie geöffnet, erhält ein Skript dasjenige,
   das LibreOffice als aktuell meldet; die anderen stehen in `documents` und werden nicht angeboten. Welches Dokument
   aktuell ist, wenn der Fokus auf einem anderen Fenster liegt (einem Dialog, der Basic-IDE), ist unbestätigt.

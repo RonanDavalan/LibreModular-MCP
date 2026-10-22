@@ -367,8 +367,7 @@ The `get_state` that followed returned, under `state`:
   first start in another environment (cold caches) it had not answered after 8 seconds and had
   by 14. Tried against LibreOffice 24.2.7.2: a bridge started before LibreOffice, then
   LibreOffice started, then the state asked again and the Hub connected again
-  (`cargo test --test libreoffice_real -- --ignored`; the same test fails against the bridge
-  file of before this change, with the warning still there).
+  (`cargo test --test libreoffice_real -- --ignored`).
 - Only the **current** document is reachable. With several documents of a family open, a
   script gets whichever LibreOffice reports as current; the other ones are listed in
   `documents` and are not offered. Which document is current when the focus is on another

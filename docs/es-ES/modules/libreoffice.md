@@ -362,8 +362,7 @@ El `get_state` que siguió devolvió, en `state`:
   primer inicio en otro entorno (cachés frías) no había respondido tras 8 s y ya lo había hecho
   a los 14 s. Probado con LibreOffice 24.2.7.2: un puente iniciado antes que LibreOffice, luego
   LibreOffice iniciado, luego el estado pedido de nuevo y el Hub conectado de nuevo
-  (`cargo test --test libreoffice_real -- --ignored`; la misma prueba falla con el archivo del puente
-  anterior a este cambio, con el aviso aún presente).
+  (`cargo test --test libreoffice_real -- --ignored`).
 - Solo el documento **actual** es accesible. Con varios documentos de una familia abiertos, un
   script recibe el que LibreOffice indica como actual; los demás aparecen en
   `documents` y no se ofrecen. Qué documento es el actual cuando el foco está en otra

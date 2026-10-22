@@ -343,7 +343,7 @@ Le `get_state` qui a suivi a rendu, sous `state` :
   démarrage dans une exécution de test ; à son tout premier démarrage dans un autre environnement (caches froids), il n'avait
   pas répondu au bout de 8 secondes et l'avait fait au bout de 14. Essayé contre LibreOffice 24.2.7.2 : un pont démarré avant
   LibreOffice, puis LibreOffice démarré, puis l'état redemandé et le Hub reconnecté
-  (`cargo test --test libreoffice_real -- --ignored` ; le même test échoue contre le fichier du pont d'avant ce changement, l'avertissement restant en place).
+  (`cargo test --test libreoffice_real -- --ignored`).
 - Seul le document **courant** est joignable. Avec plusieurs documents d'une famille ouverts, un script reçoit celui que
   LibreOffice indique comme courant ; les autres sont listés dans `documents` et ne sont pas proposés. Quel document est
   courant quand le focus est sur une autre fenêtre (une boîte de dialogue, l'EDI Basic) : non confirmé.
