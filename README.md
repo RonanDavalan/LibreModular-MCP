@@ -220,10 +220,11 @@ LibreModular-MCP is built in an asymmetric human–LLM collaboration. The roles 
 were actually played; the full list is in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
 - **Ronan Davalan**: architect and arbiter. Initiative, priorities, security requirements, validation and testing.
-- **Claude Code (Anthropic)**: systems engineer and lead developer. Working framework, review and integration of the code, documentation.
+- **Claude Code (Anthropic)**: systems engineer and lead developer. Working framework, review and integration of the code, documentation, packages, website and translations.
 - **Claude Cloud (Anthropic)**: wrote the code on branches from prompts, reviewed before every merge.
 - **Gemini (Google)**: architectural advisor and synthesizer; wrote the founding note and proposed the project's name.
 - **Muse Spark 1.3 (Meta)**: graphic designer; drew the logo and the favicons.
+- **DeepSeek V4.1 Flash and MiMo V2.6 Flash (free models, run through opencode)**: pilot models of the Windows trial and visitors with no context in the first-contact test; the frictions they reported are corrected in this README and in the guides.
 
 ## Security and licence
 
