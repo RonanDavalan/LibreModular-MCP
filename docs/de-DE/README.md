@@ -45,7 +45,7 @@ tar -xf libremodular-mcp-0.1.0-windows.zip
 
 Es braucht keine Administratorrechte: Es installiert den Hub, `libremodular-launch` (das sich unter Windows weigert zu laufen), die Brücken als Textdateien, die Lizenz und die Leitfäden nach `%LOCALAPPDATA%\Programs\LibreModular-MCP\` und fügt diesen Ordner dem `PATH` Ihres Kontos hinzu (öffnen Sie ein neues Terminal). Führen Sie danach `libremodular-mcp init` aus; Konfiguration und Token liegen in `%LOCALAPPDATA%\libremodular-mcp\config\`. `uninstall.exe` im Installationsordner entfernt das Programm und lässt Konfiguration, Token und Audit-Journal zurück.
 
-Um den Hub stattdessen aus den Quellen zu bauen:
+Um den Hub stattdessen aus den Quellen zu bauen, installieren Sie einen C-Compiler und -Linker (unter Debian `sudo apt install build-essential`) und Rust 1.97 oder neuer (mit [rustup](https://rustup.rs): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`) und führen Sie dann aus:
 
 ```sh
 cd /home/alice/LibreModular-MCP
