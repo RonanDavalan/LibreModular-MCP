@@ -2,7 +2,7 @@
 
 [English](../../README.md) | [Français](../fr-FR/README.md) | **Deutsch** | [Español](../es-ES/README.md)
 
-## Universeller MCP-Server in Rust, mit einem Hub, der nur zwei Werkzeuge anbietet
+## Universeller, in Rust geschriebener MCP-Server mit einem Hub, der nur zwei Werkzeuge bereitstellt
 
 Ein MCP-Server, mit dem ein Sprachmodell Desktop-Anwendungen steuern kann, indem es Skripte in ihnen ausführt.
 
