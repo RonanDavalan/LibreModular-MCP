@@ -2,15 +2,12 @@
 
 ## Supported versions
 
-Only the latest commit of the default branch is supported. The project has no release yet.
+Only the latest release and the latest commit of the default branch are supported.
 
 ## Reporting a vulnerability
 
 Report it privately, through the private vulnerability reporting of the repository (the
 *Security* tab, then *Report a vulnerability*). Do not open a public issue for it.
-
-That feature must be enabled in the repository settings before the project is published: this
-file cannot check it, and until it is enabled there is no private channel.
 
 A report is easier to act on with: the commit it applies to, the configuration used (never the
 token), the exact script or request, and what happened compared with what should have.
