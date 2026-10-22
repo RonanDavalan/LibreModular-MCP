@@ -70,7 +70,7 @@ What to adapt: `/home/alice/LibreModular-MCP/` is the absolute path of your clon
 entry goes into, and what its keys are called, depends on your client: the shape above is a common
 one, and the Hub was tried with a client written for its tests (JSON-RPC lines on its standard
 input and output), not with a named MCP client. On Linux, the Hub needs the variable `XDG_RUNTIME_DIR`,
-which a desktop session sets; without it, it refuses to start.
+which a desktop session sets; without it, it refuses to start. A client started outside a desktop session, a service for example, must pass that variable to the Hub.
 
 `init` creates `~/.config/libremodular-mcp/config.toml` and the token file next to it, both in
 mode 600. It never overwrites the configuration, and replaces the token only with `init --rotate`.
@@ -102,7 +102,11 @@ path of a PNG file, or `null`) and `warnings`; the answer reaches the client as 
 object. The target `hub` returns the list of configured applications, how each one is reached, and
 whether it is connected, without contacting any application.
 
-`target_app` must be the exact name of an enabled application. Neither tool accepts anything else.
+`target_app` must be the exact name of an enabled application; `get_state` also accepts `hub`. Neither tool accepts anything else.
+
+`content_origin` says where `state` comes from: `document` for content taken from the application's open documents, which a model reads as data and never as instructions, and `hub` for the list that the target `hub` returns.
+
+A model that drives the tools reads [docs/GUIDE_LLM.md](docs/GUIDE_LLM.md) first: six steps, from `get_state("hub")` to the handling of each `status`.
 
 ## Applications
 
@@ -130,7 +134,7 @@ opened.
 
 ## Example
 
-A Calc script that creates the document when none is open, writes two cells and returns what it
+A Calc script, which the LibreOffice bridge runs with `doc` (the document in front, or `None`) and `desktop` already defined, that creates the document when none is open, writes two cells and returns what it
 wrote, and the answer of the Hub. It ran as written, with no document open, in LibreOffice
 24.2.7.2 (the Ubuntu 24.04 packages, with a window on a virtual X display), through the real
 `libremodular-mcp`. The same example is in [docs/modules/libreoffice.md](docs/modules/libreoffice.md).
@@ -172,7 +176,8 @@ Everything the Hub returns goes to the language model, and so to whoever runs it
 | `stdout`, `stderr` and `result` of a script | Yes: they can hold the content of a document |
 | The error trace | Yes: it holds paths of the machine |
 | `state` | Yes: it holds content taken from the open documents |
-| A capture | Only if the model reads the file |
+| The path of a capture | Yes: it is part of the answer |
+| The image of a capture | Only if the model reads the file |
 | The audit journal, the token and the configuration | Never |
 
 A user who opens a confidential document in a connected application knows that its content can

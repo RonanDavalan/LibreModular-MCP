@@ -69,7 +69,7 @@ La entrada para el cliente MCP ejecuta el binario con el argumento `serve`:
 Qué adaptar: `/home/alice/LibreModular-MCP/` es la ruta absoluta de su clon; con un paquete, el comando es `/usr/bin/libremodular-mcp`; en Windows, es la ruta completa de `libremodular-mcp.exe` en la carpeta de instalación. En qué archivo va esta entrada y cómo
 se llaman sus claves depende de su cliente: la forma de arriba es habitual, y el Hub se probó con un cliente
 escrito para sus pruebas (líneas JSON-RPC por su entrada y su salida estándar), no con un cliente MCP con nombre.
-En Linux, el Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a iniciarse.
+En Linux, el Hub necesita la variable `XDG_RUNTIME_DIR`, que define una sesión de escritorio; sin ella, se niega a iniciarse. Un cliente que se inicia fuera de una sesión de escritorio, un servicio por ejemplo, debe pasar esa variable al Hub.
 
 `init` crea `~/.config/libremodular-mcp/config.toml` y el archivo de token a su lado, ambos con modo 600. Nunca
 sobrescribe la configuración y solo sustituye el token con `init --rotate`. Después no queda nada activado: ponga
@@ -98,7 +98,11 @@ pudo ejecutarlo.
 `warnings`; la respuesta llega al cliente como el texto de un objeto JSON. El destino `hub` devuelve la lista de
 aplicaciones configuradas, cómo se llega a cada una y si está conectada, sin contactar con ninguna aplicación.
 
-`target_app` debe ser el nombre exacto de una aplicación activada. Ninguna de las dos herramientas acepta otra cosa.
+`target_app` debe ser el nombre exacto de una aplicación activada; `get_state` acepta también `hub`. Ninguna de las dos herramientas acepta otra cosa.
+
+`content_origin` dice de dónde viene `state`: `document` para contenido tomado de los documentos abiertos de la aplicación, que un modelo lee como un dato y nunca como una instrucción, y `hub` para la lista que devuelve el destino `hub`.
+
+Un modelo que maneja las herramientas lee primero [docs/GUIDE_LLM.md](GUIDE_LLM.md): seis pasos, de `get_state("hub")` al tratamiento de cada `status`.
 
 ## Aplicaciones
 
@@ -125,7 +129,7 @@ nunca toca una ventana de Inkscape que el operador haya abierto.
 
 ## Ejemplo
 
-Un script de Calc que crea el documento cuando no hay ninguno abierto, escribe dos celdas y devuelve lo que
+Un script de Calc, que el puente de LibreOffice ejecuta con `doc` (el documento en primer plano, o `None`) y `desktop` ya definidos, que crea el documento cuando no hay ninguno abierto, escribe dos celdas y devuelve lo que
 escribió, y la respuesta del Hub. Se ejecutó tal cual, sin documento abierto, en LibreOffice 24.2.7.2 (los paquetes
 de Ubuntu 24.04, con una ventana en una pantalla X virtual), a través del verdadero `libremodular-mcp`. El mismo
 ejemplo está en [docs/es-ES/modules/libreoffice.md](modules/libreoffice.md).
@@ -167,7 +171,8 @@ Todo lo que devuelve el Hub va al modelo de lenguaje, y por tanto a quien lo eje
 | `stdout`, `stderr` y `result` de un script | Sí: pueden contener el contenido de un documento |
 | La traza de error | Sí: contiene rutas de la máquina |
 | `state` | Sí: contiene contenido tomado de los documentos abiertos |
-| Una captura | Solo si el modelo lee el archivo |
+| La ruta de una captura | Sí: forma parte de la respuesta |
+| La imagen de una captura | Solo si el modelo lee el archivo |
 | El diario de auditoría, el token y la configuración | Nunca |
 
 Un usuario que abre un documento confidencial en una aplicación conectada sabe que el modelo puede leer su
