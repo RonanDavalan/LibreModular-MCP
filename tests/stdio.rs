@@ -73,6 +73,10 @@ fn a_full_session_on_stdio_writes_nothing_but_the_protocol() {
         .collect();
     names.sort_unstable();
     assert_eq!(names, vec!["execute_script", "get_state"]);
+    // Ce que le client MCP lit des outils (descriptions et schémas) est en anglais : pas une lettre accentuée.
+    let listed = tools["result"]["tools"].to_string();
+    assert!(listed.is_ascii(), "tool descriptions must be English: {listed}");
+    assert!(!listed.contains("Le script"), "{listed}");
     let call = exchange(
         rpc(
             3,

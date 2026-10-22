@@ -87,13 +87,14 @@ impl HubContext {
     }
 }
 
-/// Les paramètres de `execute_script`. Rien d'autre n'est accepté.
+/// Les paramètres de `execute_script`. Rien d'autre n'est accepté. Les commentaires des champs sont la
+/// description que le client MCP lit : ils sont en anglais, comme le reste de ce que le produit publie.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteScriptParams {
-    /// Le nom exact d'une application activée, par exemple "gimp".
+    /// The exact name of an enabled application, for example "gimp".
     pub target_app: String,
-    /// Le script Python complet à exécuter.
+    /// The complete Python script to run.
     pub script_content: String,
 }
 
@@ -101,7 +102,7 @@ pub struct ExecuteScriptParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GetStateParams {
-    /// Le nom exact d'une application activée, ou "hub".
+    /// The exact name of an enabled application, or "hub".
     pub target_app: String,
 }
 
