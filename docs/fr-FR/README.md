@@ -2,6 +2,13 @@
 
 [English](../../README.md) | **Français** | [Deutsch](../de-DE/README.md) | [Español](../es-ES/README.md)
 
+<p align="center">
+  <a href="https://github.com/RonanDavalan/LibreModular-MCP/releases/tag/v0.1.0"><img src="https://img.shields.io/badge/version-v0.1.0-brightgreen.svg" alt="Version v0.1.0"></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="Licence : MIT"></a>
+  <a href="https://github.com/RonanDavalan/LibreModular-MCP/actions/workflows/ci.yml"><img src="https://github.com/RonanDavalan/LibreModular-MCP/actions/workflows/ci.yml/badge.svg" alt="Intégration continue"></a>
+  <a href="#démarrage-rapide"><img src="https://img.shields.io/badge/packages-Debian_%C2%B7_Ubuntu_%C2%B7_Fedora_%C2%B7_openSUSE_%C2%B7_Arch_%C2%B7_Windows-informational.svg" alt="Paquets pour Debian, Ubuntu, Fedora, openSUSE Leap et Arch Linux, et installeur pour Windows 11"></a>
+</p>
+
 ## MCP universel écrit en Rust, avec un Hub qui n'expose que deux outils
 
 Un serveur MCP qui permet à un modèle de langage de piloter des applications de bureau en y exécutant des scripts.
