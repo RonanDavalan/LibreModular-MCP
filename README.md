@@ -190,7 +190,7 @@ Everything the Hub returns goes to the language model, and so to whoever runs it
 A user who opens a confidential document in a connected application knows that its content can
 be read by the model.
 
-The Hub opens no connection other than the ones to bridges on `127.0.0.1`: a test reads the source
+The Hub connects only to bridges on `127.0.0.1`: a test reads the source
 for any other (`cargo test --locked --test invariants`).
 
 ## Limits
@@ -221,6 +221,7 @@ python3 scripts/build_bridges.py --check
 Tests that need a real application are marked `#[ignore]` with their reason and are run on
 purpose, for example `cargo test --locked --test libreoffice_real -- --ignored --nocapture`.
 
+The full list of checks and how to contribute are in [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Credits
 
 LibreModular-MCP is built in an asymmetric human–LLM collaboration. The roles are written down as they

@@ -188,7 +188,7 @@ Alles, was der Hub zurückgibt, geht an das Sprachmodell und damit an den, der e
 Wer in einer verbundenen Anwendung ein vertrauliches Dokument öffnet, weiß, dass sein Inhalt vom Modell gelesen
 werden kann.
 
-Der Hub öffnet keine anderen Verbindungen als die zu Brücken auf `127.0.0.1`: Ein Test durchsucht den Quelltext nach
+Der Hub verbindet sich nur mit Brücken auf `127.0.0.1`: Ein Test durchsucht den Quelltext nach
 jeder anderen (`cargo test --locked --test invariants`).
 
 ## Grenzen
@@ -218,6 +218,8 @@ python3 scripts/build_bridges.py --check
 
 Tests, die eine echte Anwendung brauchen, sind mit `#[ignore]` und ihrem Grund markiert und werden gezielt
 ausgeführt, zum Beispiel `cargo test --locked --test libreoffice_real -- --ignored --nocapture`.
+
+Die vollständige Liste der Prüfungen und wie man beiträgt, steht in [CONTRIBUTING.md](../../CONTRIBUTING.md) (auf Englisch).
 
 ## Danksagungen
 

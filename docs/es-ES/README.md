@@ -184,7 +184,7 @@ Todo lo que devuelve el Hub va al modelo de lenguaje, y por tanto a quien lo eje
 Un usuario que abre un documento confidencial en una aplicación conectada sabe que el modelo puede leer su
 contenido.
 
-El Hub no abre ninguna conexión distinta de las de los puentes en `127.0.0.1`: una prueba lee el código fuente en
+El Hub solo se conecta a los puentes en `127.0.0.1`: una prueba lee el código fuente en
 busca de cualquier otra (`cargo test --locked --test invariants`).
 
 ## Límites
@@ -214,6 +214,8 @@ python3 scripts/build_bridges.py --check
 
 Las pruebas que necesitan una aplicación real están marcadas con `#[ignore]` y su motivo, y se ejecutan a propósito,
 por ejemplo `cargo test --locked --test libreoffice_real -- --ignored --nocapture`.
+
+La lista completa de comprobaciones y cómo contribuir están en [CONTRIBUTING.md](../../CONTRIBUTING.md) (en inglés).
 
 ## Créditos
 
