@@ -176,3 +176,10 @@ result = {"layers": [node.name() for node in document.topLevelNodes()]}
   safety net against accidents, not a sandbox.
 - A script runs with the user's rights, inside Krita's Python.
 - The bridge serves one connection at a time.
+- `Document.exportImage` opens the export options of the file format in the window and waits for an answer: with PNG,
+  a call on a document without `setBatchmode(True)` did not return until the dialog was closed. Call
+  `document.setBatchmode(True)` first, then `document.exportImage(path, InfoObject())` with
+  `from krita import InfoObject`.
+- Krita's Python API has no call that makes a brush stroke. A script draws its strokes itself (Qt's `QPainter` on a
+  `QImage`), writes the pixels into a layer with `node.setPixelData` (bytes in the order blue, green, red, alpha), and
+  can then run Krita's own filters, for example `Krita.instance().filter("oilpaint")`.

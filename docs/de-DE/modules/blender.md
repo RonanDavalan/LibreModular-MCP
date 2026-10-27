@@ -257,3 +257,12 @@ result = {"object": item.name, "objects": len(bpy.context.scene.objects)}
   Sandbox.
 - Ein Skript läuft mit den Rechten des Benutzers, im Python von Blender.
 - Die Brücke bedient jeweils eine Verbindung.
+- Ein Skript öffnet keine andere Datei. `bpy.ops.wm.open_mainfile`, aus einem Skript aufgerufen, beendete Blender
+  4.3.2 mit einem Speicherzugriffsfehler, und der Hub antwortete `unavailable`
+  (`the connection to the bridge closed after the request was sent`). Starten Sie Blender stattdessen auf der
+  gewünschten Datei (`blender -b scene.blend --python <boot file>`).
+- Cycles kann im Debian-Paket 4.3.2 nicht entrauschen: Mit `scene.cycles.use_denoising = True` löste
+  `bpy.ops.render.render` den Fehler `Failed to denoise, build has no OpenImageDenoise support` aus. Lassen Sie es auf
+  `False` und erhöhen Sie `scene.cycles.samples` (320 Samples bei 1360 mal 766 Pixeln dauerten 23 s auf der CPU).
+- Beim Rendern mit Workbench wird jedes Objekt als Vollkörper gezeichnet, was auch immer `object.display_type` sagt:
+  `WIRE` änderte nichts. Ein `WIREFRAME`-Modifikator mit `use_replace = True` zeichnet die Kanten.

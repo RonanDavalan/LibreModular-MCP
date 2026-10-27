@@ -261,3 +261,12 @@ result = {"object": item.name, "objects": len(bpy.context.scene.objects)}
   against accidents, not a sandbox.
 - A script runs with the user's rights, inside Blender's Python.
 - The bridge serves one connection at a time.
+- A script does not open another file. `bpy.ops.wm.open_mainfile`, called from a script, ended Blender 4.3.2 with a
+  segmentation fault, and the Hub answered `unavailable`
+  (`the connection to the bridge closed after the request was sent`). Start Blender on the file instead
+  (`blender -b scene.blend --python <boot file>`).
+- Cycles cannot denoise in the Debian 4.3.2 build: with `scene.cycles.use_denoising = True`, `bpy.ops.render.render`
+  raised `Failed to denoise, build has no OpenImageDenoise support`. Leave it `False` and raise `scene.cycles.samples`
+  (320 samples at 1360 by 766 pixels took 23 s on the CPU).
+- A Workbench render draws every object as a solid, whatever `object.display_type` says: `WIRE` changed nothing. A
+  `WIREFRAME` modifier with `use_replace = True` draws the edges.

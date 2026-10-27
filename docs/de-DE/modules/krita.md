@@ -171,3 +171,11 @@ result = {"layers": [node.name() for node in document.topLevelNodes()]}
   Versehen, keine Sandbox.
 - Ein Skript läuft mit den Rechten des Benutzers, im Python von Krita.
 - Die Brücke bedient jeweils eine Verbindung.
+- `Document.exportImage` öffnet im Fenster die Exportoptionen des Dateiformats und wartet auf eine Antwort: Bei PNG
+  kehrte ein Aufruf auf einem Dokument ohne `setBatchmode(True)` erst zurück, nachdem der Dialog geschlossen war.
+  Rufen Sie zuerst `document.setBatchmode(True)` auf, danach `document.exportImage(path, InfoObject())` mit
+  `from krita import InfoObject`.
+- Die Python-Schnittstelle von Krita kennt keinen Aufruf, der einen Pinselstrich zieht. Ein Skript zeichnet seine
+  Striche selbst (`QPainter` von Qt auf einem `QImage`), schreibt die Pixel mit `node.setPixelData` in eine Ebene
+  (Bytes in der Reihenfolge Blau, Grün, Rot, Alpha) und kann danach die eigenen Filter von Krita ausführen, zum
+  Beispiel `Krita.instance().filter("oilpaint")`.
