@@ -257,10 +257,12 @@ result = {"object": item.name, "objects": len(bpy.context.scene.objects)}
   Sandbox.
 - Ein Skript läuft mit den Rechten des Benutzers, im Python von Blender.
 - Die Brücke bedient jeweils eine Verbindung.
-- Ein Skript öffnet keine andere Datei. `bpy.ops.wm.open_mainfile`, aus einem Skript aufgerufen, beendete Blender
-  4.3.2 mit einem Speicherzugriffsfehler, und der Hub antwortete `unavailable`
-  (`the connection to the bridge closed after the request was sent`). Starten Sie Blender stattdessen auf der
-  gewünschten Datei (`blender -b scene.blend --python <boot file>`).
+- Ein Skript ersetzt die geöffnete Datei nicht. Während eines Skripts weist die Brücke `bpy.ops.wm.open_mainfile`,
+  `wm.revert_mainfile`, `wm.read_homefile` und `wm.read_factory_settings` ab: Der Aufruf löst `RuntimeError` aus
+  (`bpy.ops.wm.open_mainfile cannot run from a bridge script: it ends Blender. Start Blender on the file instead
+  (blender -b <file>.blend --python <boot file>).`), der Hub antwortet `error`, und Blender läuft weiter. Ohne diese
+  Abweisung beendeten diese Operatoren Blender 4.3.2 (der Hub antwortete `unavailable`). Um an einer anderen Datei zu
+  arbeiten, starten Sie Blender darauf (`blender -b scene.blend --python <boot file>`).
 - Cycles kann im Debian-Paket 4.3.2 nicht entrauschen: Mit `scene.cycles.use_denoising = True` löste
   `bpy.ops.render.render` den Fehler `Failed to denoise, build has no OpenImageDenoise support` aus. Lassen Sie es auf
   `False` und erhöhen Sie `scene.cycles.samples` (320 Samples bei 1360 mal 766 Pixeln dauerten 23 s auf der CPU).

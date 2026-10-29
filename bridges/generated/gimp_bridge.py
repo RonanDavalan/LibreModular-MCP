@@ -10,6 +10,7 @@ parler, combien il lit et comment un script s'exécute sont décidés une seule 
 qu'une application n'ajoute qu'un adaptateur et qu'aucun adaptateur ne puisse affaiblir un contrôle.
 """
 
+import contextlib
 import errno
 import hmac
 import io
@@ -448,19 +449,22 @@ def _script_result(namespace):
 def _run_script(adapter, script, work_dir, extra=()):
     """Compile et exécute un script dans un espace de noms neuf ; ne lève jamais pour ce que fait
     le script, SystemExit compris. `extra` contient les arguments qu'un adaptateur qui sert
-    plusieurs familles prend après les arguments habituels."""
+    plusieurs familles prend après les arguments habituels. Un adaptateur qui a une méthode
+    `script_scope()` (un gestionnaire de contexte) l'a ouverte pendant l'exécution du script seulement."""
     namespace = {"__name__": "__main__"}
     namespace.update(adapter.namespace(*extra))
     namespace["LMM_WORK_DIR"] = work_dir
     stdout, stderr = _Capture(), _Capture()
     outcome = {}
+    scope = getattr(adapter, "script_scope", None)
 
     def run():
         saved = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = stdout, stderr
         try:
             code = compile(script, SCRIPT_FILENAME, "exec", dont_inherit=True)
-            exec(code, namespace)
+            with scope() if scope is not None else contextlib.nullcontext():
+                exec(code, namespace)
         except BaseException as error:  # un script ne doit jamais arrêter le pont
             outcome["error"] = _script_error(error)
         finally:

@@ -10,6 +10,7 @@ parler, combien il lit et comment un script s'exécute sont décidés une seule 
 qu'une application n'ajoute qu'un adaptateur et qu'aucun adaptateur ne puisse affaiblir un contrôle.
 """
 
+import contextlib
 import errno
 import hmac
 import io
@@ -448,19 +449,22 @@ def _script_result(namespace):
 def _run_script(adapter, script, work_dir, extra=()):
     """Compile et exécute un script dans un espace de noms neuf ; ne lève jamais pour ce que fait
     le script, SystemExit compris. `extra` contient les arguments qu'un adaptateur qui sert
-    plusieurs familles prend après les arguments habituels."""
+    plusieurs familles prend après les arguments habituels. Un adaptateur qui a une méthode
+    `script_scope()` (un gestionnaire de contexte) l'a ouverte pendant l'exécution du script seulement."""
     namespace = {"__name__": "__main__"}
     namespace.update(adapter.namespace(*extra))
     namespace["LMM_WORK_DIR"] = work_dir
     stdout, stderr = _Capture(), _Capture()
     outcome = {}
+    scope = getattr(adapter, "script_scope", None)
 
     def run():
         saved = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = stdout, stderr
         try:
             code = compile(script, SCRIPT_FILENAME, "exec", dont_inherit=True)
-            exec(code, namespace)
+            with scope() if scope is not None else contextlib.nullcontext():
+                exec(code, namespace)
         except BaseException as error:  # un script ne doit jamais arrêter le pont
             outcome["error"] = _script_error(error)
         finally:
@@ -915,13 +919,16 @@ def launch(adapter, default_port):
 Pourquoi ce module existe
 L'API Python de Krita doit être utilisée depuis le fil de son interface, qu'un autre fil atteint par
 un signal Qt mis en file. Ce fichier est le seul endroit qui le sait, pour que le cœur reste le
-même pour toutes les applications. Écrit d'après l'API Python publique de Krita 5 ; pas essayé
-dans un vrai Krita.
+même pour toutes les applications.
 """
 
+import contextlib
 import threading
 
 DEFAULT_PORT = 9302
+# Les méthodes de `Document` qui ouvrent la boîte d'options du format et attendent une réponse tant que
+# le document n'est pas en mode batch : le fil de l'interface, donc le pont, reste bloqué.
+_DIALOG_METHODS = ("exportImage", "saveAs")
 
 
 def _krita_class():
@@ -933,6 +940,15 @@ def _krita_class():
     return Krita
 
 
+def _document_class():
+    """La classe Document de l'API Python de Krita, ou None hors de Krita."""
+    try:
+        from krita import Document
+    except Exception:
+        return None
+    return Document
+
+
 def _instance():
     Krita = _krita_class()
     if Krita is None:
@@ -941,6 +957,20 @@ def _instance():
         return Krita.instance()
     except Exception:
         return None
+
+
+def _in_batch_mode(method):
+    """`method` appelée avec le mode batch du document allumé, puis remis comme il était."""
+
+    def wrapped(document, *arguments, **keywords):
+        previous = document.batchmode()
+        document.setBatchmode(True)
+        try:
+            return method(document, *arguments, **keywords)
+        finally:
+            document.setBatchmode(previous)
+
+    return wrapped
 
 
 def _qt_core():
@@ -1027,6 +1057,24 @@ class KritaAdapter:
     def namespace(self):
         Krita = _krita_class()
         return {"Krita": Krita} if Krita is not None else {}
+
+    @contextlib.contextmanager
+    def script_scope(self):
+        """Pendant un script, l'export et l'enregistrement d'un document se font en mode batch : Krita
+        rend la main au lieu de demander les options du format. Le mode batch d'un document, ouvert par
+        l'opérateur ou créé par le script, retrouve sa valeur après chaque appel."""
+        document_class = _document_class()
+        originals = {}
+        for name in _DIALOG_METHODS:
+            method = getattr(document_class, name, None)
+            if method is not None:
+                originals[name] = method
+                setattr(document_class, name, _in_batch_mode(method))
+        try:
+            yield
+        finally:
+            for name, method in originals.items():
+                setattr(document_class, name, method)
 
     def run_on_main(self, function):
         """Exécute `function` dans le fil de l'interface de Krita et rend sa valeur ou son exception. Hors

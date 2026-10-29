@@ -20,6 +20,7 @@ from bridge_support import (
     Client,
     PrivateDir,
     defective_adapter,
+    defective_core,
     load_adapter,
     load_core,
     returns_in_time,
@@ -376,6 +377,116 @@ class WithoutKritaTests(unittest.TestCase):
         self.assertEqual(
             state["warnings"], ["the krita scripting API cannot be imported in this process"]
         )
+
+
+def fake_krita_with_dialogs():
+    """Un faux Krita dont `Document.exportImage` et `Document.saveAs` ouvrent la boîte d'options du format,
+    et attendent sa réponse, tant que le mode batch du document n'est pas allumé."""
+    module = fake_krita(document=False)
+
+    class Document:
+        def __init__(self, batch=False):
+            self.batch = batch
+            self.dialogs = 0
+
+        def batchmode(self):
+            return self.batch
+
+        def setBatchmode(self, value):
+            self.batch = value
+
+        def _write(self, path):
+            if not self.batch:
+                self.dialogs += 1
+            return True
+
+        def exportImage(self, filename, configuration):
+            return self._write(filename)
+
+        def saveAs(self, filename):
+            return self._write(filename)
+
+    module.Document = Document
+    return module
+
+
+DIALOG_SCRIPT = (
+    "import krita\n"
+    "document = krita.Document(batch=%s)\n"
+    "answers = [document.exportImage('/home/alice/work/a.png', None), document.saveAs('/home/alice/work/b.png')]\n"
+    "result = {'answers': answers, 'dialogs': document.dialogs, 'batch': document.batchmode()}\n"
+)
+
+
+def check_exports_do_not_wait_for_the_dialog(core, adapter_module):
+    """Un script qui exporte ou enregistre un document hors mode batch ne rencontre pas la boîte d'options ;
+    le mode batch du document retrouve sa valeur ; les méthodes d'origine sont rétablies après le script,
+    réussi ou non."""
+    problems = []
+    krita = fake_krita_with_dialogs()
+    originals = {name: getattr(krita.Document, name) for name in ("exportImage", "saveAs")}
+    with krita_modules(krita=krita):
+        adapter = adapter_module.KritaAdapter()
+        for batch in (False, True):
+            answer = core._run_script(adapter, DIALOG_SCRIPT % batch, "/home/alice/work")
+            expected = {"answers": [True, True], "dialogs": 0, "batch": batch}
+            if answer["result"] != expected:
+                problems.append("batch=%s: %r" % (batch, answer))
+        failing = core._run_script(adapter, "raise ValueError('boom')\n", "/home/alice/work")
+        if failing["ok"]:
+            problems.append("the failing script did not fail")
+    for name, original in originals.items():
+        if getattr(krita.Document, name) is not original:
+            problems.append("%s was not restored after the scripts" % name)
+    return problems
+
+
+class DialogMethodsTests(unittest.TestCase):
+    def test_export_and_save_never_wait_for_the_format_options(self):
+        self.assertEqual(check_exports_do_not_wait_for_the_dialog(CORE, KRITA), [])
+
+    def test_the_methods_are_the_originals_outside_a_script(self):
+        krita = fake_krita_with_dialogs()
+        original = krita.Document.exportImage
+        with krita_modules(krita=krita):
+            adapter = KRITA.KritaAdapter()
+            with adapter.script_scope():
+                self.assertIsNot(krita.Document.exportImage, original)
+            self.assertIs(krita.Document.exportImage, original)
+            document = krita.Document()
+            document.exportImage("/home/alice/work/c.png", None)
+        self.assertEqual(document.dialogs, 1, "outside a script the operator's own dialog stays")
+
+    def test_without_the_document_class_scripts_run_unchanged(self):
+        with krita_modules(krita=fake_krita(document=False)):
+            answer = CORE._run_script(KRITA.KritaAdapter(), "result = 1\n", "/home/alice/work")
+        self.assertEqual(answer["result"], 1)
+
+    def test_without_krita_the_scope_does_nothing(self):
+        with krita_modules():
+            answer = CORE._run_script(KRITA.KritaAdapter(), "result = 2\n", "/home/alice/work")
+        self.assertEqual(answer["result"], 2)
+
+    def test_counter_proof_an_adapter_that_does_not_wrap_is_caught(self):
+        defective = defective_adapter(
+            "krita",
+            "setattr(document_class, name, _in_batch_mode(method))",
+            "setattr(document_class, name, method)",
+        )
+        self.assertNotEqual(check_exports_do_not_wait_for_the_dialog(CORE, defective), [])
+
+    def test_counter_proof_a_core_that_never_opens_the_scope_is_caught(self):
+        defective = defective_core(
+            "with scope() if scope is not None else contextlib.nullcontext():",
+            "with contextlib.nullcontext():",
+        )
+        self.assertNotEqual(check_exports_do_not_wait_for_the_dialog(defective, KRITA), [])
+
+    def test_counter_proof_a_wrapper_that_leaves_batch_mode_on_is_caught(self):
+        defective = defective_adapter(
+            "krita", "            document.setBatchmode(previous)\n", "            pass\n"
+        )
+        self.assertNotEqual(check_exports_do_not_wait_for_the_dialog(CORE, defective), [])
 
 
 if __name__ == "__main__":

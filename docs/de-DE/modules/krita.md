@@ -171,10 +171,12 @@ result = {"layers": [node.name() for node in document.topLevelNodes()]}
   Versehen, keine Sandbox.
 - Ein Skript läuft mit den Rechten des Benutzers, im Python von Krita.
 - Die Brücke bedient jeweils eine Verbindung.
-- `Document.exportImage` öffnet im Fenster die Exportoptionen des Dateiformats und wartet auf eine Antwort: Bei PNG
-  kehrte ein Aufruf auf einem Dokument ohne `setBatchmode(True)` erst zurück, nachdem der Dialog geschlossen war.
-  Rufen Sie zuerst `document.setBatchmode(True)` auf, danach `document.exportImage(path, InfoObject())` mit
-  `from krita import InfoObject`.
+- `Document.exportImage` und `Document.saveAs` öffnen den Optionsdialog des Dateiformats und warten auf eine Antwort,
+  was die Oberfläche von Krita blockiert. Während eines Skripts schaltet die Brücke für diese beiden Aufrufe den
+  Batch-Modus des Dokuments ein und setzt ihn danach auf den vorherigen Wert zurück; sie kehren daher mit `True` oder
+  `False` zurück (`False`: Krita konnte die Datei nicht schreiben, zum Beispiel weil der Ordner fehlt), und es öffnet
+  sich kein Dialog. Ein Skript braucht `document.setBatchmode(True)` nicht. Außerhalb eines Skripts, in Scripter oder
+  in den Menüs von Krita, ändert sich nichts.
 - Die Python-Schnittstelle von Krita kennt keinen Aufruf, der einen Pinselstrich zieht. Ein Skript zeichnet seine
   Striche selbst (`QPainter` von Qt auf einem `QImage`), schreibt die Pixel mit `node.setPixelData` in eine Ebene
   (Bytes in der Reihenfolge Blau, Grün, Rot, Alpha) und kann danach die eigenen Filter von Krita ausführen, zum

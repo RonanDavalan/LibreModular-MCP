@@ -147,10 +147,11 @@ result = {"layers": [node.name() for node in document.topLevelNodes()]}
   red de seguridad contra accidentes, no un entorno aislado.
 - Un script se ejecuta con los derechos del usuario, dentro del Python de Krita.
 - El puente atiende una conexión a la vez.
-- `Document.exportImage` abre en la ventana las opciones de exportación del formato y espera una respuesta: con PNG,
-  una llamada sobre un documento sin `setBatchmode(True)` no volvió hasta que se cerró el cuadro de diálogo. Llame
-  primero a `document.setBatchmode(True)` y después a `document.exportImage(path, InfoObject())` con
-  `from krita import InfoObject`.
+- `Document.exportImage` y `Document.saveAs` abren el cuadro de opciones del formato y esperan una respuesta, lo que
+  bloquea la interfaz de Krita. Durante un script, el puente activa el modo por lotes del documento para estas dos
+  llamadas y lo devuelve después a su valor anterior; por eso devuelven `True` o `False` (`False`: Krita no pudo
+  escribir el archivo, por ejemplo porque la carpeta no existe) y no se abre ningún cuadro. Un script no necesita
+  `document.setBatchmode(True)`. Fuera de un script, en Scripter o en los menús de Krita, nada cambia.
 - La API de Python de Krita no tiene ninguna llamada que trace una pincelada. Un script dibuja sus trazos por sí mismo
   (`QPainter` de Qt sobre una `QImage`), escribe los píxeles en una capa con `node.setPixelData` (bytes en el orden
   azul, verde, rojo, alfa) y después puede ejecutar los filtros propios de Krita, por ejemplo

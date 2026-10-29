@@ -261,10 +261,12 @@ result = {"object": item.name, "objects": len(bpy.context.scene.objects)}
   against accidents, not a sandbox.
 - A script runs with the user's rights, inside Blender's Python.
 - The bridge serves one connection at a time.
-- A script does not open another file. `bpy.ops.wm.open_mainfile`, called from a script, ended Blender 4.3.2 with a
-  segmentation fault, and the Hub answered `unavailable`
-  (`the connection to the bridge closed after the request was sent`). Start Blender on the file instead
-  (`blender -b scene.blend --python <boot file>`).
+- A script cannot replace the open file. During a script the bridge refuses `bpy.ops.wm.open_mainfile`,
+  `wm.revert_mainfile`, `wm.read_homefile` and `wm.read_factory_settings`: the call raises `RuntimeError`
+  (`bpy.ops.wm.open_mainfile cannot run from a bridge script: it ends Blender. Start Blender on the file instead
+  (blender -b <file>.blend --python <boot file>).`), the Hub answers `error` and Blender stays up. Without that
+  refusal these operators ended Blender 4.3.2 (the Hub answered `unavailable`). To work on another file, start Blender
+  on it (`blender -b scene.blend --python <boot file>`).
 - Cycles cannot denoise in the Debian 4.3.2 build: with `scene.cycles.use_denoising = True`, `bpy.ops.render.render`
   raised `Failed to denoise, build has no OpenImageDenoise support`. Leave it `False` and raise `scene.cycles.samples`
   (320 samples at 1360 by 766 pixels took 23 s on the CPU).

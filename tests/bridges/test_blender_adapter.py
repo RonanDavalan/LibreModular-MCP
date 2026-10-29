@@ -18,6 +18,7 @@ import unittest
 from bridge_support import (
     Client,
     defective_adapter,
+    defective_core,
     execute,
     load_adapter,
     load_core,
@@ -312,6 +313,92 @@ class WithoutBlenderTests(unittest.TestCase):
         self.assertEqual(
             state["warnings"], ["the blender scripting API cannot be imported in this process"]
         )
+
+
+def fake_operators():
+    """Un faux `bpy.ops` : comme le vrai, l'appel d'un opérateur lit `_op_call` dans les globales du
+    module au moment de l'appel."""
+    operators = types.ModuleType("bpy.ops")
+    operators.reached = []
+    operators._op_call = lambda idname, keywords: operators.reached.append(idname) or ["FINISHED"]
+    exec(
+        "def call(idname, **keywords):\n    return _op_call(idname, keywords)\n",
+        operators.__dict__,
+    )
+    return operators
+
+
+REPLACING = ("wm.open_mainfile", "wm.revert_mainfile", "wm.read_homefile", "wm.read_factory_settings")
+
+
+def check_replacing_operators_are_refused(core, adapter_module):
+    """Un script qui appelle un opérateur qui remplace la base de données reçoit une erreur lisible, sans que
+    l'opérateur soit atteint ; un opérateur ordinaire passe ; l'appel d'origine est rétabli après chaque
+    script, réussi ou non."""
+    problems = []
+    fake = fake_bpy()
+    fake.ops = fake_operators()
+    original = fake.ops._op_call
+    with bpy_module(fake):
+        adapter = adapter_module.BlenderAdapter()
+        for idname in REPLACING:
+            answer = core._run_script(
+                adapter, "import bpy\nbpy.ops.call(%r, filepath='/home/alice/work/a.blend')\n" % idname, "/home/alice/work"
+            )
+            error = answer["error"] or {}
+            if answer["ok"] or error.get("type") != "RuntimeError" or idname not in error.get("message", ""):
+                problems.append("%s was not refused with a readable error: %r" % (idname, answer))
+            if fake.ops._op_call is not original:
+                problems.append("the operator call was not restored after %s" % idname)
+        answer = core._run_script(
+            adapter, "import bpy\nresult = bpy.ops.call('mesh.primitive_cube_add')\n", "/home/alice/work"
+        )
+        if not answer["ok"] or answer["result"] != ["FINISHED"]:
+            problems.append("an ordinary operator did not run: %r" % answer)
+    if fake.ops.reached != ["mesh.primitive_cube_add"]:
+        problems.append("operators reached Blender: %r" % fake.ops.reached)
+    return problems
+
+
+class ReplacingOperatorsTests(unittest.TestCase):
+    def test_operators_that_replace_the_open_file_are_refused_and_blender_goes_on(self):
+        self.assertEqual(check_replacing_operators_are_refused(CORE, BLENDER), [])
+
+    def test_the_refusal_comes_back_as_an_error_through_the_bridge(self):
+        fake = fake_bpy(background=True)
+        fake.ops = fake_operators()
+        with bpy_module(fake):
+            with running(CORE, adapter=BLENDER.BlenderAdapter()) as bridge:
+                client = Client(bridge.port)
+                client.hello()
+                refused = client.request(execute("import bpy\nbpy.ops.call('wm.open_mainfile')\n"))
+                after = client.request({"id": "p", "type": "ping"})
+                client.close()
+        self.assertIs(refused["ok"], False)
+        self.assertEqual(refused["error"]["type"], "RuntimeError")
+        self.assertIn("bpy.ops.wm.open_mainfile cannot run from a bridge script", refused["error"]["message"])
+        self.assertIn("RuntimeError", refused["error"]["traceback"].splitlines()[-1])
+        self.assertIs(after["ok"], True)
+
+    def test_without_the_operator_call_point_scripts_run_unchanged(self):
+        fake = fake_bpy()
+        fake.ops = types.ModuleType("bpy.ops")
+        with bpy_module(fake):
+            answer = CORE._run_script(BLENDER.BlenderAdapter(), "result = 1\n", "/home/alice/work")
+        self.assertEqual(answer["result"], 1)
+
+    def test_counter_proof_an_adapter_that_lets_the_operator_through_is_caught(self):
+        defective = defective_adapter(
+            "blender", "if idname in _REPLACING_OPERATORS:", "if False:"
+        )
+        self.assertNotEqual(check_replacing_operators_are_refused(CORE, defective), [])
+
+    def test_counter_proof_a_core_that_never_opens_the_scope_is_caught(self):
+        defective = defective_core(
+            "with scope() if scope is not None else contextlib.nullcontext():",
+            "with contextlib.nullcontext():",
+        )
+        self.assertNotEqual(check_replacing_operators_are_refused(defective, BLENDER), [])
 
 
 if __name__ == "__main__":

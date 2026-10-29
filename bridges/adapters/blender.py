@@ -7,12 +7,25 @@ main (`serve_main_thread`). Ce fichier est le seul endroit qui le sait, pour que
 pour toutes les applications.
 """
 
+import contextlib
 import queue
 import threading
 
 DEFAULT_PORT = 9303
 # Combien de fois, en secondes, le minuteur du fil principal de Blender cherche du travail.
 _POLL_INTERVAL = 0.05
+# Les opérateurs qui remplacent toute la base de données ouverte : appelés par un script du pont, ils
+# terminent Blender 4.3.2 par une violation de segmentation et le Hub répond `unavailable`.
+_REPLACING_OPERATORS = (
+    "wm.open_mainfile",
+    "wm.revert_mainfile",
+    "wm.read_homefile",
+    "wm.read_factory_settings",
+)
+_REFUSAL = (
+    "bpy.ops.%s cannot run from a bridge script: it ends Blender. Start Blender on the file "
+    "instead (blender -b <file>.blend --python <boot file>)."
+)
 
 
 def _bpy():
@@ -71,6 +84,28 @@ class BlenderAdapter:
             except queue.Empty:
                 return _POLL_INTERVAL
             task()
+
+    @contextlib.contextmanager
+    def script_scope(self):
+        """Pendant un script, un opérateur qui remplace la base de données lève `RuntimeError` au lieu de
+        terminer Blender. Le point de passage de tous les opérateurs est `bpy.ops._op_call` : un
+        `getattr` ou un alias ne le contourne pas."""
+        operators = getattr(_bpy(), "ops", None)
+        call = getattr(operators, "_op_call", None)
+        if call is None:
+            yield
+            return
+
+        def guarded(idname, *arguments, **keywords):
+            if idname in _REPLACING_OPERATORS:
+                raise RuntimeError(_REFUSAL % idname)
+            return call(idname, *arguments, **keywords)
+
+        operators._op_call = guarded
+        try:
+            yield
+        finally:
+            operators._op_call = call
 
     def app_version(self):
         bpy = _bpy()

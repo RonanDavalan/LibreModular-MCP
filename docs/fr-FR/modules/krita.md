@@ -166,10 +166,11 @@ result = {"layers": [node.name() for node in document.topLevelNodes()]}
   accidents, pas un bac à sable.
 - Un script s'exécute avec les droits de l'utilisateur, dans le Python de Krita.
 - Le pont ne sert qu'une connexion à la fois.
-- `Document.exportImage` ouvre dans la fenêtre les options d'export du format et attend une réponse : en PNG, un appel
-  sur un document sans `setBatchmode(True)` n'est pas revenu avant la fermeture de la boîte de dialogue. Appelez
-  d'abord `document.setBatchmode(True)`, puis `document.exportImage(path, InfoObject())` avec
-  `from krita import InfoObject`.
+- `Document.exportImage` et `Document.saveAs` ouvrent la boîte d'options du format et attendent une réponse, ce qui
+  bloque l'interface de Krita. Pendant un script, le pont allume le mode batch du document pour ces deux appels et le
+  remet ensuite comme il était : ils rendent `True` ou `False` (`False` : Krita n'a pas pu écrire le fichier, par
+  exemple parce que le dossier n'existe pas) et aucune boîte ne s'ouvre. Un script n'a pas besoin de
+  `document.setBatchmode(True)`. Hors d'un script, dans Scripter ou dans les menus de Krita, rien ne change.
 - L'API Python de Krita n'a aucun appel qui trace un coup de pinceau. Un script dessine ses traits lui-même
   (`QPainter` de Qt sur une `QImage`), écrit les pixels dans un calque avec `node.setPixelData` (octets dans l'ordre
   bleu, vert, rouge, alpha), puis peut lancer les filtres de Krita, par exemple `Krita.instance().filter("oilpaint")`.
