@@ -252,6 +252,6 @@ result = {"object": item.name, "objects": len(bpy.context.scene.objects)}
   Blender directamente sobre él (`blender -b scene.blend --python <boot file>`).
 - Cycles no puede eliminar el ruido en el paquete de Debian 4.3.2: con `scene.cycles.use_denoising = True`,
   `bpy.ops.render.render` lanzó `Failed to denoise, build has no OpenImageDenoise support`. Déjelo en `False` y suba
-  `scene.cycles.samples` (320 muestras a 1360 por 766 píxeles tardaron 23 s en la CPU).
+  `scene.cycles.samples` (320 muestras a 1360 por 766 píxeles tardaron de 5 a 23 s en la CPU, según la medición).
 - Un renderizado de Workbench dibuja cada objeto como sólido, diga lo que diga `object.display_type`: `WIRE` no cambió
   nada. Un modificador `WIREFRAME` con `use_replace = True` dibuja las aristas.

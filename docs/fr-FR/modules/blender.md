@@ -255,6 +255,6 @@ result = {"object": item.name, "objects": len(bpy.context.scene.objects)}
   Blender dessus (`blender -b scene.blend --python <boot file>`).
 - Cycles ne peut pas débruiter avec la compilation Debian 4.3.2 : avec `scene.cycles.use_denoising = True`,
   `bpy.ops.render.render` a levé `Failed to denoise, build has no OpenImageDenoise support`. Laissez `False` et
-  augmentez `scene.cycles.samples` (320 échantillons en 1 360 par 766 pixels ont pris 23 s sur le processeur).
+  augmentez `scene.cycles.samples` (320 échantillons en 1 360 par 766 pixels ont pris de 5 à 23 s sur le processeur, selon la mesure).
 - Un rendu Workbench dessine chaque objet en volume plein, quoi que dise `object.display_type` : `WIRE` n'a rien
   changé. Un modificateur `WIREFRAME` avec `use_replace = True` dessine les arêtes.

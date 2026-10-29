@@ -269,6 +269,6 @@ result = {"object": item.name, "objects": len(bpy.context.scene.objects)}
   on it (`blender -b scene.blend --python <boot file>`).
 - Cycles cannot denoise in the Debian 4.3.2 build: with `scene.cycles.use_denoising = True`, `bpy.ops.render.render`
   raised `Failed to denoise, build has no OpenImageDenoise support`. Leave it `False` and raise `scene.cycles.samples`
-  (320 samples at 1360 by 766 pixels took 23 s on the CPU).
+  (320 samples at 1360 by 766 pixels took 5 to 23 s on the CPU, in two measurements).
 - A Workbench render draws every object as a solid, whatever `object.display_type` says: `WIRE` changed nothing. A
   `WIREFRAME` modifier with `use_replace = True` draws the edges.
