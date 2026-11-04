@@ -1535,9 +1535,10 @@ fn repository_problems(root: &Path) -> Vec<String> {
         if name == "audit.jsonl" || name.starts_with("audit.jsonl.") {
             problems.push(format!("{relative}: an audit journal"));
         }
-        // Les PNG du logo sont l'identité publiée du projet ; tout autre PNG peut être une capture d'écran.
-        let is_logo = path.parent() == Some(&root.join("logo"));
-        if path.extension().is_some_and(|extension| extension == "png") && !is_logo {
+        // Les PNG du logo et ceux de `docs/images/` (l'image des README) sont publiés et déclarés ; tout autre PNG peut être une capture d'écran.
+        let is_published_image = path.parent() == Some(&root.join("logo"))
+            || path.parent() == Some(&root.join("docs").join("images"));
+        if path.extension().is_some_and(|extension| extension == "png") && !is_published_image {
             problems.push(format!("{relative}: a capture"));
         }
         if name == "config.toml" {
@@ -1596,6 +1597,7 @@ fn counter_proof_a_real_path_or_an_operator_file_is_detected() {
             ),
             ("tests/a.py", format!("path = '{home}alice/work'\n")),
             ("logo/favicon-16.png", String::new()),
+            ("docs/images/strip.png", String::new()),
         ],
         &[],
     );
@@ -1648,6 +1650,16 @@ fn counter_proof_a_real_path_or_an_operator_file_is_detected() {
         (
             "a capture file under the logo directory",
             vec![("logo/shots/shot.png", String::new())],
+            vec![],
+        ),
+        (
+            "a capture file under the images directory of the docs",
+            vec![("docs/images/shots/shot.png", String::new())],
+            vec![],
+        ),
+        (
+            "a capture file beside the docs images directory",
+            vec![("docs/shot.png", String::new())],
             vec![],
         ),
         ("a captures directory", vec![], vec!["run/captures"]),
