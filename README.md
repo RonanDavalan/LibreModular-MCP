@@ -82,7 +82,7 @@ The entry for the MCP client runs the binary with the argument `serve`:
 What to adapt: `/home/alice/LibreModular-MCP/` is the absolute path of your clone; with a package, the command is `/usr/bin/libremodular-mcp`; on Windows, it is the full path of `libremodular-mcp.exe` in the install folder. Which file this
 entry goes into, and what its keys are called, depends on your client: the shape above is a common
 one, and the Hub was tried with a client written for its tests (JSON-RPC lines on its standard
-input and output), not with a named MCP client. The Hub speaks the Model Context Protocol over its standard input and output: one JSON object per line, `initialize` first, then `tools/list` and `tools/call` with a `name` and an `arguments` object; the text of each answer is in `result.content[0].text`. On Linux, the Hub needs the variable `XDG_RUNTIME_DIR`,
+input and output); in Claude Code 2.1.312 and in opencode 2.2.0 it answered `get_state` on `hub`, and no `execute_script` call was made from either. No other MCP client was tried. The Hub speaks the Model Context Protocol over its standard input and output: one JSON object per line, `initialize` first, then `tools/list` and `tools/call` with a `name` and an `arguments` object; the text of each answer is in `result.content[0].text`. On Linux, the Hub needs the variable `XDG_RUNTIME_DIR`,
 which a desktop session sets; without it, it refuses to start. A client started outside a desktop session, a service for example, must pass that variable to the Hub.
 
 `init` creates `~/.config/libremodular-mcp/config.toml` and the token file next to it, both in

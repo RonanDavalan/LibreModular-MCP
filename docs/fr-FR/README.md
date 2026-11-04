@@ -82,7 +82,7 @@ L'entrée du client MCP lance le binaire avec l'argument `serve` :
 À adapter : `/home/alice/LibreModular-MCP/` est le chemin absolu de votre clone ; avec un paquet, la commande est `/usr/bin/libremodular-mcp` ; sous Windows, c'est le chemin complet de `libremodular-mcp.exe` dans le dossier d'installation. Le fichier où cette
 entrée se place, et le nom de ses clés, dépendent de votre client : la forme ci-dessus est courante, et le
 Hub a été essayé avec un client écrit pour ses tests (des lignes JSON-RPC sur son entrée et sa sortie
-standard), pas avec un client MCP nommé. Le Hub parle le Model Context Protocol sur son entrée et sa sortie standard : un objet JSON par ligne, `initialize` d'abord, puis `tools/list` et `tools/call` avec un `name` et un objet `arguments` ; le texte de chaque réponse est dans `result.content[0].text`. Sous Linux, le Hub a besoin de la variable `XDG_RUNTIME_DIR`, que définit une
+standard) ; dans Claude Code 2.1.312 et dans opencode 2.2.0 il a répondu à `get_state` sur `hub`, sans aucun appel d'`execute_script` depuis l'un ni l'autre. Aucun autre client MCP n'a été essayé. Le Hub parle le Model Context Protocol sur son entrée et sa sortie standard : un objet JSON par ligne, `initialize` d'abord, puis `tools/list` et `tools/call` avec un `name` et un objet `arguments` ; le texte de chaque réponse est dans `result.content[0].text`. Sous Linux, le Hub a besoin de la variable `XDG_RUNTIME_DIR`, que définit une
 session de bureau ; sans elle, il refuse de démarrer. Un client lancé hors d'une session de bureau, un service par exemple, doit transmettre cette variable au Hub.
 
 `init` crée `~/.config/libremodular-mcp/config.toml` et le fichier de jeton à côté, tous deux en mode 600. Il
