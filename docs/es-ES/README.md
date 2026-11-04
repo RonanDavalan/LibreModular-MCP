@@ -13,6 +13,12 @@
 
 Un servidor MCP que permite a un modelo de lenguaje manejar aplicaciones de escritorio ejecutando scripts en ellas.
 
+<p align="center">
+  <img src="../images/chaine-cinq-applications-v2.png" srcset="../images/chaine-cinq-applications-v2.png 1x, ../images/chaine-cinq-applications-v2@2x.png 2x" width="1120" height="232" alt="Un friso: la chispa del modelo, las dos herramientas execute_script y get_state, y cinco miniaturas en una misma línea: una escena 3D para Blender, una chispa sobre un damero para GIMP, un paisaje pintado al anochecer para Krita, un dibujo de órbitas para Inkscape y una carta para LibreOffice.">
+</p>
+
+<p align="center"><em>Un modelo, dos herramientas, cinco aplicaciones: cada miniatura muestra lo que el Hub hizo en su aplicación.</em></p>
+
 El sitio web [libremodular.davalan.fr](https://libremodular.davalan.fr/es/) ofrece páginas para leer en línea sobre los mismos temas:
 
 - [Inicio rápido](https://libremodular.davalan.fr/es/quickstart/)

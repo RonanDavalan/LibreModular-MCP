@@ -13,6 +13,12 @@
 
 An MCP server that lets a language model drive desktop applications by running scripts in them.
 
+<p align="center">
+  <img src="docs/images/chaine-cinq-applications-v2.png" srcset="docs/images/chaine-cinq-applications-v2.png 1x, docs/images/chaine-cinq-applications-v2@2x.png 2x" width="1120" height="232" alt="A strip showing the model as a spark of light, the two tools execute_script and get_state, then five thumbnails in one line: a 3D scene for Blender, a spark on a checkerboard for GIMP, a painted dusk landscape for Krita, a drawing of orbits for Inkscape and a letter for LibreOffice.">
+</p>
+
+<p align="center"><em>One model, two tools, five applications: each thumbnail shows what the Hub made in its application.</em></p>
+
 The website [libremodular.davalan.fr](https://libremodular.davalan.fr/) has pages to read online on the same subjects:
 
 - [Quickstart](https://libremodular.davalan.fr/quickstart/)

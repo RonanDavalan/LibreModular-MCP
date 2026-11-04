@@ -13,6 +13,12 @@
 
 Ein MCP-Server, mit dem ein Sprachmodell Desktop-Anwendungen steuern kann, indem es Skripte in ihnen ausführt.
 
+<p align="center">
+  <img src="../images/chaine-cinq-applications-v2.png" srcset="../images/chaine-cinq-applications-v2.png 1x, ../images/chaine-cinq-applications-v2@2x.png 2x" width="1120" height="232" alt="Ein Fries: der Funke des Modells, die beiden Werkzeuge execute_script und get_state, dann fünf Vorschaubilder in einer Reihe: eine 3D-Szene für Blender, ein Funke auf einem Schachbrettmuster für GIMP, eine gemalte Abendlandschaft für Krita, eine Zeichnung von Umlaufbahnen für Inkscape und ein Brief für LibreOffice.">
+</p>
+
+<p align="center"><em>Ein Modell, zwei Werkzeuge, fünf Anwendungen: Jedes Vorschaubild zeigt, was der Hub in seiner Anwendung gemacht hat.</em></p>
+
 Die Website [libremodular.davalan.fr](https://libremodular.davalan.fr/de/) bietet Seiten zum Online-Lesen zu denselben Themen:
 
 - [Schnellstart](https://libremodular.davalan.fr/de/quickstart/)

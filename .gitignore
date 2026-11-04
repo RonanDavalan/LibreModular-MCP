@@ -6,3 +6,4 @@ audit.jsonl.*
 captures/
 *.png
 !logo/*.png
+!docs/images/*.png
