@@ -39,6 +39,7 @@ $reported = & $exe --version
 Check ($reported -eq "libremodular-mcp $Version") "--version is exact ($reported)"
 if ($Default) {
     $dataRoot = $ownData
+    Remove-Item Env:LIBREMODULAR_CONFIG_DIR, Env:LIBREMODULAR_STATE_DIR, Env:LIBREMODULAR_RUNTIME_DIR -ErrorAction SilentlyContinue
     $tokenFile = Join-Path $ownData 'config\token'
 } else {
     $env:LIBREMODULAR_CONFIG_DIR = Join-Path $data 'config'
