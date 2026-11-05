@@ -11,7 +11,7 @@
 
 ## Universal MCP server written in Rust, with a Hub that exposes only two tools
 
-An MCP server that lets a language model drive desktop applications by running scripts in them.
+One MCP server, the Hub, that lets a language model drive desktop applications by running scripts in them. An application joins the Hub through a module and a bridge; GIMP, Krita, Blender, Inkscape and LibreOffice are the five tried, not the scope of the project ([CONTRIBUTING.md](CONTRIBUTING.md) says how to add one).
 
 <p align="center">
   <img src="docs/images/chaine-cinq-applications-v2.png" srcset="docs/images/chaine-cinq-applications-v2.png 1x, docs/images/chaine-cinq-applications-v2@2x.png 2x" width="1120" height="232" alt="A strip showing the model as a spark of light, the two tools execute_script and get_state, then five thumbnails in one line: a 3D scene for Blender, a spark on a checkerboard for GIMP, a painted dusk landscape for Krita, a drawing of orbits for Inkscape and a letter for LibreOffice.">
