@@ -11,7 +11,7 @@
 
 ## Universeller, in Rust geschriebener MCP-Server mit einem Hub, der nur zwei Werkzeuge bereitstellt
 
-Ein einziger MCP-Server, der Hub, mit dem ein Sprachmodell Desktop-Anwendungen steuern kann, indem es Skripte in ihnen ausführt. Eine Anwendung wird über ein Modul und eine Brücke an den Hub angeschlossen; GIMP, Krita, Blender, Inkscape und LibreOffice sind die fünf erprobten, nicht der Umfang des Projekts ([CONTRIBUTING.md](../../CONTRIBUTING.md), auf Englisch, sagt, wie man eine weitere hinzufügt).
+Ein einziger MCP-Server, der Hub, mit dem ein Sprachmodell Desktop-Anwendungen steuern kann, indem es Skripte in ihnen ausführt. Eine Anwendung wird über ein Modul und eine Brücke an den Hub angeschlossen; GIMP, Krita, Blender, Inkscape und LibreOffice funktionieren heute; der Hub ist darauf ausgelegt, möglichst viele Anwendungen in einem einzigen Server zu verbinden ([CONTRIBUTING.md](../../CONTRIBUTING.md), auf Englisch, sagt, wie man eine weitere hinzufügt).
 
 <p align="center">
   <img src="../images/chaine-cinq-applications-v2.png" srcset="../images/chaine-cinq-applications-v2.png 1x, ../images/chaine-cinq-applications-v2@2x.png 2x" width="1120" height="232" alt="Ein Fries: der Funke des Modells, die beiden Werkzeuge execute_script und get_state, dann fünf Vorschaubilder in einer Reihe: eine 3D-Szene für Blender, ein Funke auf einem Schachbrettmuster für GIMP, eine gemalte Abendlandschaft für Krita, eine Zeichnung von Umlaufbahnen für Inkscape und ein Brief für LibreOffice.">
